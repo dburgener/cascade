@@ -1,0 +1,46 @@
+// This would go elsewhere in the real world, but including for sake of illustration here
+virtual resource file {
+	fn dynamic_transition(domain source) {
+		dynamic_transition(source, file); // TODO: file is overloaded right now
+	}
+
+	fn read(domain source) {
+		allow(source, this, [file lnk_file], [read open getattr]);
+	}
+
+	// etc etc etc
+}
+
+@hint(denial, "To protect temp files, you may want to derive a child resource")
+@derive(manage, read, write, create)
+resource tmpfile inherits file, dir, lnk_file {
+
+	// Define dynamic transition member function by deriving the union of parent class
+	// dynamic_transition functions.  You could also define your own.  Since all three parents
+	// define this function, it is an error to not derive or define it here
+	@derive(dynamic_transition)
+	// This is equivalent to:
+	// dynamic_transition(source) {
+	//    file.dynamic_transition(source);
+	//    dir.dynamic_transition(source);
+	//    lnk_file.dynamic_transition(source);
+	// }
+
+	//@derive(all)
+	// etc
+
+	fn read(domain source) {
+		file.read();
+	}
+
+	// Derives are automatic unless the parents conflict.  In this case, file, dir and lnk_file all provide these
+	// So we need to explicitly opt in to our derivation.
+
+	// When a domain associates with a tmpfile, it typically wants full control over it
+	fn domain_association(domain source) {
+		this.manage(source);
+
+		this.dynamic_transition(source, tmp);
+	}
+
+}
