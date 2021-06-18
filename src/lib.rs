@@ -2,11 +2,14 @@
 extern crate lalrpop_util;
 
 mod ast;
+mod compile;
 
 use std::fs::{File};
 use std::error::Error;
 use std::io::{Error as IOError, Read, Write};
 use std::fmt;
+
+use sexp::Sexp;
 
 lalrpop_mod!(pub parser);
 
@@ -39,9 +42,11 @@ pub fn compile_system_policy(input_files: Vec<&mut File>, out_file: &mut File) -
     }
 
     // TODO: Combine multiple files
+    let cil_tree = compile::compile(&*policies[0])?;
+
     // TODO: It would be so wonderful if we could guarantee that this can't fail.  Is that
     // possible?
-    let out_str = generate_cil(&*policies[0]);
+    let out_str = generate_cil(cil_tree);
 
     write_out_cil(out_file, out_str)?;
 
@@ -54,9 +59,8 @@ fn parse_policy<'a>(policy: &'a str) -> Result<Box<ast::Policy>, lalrpop_util::P
     return parser::PolicyParser::new().parse(policy);
 }
 
-// TODO: expand to multiple input files
-fn generate_cil(p: &ast::Policy) -> String{
-    return "TODO".to_string();
+fn generate_cil(s: sexp::Sexp) -> String{
+    return s.to_string();
 }
 
 fn write_out_cil(f: &mut File, s: String) -> Result<(), IOError> {
@@ -68,7 +72,6 @@ fn write_out_cil(f: &mut File, s: String) -> Result<(), IOError> {
 mod tests {
     lalrpop_mod!(pub parser);
 
-    use std::env;
     use std::fs;
 
     const POLICIES_DIR: &str = "data/policies/";

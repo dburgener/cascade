@@ -1,6 +1,6 @@
 #[derive(Debug)]
 pub struct Policy {
-    exprs: Vec<Expression>,
+    pub exprs: Vec<Expression>,
 }
 
 impl Policy {
@@ -38,7 +38,7 @@ impl Virtualable for Declaration {
 
 #[derive(Debug)]
 pub struct TypeDecl {
-    name: String,
+    pub name: String,
     inherits: Vec<String>,
     is_virtual: bool,
     expressions: Vec<Expression>,
