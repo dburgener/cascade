@@ -1,5 +1,5 @@
 use std::str::FromStr;
-use crate::ast::{Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation};
+use crate::ast::{Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, Virtualable};
 
 grammar;
 
@@ -26,7 +26,11 @@ pub Expr: Expression = {
 
 BaseExpr: Expression = {
 	// TODO: other keywords beside virtual?
-	"virtual"? <Decl> => Expression::Decl(<>),
+	"virtual"? <Decl> => {
+		let mut d = <>;
+		d.set_virtual();
+		Expression::Decl(d)
+	},
 	Stmt => Expression::Stmt(<>),
 };
 
@@ -36,8 +40,20 @@ Decl: Declaration = {
 }
 
 TypeDecl: Box<TypeDecl> = {
-	BuiltInType Symbol "{" Expr* "}" => Box::new(TypeDecl {}),
-	BuiltInType Symbol "inherits" Comma<Symbol> "{" Expr* "}" => Box::new(TypeDecl {}),
+	<dr:BuiltInType> <n:Symbol> <i:InheritList?> "{" <v:Expr*> "}" => {
+		let inherits = match i {
+			None => vec![dr.to_string()],
+			Some(mut i) => {
+				i.push(dr.to_string());
+				i
+			}
+		};
+		Box::new(TypeDecl::new(n, inherits, v))
+	},
+}
+
+InheritList: Vec<String> = {
+	"inherits" <Comma<Symbol>>,
 }
 
 BuiltInType = {

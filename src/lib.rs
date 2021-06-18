@@ -39,7 +39,7 @@ pub fn compile_system_policy(input_files: Vec<&mut File>, out_file: &mut File) -
     }
 
     // TODO: Combine multiple files
-    // TODO: It would be so wonderful if we could gaurantee that this can't fail.  Is that
+    // TODO: It would be so wonderful if we could guarantee that this can't fail.  Is that
     // possible?
     let out_str = generate_cil(&*policies[0]);
 
