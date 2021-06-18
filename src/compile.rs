@@ -6,6 +6,7 @@ use sexp::{Sexp, Atom};
 use crate::ast::{Policy, Expression, Declaration, TypeDecl};
 
 pub fn compile(p: &Policy) -> Result<sexp::Sexp, Box<dyn Error>> {
+    build_type_map(p);
     Ok(Sexp::Atom(Atom::S("TODO".to_string())))
 }
 
@@ -21,13 +22,14 @@ fn build_type_map(p: &Policy) -> HashMap<String, &TypeDecl> {
         };
         match d {
             Declaration::Type(t) => { decl_list.insert(t.name.clone(), &**t); },
-            Declaration::Func(f) => continue,
+            Declaration::Func(_) => continue,
         }
     }
 
     return decl_list
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::ast::{Policy, Expression, Declaration, TypeDecl};

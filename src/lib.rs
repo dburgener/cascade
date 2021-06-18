@@ -9,8 +9,6 @@ use std::error::Error;
 use std::io::{Error as IOError, Read, Write};
 use std::fmt;
 
-use sexp::Sexp;
-
 lalrpop_mod!(pub parser);
 
 #[derive(Clone, Debug)]
@@ -33,7 +31,7 @@ pub fn compile_system_policy(input_files: Vec<&mut File>, out_file: &mut File) -
         let p = parse_policy(&policy_str);
         let p = match p {
             Ok(p) => p,
-            Err(e) => { println!("TODO: Handle parse errors cleanly");
+            Err(_) => { println!("TODO: Handle parse errors cleanly");
                 return Err(Box::new(HLLCompileError {}));
             }
         };

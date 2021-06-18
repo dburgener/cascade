@@ -1,4 +1,3 @@
-use std::str::FromStr;
 use crate::ast::{Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, Virtualable};
 
 grammar;

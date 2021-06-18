@@ -2,7 +2,6 @@ use SELinuxhll::compile_system_policy;
 
 use std::env;
 use std::fs::File;
-use std::io::prelude::*;
 use std::process::exit;
 
 fn usage() {
