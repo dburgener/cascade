@@ -39,7 +39,7 @@ impl Virtualable for Declaration {
 #[derive(Debug)]
 pub struct TypeDecl {
     pub name: String,
-    inherits: Vec<String>,
+    pub inherits: Vec<String>,
     is_virtual: bool,
     expressions: Vec<Expression>,
 }
@@ -49,6 +49,14 @@ impl TypeDecl {
         TypeDecl { name: n, inherits: i, is_virtual: false, expressions: e }
     }
 }
+
+// Only one Type declaration allowed per name
+impl PartialEq for TypeDecl {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
 
 impl Virtualable for TypeDecl {
     fn set_virtual(&mut self) {
