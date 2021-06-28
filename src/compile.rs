@@ -114,7 +114,17 @@ mod tests {
         }
     }
 
+    #[test]
     fn organize_type_map_test() {
+        let mut types: HashMap<String, &TypeDecl>  = HashMap::new();
+        let foo_type = TypeDecl::new("foo".to_string(), vec!["domain".to_string()], Vec::new());
+        let bar_type = TypeDecl::new("bar".to_string(), vec!["domain".to_string(), "foo".to_string()], Vec::new());
+        let baz_type = TypeDecl::new("baz".to_string(), vec!["domain".to_string(), "foo".to_string(), "bar".to_string()], Vec::new());
+        types.insert("foo".to_string(), &foo_type);
+        types.insert("bar".to_string(), &bar_type);
+        types.insert("baz".to_string(), &baz_type);
+
+        let type_vec = organize_type_map(&types).unwrap();
         //assert_eq!(types.name, "domain");
         //assert_eq!(*types.parent, None);
         //assert_eq!(types.children.len(), 1);
