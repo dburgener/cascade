@@ -3,6 +3,7 @@ extern crate lalrpop_util;
 
 mod ast;
 mod compile;
+mod functions;
 
 use std::fs::{File};
 use std::error::Error;

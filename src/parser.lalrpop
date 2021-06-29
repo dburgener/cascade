@@ -1,4 +1,4 @@
-use crate::ast::{Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, Virtualable};
+use crate::ast::{Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, Virtualable, FuncCall};
 
 grammar;
 
@@ -74,8 +74,8 @@ FuncDeclArg: String = {
 }
 
 Stmt: Statement = {
-	Symbol "." Symbol "(" Comma<Arg> ")" ";" => Statement::Tmp,
-	Symbol "(" Comma<Arg> ")" ";" => Statement::Tmp,
+	<c:Symbol> "." <n:Symbol> "(" <a:Comma<Arg>> ")" ";" => Statement::Call(Box::new(FuncCall::new(Some(c), n, a))),
+	<n:Symbol> "(" <a:Comma<Arg>> ")" ";" => Statement::Call(Box::new(FuncCall::new(None, n, a))),
 }
 
 Ann: Box<Annotation> = {

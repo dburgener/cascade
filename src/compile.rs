@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use sexp::{Sexp, Atom};
 
 use crate::ast::{Policy, Expression, Declaration, TypeDecl};
+use crate::functions;
 
 pub fn compile(p: &Policy) -> Result<sexp::Sexp, Box<dyn Error>> {
     let type_map = build_type_map(p);

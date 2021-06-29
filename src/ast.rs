@@ -69,7 +69,24 @@ pub struct FuncDecl {}
 
 #[derive(Debug)]
 pub enum Statement {
-    Tmp,
+    Call(Box<FuncCall>),
+}
+
+#[derive(Debug)]
+pub struct FuncCall {
+    class_name: Option<String>,
+    name: String,
+    args: Vec<Argument>,
+}
+
+impl FuncCall {
+    pub fn new(cn: Option<String>, n: String, a: Vec<Argument>) -> FuncCall {
+        FuncCall {
+            class_name: cn,
+            name: n,
+            args: a
+        }
+    }
 }
 
 #[derive(Debug)]
