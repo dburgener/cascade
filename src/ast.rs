@@ -40,7 +40,7 @@ impl Virtualable for Declaration {
 pub struct TypeDecl {
     pub name: String,
     pub inherits: Vec<String>,
-    is_virtual: bool,
+    pub is_virtual: bool,
     expressions: Vec<Expression>,
 }
 
@@ -74,10 +74,12 @@ pub enum Statement {
 
 #[derive(Debug)]
 pub struct FuncCall {
-    class_name: Option<String>,
-    name: String,
-    args: Vec<Argument>,
+    pub class_name: Option<String>,
+    pub name: String,
+    pub args: Vec<Argument>,
 }
+
+const builtins: &'static [&'static str] = &["allow", "dontaudit", "auditallow", "neverallow"];
 
 impl FuncCall {
     pub fn new(cn: Option<String>, n: String, a: Vec<Argument>) -> FuncCall {
@@ -87,6 +89,15 @@ impl FuncCall {
             args: a
         }
     }
+
+    pub fn is_builtin(&self) -> bool {
+        match self.class_name {
+            Some(_) => return false,
+            None=> (),
+        }
+        return builtins.iter().any(|&i| i == &self.name);
+    }
+
 }
 
 #[derive(Debug)]

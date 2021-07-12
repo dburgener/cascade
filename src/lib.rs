@@ -1,7 +1,9 @@
 #[macro_use]
 extern crate lalrpop_util;
 
+mod av_rule;
 mod ast;
+mod internal_rep;
 mod compile;
 mod functions;
 
