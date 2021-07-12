@@ -1,6 +1,6 @@
 use sexp::{Sexp, Atom};
 
-use crate::av_rule::{AvRuleFlavor, AvRule};
+use crate::internal_rep::{AvRuleFlavor, AvRule};
 
 pub fn generate_cil_for_av_rule(rule: AvRule) -> sexp::Sexp {
     let mut ret: Vec<sexp::Sexp> = Vec::new();

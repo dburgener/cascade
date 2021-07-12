@@ -4,8 +4,7 @@ use sexp::{Sexp, Atom};
 
 use crate::ast::{Policy, Expression, Declaration, Statement, TypeDecl, FuncCall, Argument};
 //use crate::functions;
-use crate::av_rule::{AvRuleFlavor, AvRule};
-use crate::internal_rep::{TypeInfo};
+use crate::internal_rep::{TypeInfo,AvRuleFlavor, AvRule};
 
 pub fn compile(p: &Policy) -> Result<sexp::Sexp, Box<dyn Error>> {
     let type_map = build_type_map(p);
