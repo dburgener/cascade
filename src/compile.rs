@@ -2,7 +2,7 @@ use std::error::Error;
 use std::collections::{HashMap, HashSet};
 use sexp::{Sexp, Atom};
 
-use crate::ast::{Policy, Expression, Declaration, Statement, TypeDecl, FuncCall, Argument};
+use crate::ast::{Policy, Expression, Declaration, Statement, FuncCall, Argument};
 use crate::internal_rep::{TypeInfo,AvRuleFlavor, AvRule};
 use crate::functions::generate_cil_for_av_rule;
 

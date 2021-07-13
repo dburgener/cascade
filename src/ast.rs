@@ -79,7 +79,7 @@ pub struct FuncCall {
     pub args: Vec<Argument>,
 }
 
-const builtins: &'static [&'static str] = &["allow", "dontaudit", "auditallow", "neverallow"];
+const BUILTINS: &'static [&'static str] = &["allow", "dontaudit", "auditallow", "neverallow"];
 
 impl FuncCall {
     pub fn new(cn: Option<String>, n: String, a: Vec<Argument>) -> FuncCall {
@@ -95,7 +95,7 @@ impl FuncCall {
             Some(_) => return false,
             None=> (),
         }
-        return builtins.iter().any(|&i| i == &self.name);
+        return BUILTINS.iter().any(|&i| i == &self.name);
     }
 
 }
