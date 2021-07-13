@@ -21,7 +21,11 @@ fn main() -> std::io::Result<()> {
     policies.push(&mut in_file);
 
     let mut out_file = File::create("out.cil")?;
-    compile_system_policy(policies, &mut out_file);
+    let res = compile_system_policy(policies, &mut out_file);
+    match res {
+        Err(e) => eprintln!("{}", e),
+        _ => (),
+    }
 
     return Ok(());
 }

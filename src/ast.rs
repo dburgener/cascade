@@ -41,7 +41,7 @@ pub struct TypeDecl {
     pub name: String,
     pub inherits: Vec<String>,
     pub is_virtual: bool,
-    expressions: Vec<Expression>,
+    pub expressions: Vec<Expression>,
 }
 
 impl TypeDecl {

@@ -1,6 +1,6 @@
 use crate::ast::{TypeDecl};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TypeInfo {
     pub name: String,
     pub inherits: Vec<String>,
@@ -13,6 +13,7 @@ impl TypeInfo {
     }
 }
 
+#[derive(Clone, Debug)]
 pub enum AvRuleFlavor {
     Allow,
     Dontaudit,
@@ -20,6 +21,7 @@ pub enum AvRuleFlavor {
     Neverallow,
 }
 
+#[derive(Clone, Debug)]
 pub struct AvRule<'a> {
     pub av_rule_flavor: AvRuleFlavor,
     pub source: &'a TypeInfo,
