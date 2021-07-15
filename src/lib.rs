@@ -45,28 +45,26 @@ pub fn compile_system_policy(input_files: Vec<&mut File>, out_file: &mut File) -
     // TODO: Combine multiple files
     let cil_tree = compile::compile(&*policies[0])?;
 
-    // TODO: It would be so wonderful if we could guarantee that this can't fail.  Is that
-    // possible?
     let out_str = generate_cil(cil_tree);
 
     write_out_cil(out_file, out_str)?;
 
-    return Ok(());
+    Ok(())
 }
 
 fn parse_policy<'a>(policy: &'a str) -> Result<Box<ast::Policy>, lalrpop_util::ParseError<usize, lalrpop_util::lexer::Token<'a>, &'static str>> {
     // TODO: Probably should only construct once
     // Why though?
-    return parser::PolicyParser::new().parse(policy);
+    parser::PolicyParser::new().parse(policy)
 }
 
 fn generate_cil(s: sexp::Sexp) -> String{
-    return s.to_string();
+    s.to_string()
 }
 
 fn write_out_cil(f: &mut File, s: String) -> Result<(), IOError> {
     f.write_all(s.as_bytes())?;
-    return Ok(());
+    Ok(())
 }
 
 #[cfg(test)]

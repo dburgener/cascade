@@ -26,6 +26,6 @@ pub struct AvRule<'a> {
     pub av_rule_flavor: AvRuleFlavor,
     pub source: &'a TypeInfo,
     pub target: &'a TypeInfo,
-    pub class: String,
-    pub perms: Vec<String>,
+    pub class: &'a str,
+    pub perms: Vec<&'a str>,
 }

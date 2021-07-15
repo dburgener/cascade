@@ -11,7 +11,6 @@ pub fn compile(p: &Policy) -> Result<sexp::Sexp, Box<dyn Error>> {
     let type_decl_list = organize_type_map(&type_map)?;
 
     let av_rules = do_rules_pass(&type_map, &p.exprs)?;
-    println!("{:?}", av_rules);
 
     // TODO: The rest of compilation
     let cil_types = type_list_to_sexp(type_decl_list);
@@ -37,7 +36,7 @@ fn build_type_map(p: &Policy) -> HashMap<String, TypeInfo> {
         };
     }
 
-    return decl_map;
+    decl_map
 }
 
 //TODO: Centralize Error handling
@@ -96,10 +95,10 @@ fn organize_type_map<'a>(types: &'a HashMap<String, TypeInfo>) -> Result<Vec<&'a
         }
         out.append(&mut current_pass_types);
     }
-    return Ok(out);
+    Ok(out)
 }
 
-fn do_rules_pass<'a>(types: &'a HashMap<String, TypeInfo>, exprs: &Vec<Expression>) -> Result<Vec<AvRule<'a>>, Box<dyn Error>> {
+fn do_rules_pass<'a>(types: &'a HashMap<String, TypeInfo>, exprs: &'a Vec<Expression>) -> Result<Vec<AvRule<'a>>, Box<dyn Error>> {
     let mut ret: Vec<AvRule> = Vec::new();
     for e in exprs {
         match e {
@@ -116,7 +115,7 @@ fn do_rules_pass<'a>(types: &'a HashMap<String, TypeInfo>, exprs: &Vec<Expressio
             _ => continue,
         }
     }
-    return Ok(ret);
+    Ok(ret)
 }
 
 fn argument_to_typeinfo<'a>(a: &Argument, types: &'a HashMap<String, TypeInfo>) -> Result<&'a TypeInfo, Box<dyn Error>> {
@@ -129,7 +128,7 @@ fn argument_to_typeinfo<'a>(a: &Argument, types: &'a HashMap<String, TypeInfo>) 
     t.ok_or(Box::new(HLLCompileError {}))
 }
 
-fn call_to_av_rule<'a>(c: &FuncCall, types: &'a HashMap<String, TypeInfo>) -> Result<AvRule<'a>, Box<dyn Error>> {
+fn call_to_av_rule<'a>(c: &'a FuncCall, types: &'a HashMap<String, TypeInfo>) -> Result<AvRule<'a>, Box<dyn Error>> {
     let flavor = match c.name.as_str() {
         "allow" => AvRuleFlavor::Allow,
         "dontaudit" => AvRuleFlavor::Dontaudit,
@@ -141,11 +140,11 @@ fn call_to_av_rule<'a>(c: &FuncCall, types: &'a HashMap<String, TypeInfo>) -> Re
     let source = argument_to_typeinfo(&c.args[0], types)?;
     let target = argument_to_typeinfo(&c.args[1], types)?;
     let class = match &c.args[2] {
-        Argument::Var(s) => s.clone(),
+        Argument::Var(s) => s,
         _ => return Err(Box::new(HLLCompileError {})),
     };
     let perms = match &c.args[3] {
-        Argument::List(l) => l.clone(),
+        Argument::List(l) => l.iter().map(|s| s as &str).collect(),
         _ => return Err(Box::new(HLLCompileError {})),
     };
 
@@ -165,15 +164,17 @@ fn type_list_to_sexp(types: Vec<&TypeInfo>) -> Vec<sexp::Sexp> {
         ret.push(Sexp::List(vec![Sexp::Atom(Atom::S("type".to_string())),
                                 Sexp::Atom(Atom::S(t.name.clone()))]))
     }
-    return ret;
+    ret
 }
 
-fn av_list_to_sexp(av_rules: Vec<AvRule>) -> Vec<sexp::Sexp> {
+fn av_list_to_sexp<'a, T>(av_rules: T) -> Vec<sexp::Sexp>
+    where T: IntoIterator<Item = AvRule<'a>>
+{
     let mut ret: Vec<sexp::Sexp> = Vec::new();
     for a in av_rules {
         ret.push(generate_cil_for_av_rule(a));
     }
-    return ret;
+    ret
 }
 
 #[cfg(test)]

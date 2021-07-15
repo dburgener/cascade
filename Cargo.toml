@@ -5,9 +5,9 @@ authors = ["Daniel Burgener <Daniel.Burgener@microsoft.com>"]
 edition = "2018"
 
 [build-dependencies]
-lalrpop = "0.19.5"
+lalrpop = "0.19"
 
 [dependencies]
-lalrpop-util = "0.19.5"
+lalrpop-util = "0.19"
 regex = "1"
-sexp = "1.1.4"
+sexp = "1.1"

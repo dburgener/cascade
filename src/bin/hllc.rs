@@ -2,7 +2,7 @@ use SELinuxhll::compile_system_policy;
 
 use std::env;
 use std::fs::File;
-use std::process::exit;
+use std::io::{Error, ErrorKind};
 
 fn usage() {
     println!("hllc policy.hll");
@@ -13,7 +13,7 @@ fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
         usage();
-        exit(1);
+        return Err(Error::new(ErrorKind::InvalidInput, "Missing policy file"));
     }
 
     let mut policies: Vec<&mut File> = Vec::new();
@@ -27,5 +27,5 @@ fn main() -> std::io::Result<()> {
         _ => (),
     }
 
-    return Ok(());
+    Ok(())
 }

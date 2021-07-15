@@ -95,7 +95,7 @@ impl FuncCall {
             Some(_) => return false,
             None=> (),
         }
-        return BUILTINS.iter().any(|&i| i == &self.name);
+        BUILTINS.iter().any(|&i| i == &self.name)
     }
 
 }
