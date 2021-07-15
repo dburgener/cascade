@@ -4,44 +4,31 @@ extern crate lalrpop_util;
 mod ast;
 mod compile;
 mod constants;
+pub mod error;
 mod functions;
 mod internal_rep;
 
-use std::error::Error;
-use std::fmt;
+use error::HLLError;
 use std::fs::File;
 use std::io::{Error as IOError, Read, Write};
 
 lalrpop_mod!(pub parser);
 
-#[derive(Clone, Debug)]
-struct HLLCompileError {}
-
-impl fmt::Display for HLLCompileError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "TODO")
-    }
-}
-
-impl Error for HLLCompileError {}
-
 // TODO: Should use a more specific error type
 pub fn compile_system_policy(
     input_files: Vec<&mut File>,
     out_file: &mut File,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), Vec<error::HLLError>> {
     let mut policies: Vec<Box<ast::Policy>> = Vec::new();
     for f in input_files {
         let mut policy_str = String::new();
-        f.read_to_string(&mut policy_str)?;
-        let p = parse_policy(&policy_str);
-        let p = match p {
+        match f.read_to_string(&mut policy_str) {
+            Ok(_) => (),
+            Err(e) => return Err(Vec::from(HLLError::from(e))),
+        }
+        let p = match parse_policy(&policy_str) {
             Ok(p) => p,
-            Err(e) => {
-                println!("TODO: Handle parse errors cleanly");
-                eprintln!("{}", e);
-                return Err(Box::new(HLLCompileError {}));
-            }
+            Err(e) => return Err(Vec::from(HLLError::from(e))),
         };
 
         policies.push(p);
@@ -52,7 +39,10 @@ pub fn compile_system_policy(
 
     let out_str = generate_cil(cil_tree);
 
-    write_out_cil(out_file, out_str)?;
+    match write_out_cil(out_file, out_str) {
+        Ok(_) => (),
+        Err(e) => return Err(Vec::from(HLLError::from(e))),
+    }
 
     Ok(())
 }

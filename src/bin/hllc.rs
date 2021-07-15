@@ -23,7 +23,11 @@ fn main() -> std::io::Result<()> {
     let mut out_file = File::create("out.cil")?;
     let res = compile_system_policy(policies, &mut out_file);
     match res {
-        Err(e) => eprintln!("{}", e),
+        Err(error_list) => {
+            for e in error_list {
+                eprintln!("{}", e);
+            }
+        }
         _ => (),
     }
 
