@@ -3,8 +3,7 @@ use std::collections::{HashMap, HashSet};
 use sexp::{Sexp, Atom};
 
 use crate::ast::{Policy, Expression, Declaration, Statement, FuncCall, Argument};
-use crate::internal_rep::{TypeInfo,AvRuleFlavor, AvRule};
-use crate::functions::generate_cil_for_av_rule;
+use crate::internal_rep::{TypeInfo,AvRuleFlavor, AvRule,generate_cil_for_av_rule};
 
 pub fn compile(p: &Policy) -> Result<sexp::Sexp, Box<dyn Error>> {
     let type_map = build_type_map(p);
