@@ -38,7 +38,7 @@ pub struct AvRule<'a> {
 
 impl From<AvRule<'_>> for sexp::Sexp {
     fn from(rule: AvRule) -> sexp::Sexp {
-        let mut ret: Vec<sexp::Sexp> = Vec::new();
+        let mut ret = Vec::new();
 
         ret.push(match rule.av_rule_flavor {
             AvRuleFlavor::Allow => Sexp::Atom(Atom::S("allow".to_string())),

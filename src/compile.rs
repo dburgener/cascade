@@ -21,7 +21,7 @@ pub fn compile(p: &Policy) -> Result<sexp::Sexp, Box<dyn Error>> {
 
 // TODO: Currently is domains only
 fn build_type_map(p: &Policy) -> HashMap<String, TypeInfo> {
-    let mut decl_map: HashMap<String, TypeInfo> = HashMap::new();
+    let mut decl_map = HashMap::new();
     // TODO: This only allows domain declarations at the top level.  Is that okay?  I'm too tired
     // to think about it
     for e in &p.exprs {
@@ -61,7 +61,6 @@ impl Error for HLLCompileError {}
 fn organize_type_map<'a>(
     types: &'a HashMap<String, TypeInfo>,
 ) -> Result<Vec<&'a TypeInfo>, Box<dyn Error>> {
-    // TODO: Check what sort of type this is and convert to something more suitable like a vector
     let mut tmp_type_names: HashSet<&String> = types.keys().collect();
 
     let mut out: Vec<&TypeInfo> = Vec::new();
@@ -104,7 +103,7 @@ fn do_rules_pass<'a>(
     types: &'a HashMap<String, TypeInfo>,
     exprs: &'a Vec<Expression>,
 ) -> Result<Vec<AvRule<'a>>, Box<dyn Error>> {
-    let mut ret: Vec<AvRule> = Vec::new();
+    let mut ret = Vec::new();
     for e in exprs {
         match e {
             Expression::Stmt(Statement::Call(c)) => {
@@ -170,7 +169,7 @@ fn call_to_av_rule<'a>(
 }
 
 fn type_list_to_sexp(types: Vec<&TypeInfo>) -> Vec<sexp::Sexp> {
-    let mut ret: Vec<sexp::Sexp> = Vec::new();
+    let mut ret = Vec::new();
     for t in types {
         ret.push(Sexp::List(vec![
             Sexp::Atom(Atom::S("type".to_string())),
