@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use sexp::{Sexp, Atom};
 
 use crate::ast::{Policy, Expression, Declaration, Statement, FuncCall, Argument};
-use crate::internal_rep::{TypeInfo,AvRuleFlavor, AvRule,generate_cil_for_av_rule};
+use crate::internal_rep::{TypeInfo,AvRuleFlavor, AvRule};
 
 pub fn compile(p: &Policy) -> Result<sexp::Sexp, Box<dyn Error>> {
     let type_map = build_type_map(p);
@@ -169,7 +169,7 @@ fn type_list_to_sexp(types: Vec<&TypeInfo>) -> Vec<sexp::Sexp> {
 fn av_list_to_sexp<'a, T>(av_rules: T) -> Vec<sexp::Sexp>
     where T: IntoIterator<Item = AvRule<'a>>
 {
-    av_rules.into_iter().map(|r| generate_cil_for_av_rule(r)).collect()
+    av_rules.into_iter().map(|r| Sexp::from(r)).collect()
 }
 
 #[cfg(test)]
