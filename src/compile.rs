@@ -1,9 +1,9 @@
-use std::error::Error;
+use sexp::{Atom, Sexp};
 use std::collections::{HashMap, HashSet};
-use sexp::{Sexp, Atom};
+use std::error::Error;
 
-use crate::ast::{Policy, Expression, Declaration, Statement, FuncCall, Argument};
-use crate::internal_rep::{TypeInfo,AvRuleFlavor, AvRule};
+use crate::ast::{Argument, Declaration, Expression, FuncCall, Policy, Statement};
+use crate::internal_rep::{AvRule, AvRuleFlavor, TypeInfo};
 
 pub fn compile(p: &Policy) -> Result<sexp::Sexp, Box<dyn Error>> {
     let type_map = build_type_map(p);
@@ -30,7 +30,7 @@ fn build_type_map(p: &Policy) -> HashMap<String, TypeInfo> {
             _ => continue,
         };
         match d {
-            Declaration::Type(t) => { decl_map.insert(t.name.clone(), TypeInfo::new(&**t)) },
+            Declaration::Type(t) => decl_map.insert(t.name.clone(), TypeInfo::new(&**t)),
             Declaration::Func(_) => continue,
         };
     }
@@ -58,7 +58,9 @@ impl Error for HLLCompileError {}
 // 1. All types have at least one parent
 // 2. All listed parents are themselves types (or "domain" or "resource")
 // 3. No cycles exist
-fn organize_type_map<'a>(types: &'a HashMap<String, TypeInfo>) -> Result<Vec<&'a TypeInfo>, Box<dyn Error>> {
+fn organize_type_map<'a>(
+    types: &'a HashMap<String, TypeInfo>,
+) -> Result<Vec<&'a TypeInfo>, Box<dyn Error>> {
     // TODO: Check what sort of type this is and convert to something more suitable like a vector
     let mut tmp_type_names: HashSet<&String> = types.keys().collect();
 
@@ -70,6 +72,7 @@ fn organize_type_map<'a>(types: &'a HashMap<String, TypeInfo>) -> Result<Vec<&'a
         for t in &tmp_type_names {
             let mut wait = false;
             let ti = types.get(*t).unwrap(); // will always be Some
+
             // TODO: Do we need to consider the case when inherits is empty?  Theoretically it
             // should have always been populated with at least domain or resource by the parser.
             // Should probably return an internal error if that hasn't happened
@@ -97,7 +100,10 @@ fn organize_type_map<'a>(types: &'a HashMap<String, TypeInfo>) -> Result<Vec<&'a
     Ok(out)
 }
 
-fn do_rules_pass<'a>(types: &'a HashMap<String, TypeInfo>, exprs: &'a Vec<Expression>) -> Result<Vec<AvRule<'a>>, Box<dyn Error>> {
+fn do_rules_pass<'a>(
+    types: &'a HashMap<String, TypeInfo>,
+    exprs: &'a Vec<Expression>,
+) -> Result<Vec<AvRule<'a>>, Box<dyn Error>> {
     let mut ret: Vec<AvRule> = Vec::new();
     for e in exprs {
         match e {
@@ -106,18 +112,21 @@ fn do_rules_pass<'a>(types: &'a HashMap<String, TypeInfo>, exprs: &'a Vec<Expres
                     let av_rule = call_to_av_rule(&**c, types)?;
                     ret.push(av_rule);
                 }
-            },
+            }
             Expression::Decl(Declaration::Type(t)) => {
                 let child_rules = do_rules_pass(types, &t.expressions)?;
                 ret.extend(child_rules.iter().cloned());
-            },
+            }
             _ => continue,
         }
     }
     Ok(ret)
 }
 
-fn argument_to_typeinfo<'a>(a: &Argument, types: &'a HashMap<String, TypeInfo>) -> Result<&'a TypeInfo, Box<dyn Error>> {
+fn argument_to_typeinfo<'a>(
+    a: &Argument,
+    types: &'a HashMap<String, TypeInfo>,
+) -> Result<&'a TypeInfo, Box<dyn Error>> {
     // TODO: Handle the "this" keyword
     let t: Option<&TypeInfo> = match a {
         Argument::Var(s) => types.get(s),
@@ -127,7 +136,10 @@ fn argument_to_typeinfo<'a>(a: &Argument, types: &'a HashMap<String, TypeInfo>) 
     t.ok_or(Box::new(HLLCompileError {}))
 }
 
-fn call_to_av_rule<'a>(c: &'a FuncCall, types: &'a HashMap<String, TypeInfo>) -> Result<AvRule<'a>, Box<dyn Error>> {
+fn call_to_av_rule<'a>(
+    c: &'a FuncCall,
+    types: &'a HashMap<String, TypeInfo>,
+) -> Result<AvRule<'a>, Box<dyn Error>> {
     let flavor = match c.name.as_str() {
         "allow" => AvRuleFlavor::Allow,
         "dontaudit" => AvRuleFlavor::Dontaudit,
@@ -160,14 +172,17 @@ fn call_to_av_rule<'a>(c: &'a FuncCall, types: &'a HashMap<String, TypeInfo>) ->
 fn type_list_to_sexp(types: Vec<&TypeInfo>) -> Vec<sexp::Sexp> {
     let mut ret: Vec<sexp::Sexp> = Vec::new();
     for t in types {
-        ret.push(Sexp::List(vec![Sexp::Atom(Atom::S("type".to_string())),
-                                Sexp::Atom(Atom::S(t.name.clone()))]))
+        ret.push(Sexp::List(vec![
+            Sexp::Atom(Atom::S("type".to_string())),
+            Sexp::Atom(Atom::S(t.name.clone())),
+        ]))
     }
     ret
 }
 
 fn av_list_to_sexp<'a, T>(av_rules: T) -> Vec<sexp::Sexp>
-    where T: IntoIterator<Item = AvRule<'a>>
+where
+    T: IntoIterator<Item = AvRule<'a>>,
 {
     av_rules.into_iter().map(|r| Sexp::from(r)).collect()
 }
@@ -175,13 +190,15 @@ fn av_list_to_sexp<'a, T>(av_rules: T) -> Vec<sexp::Sexp>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{Policy, Expression, Declaration, TypeDecl};
-    use crate::internal_rep::{TypeInfo};
+    use crate::ast::{Declaration, Expression, Policy, TypeDecl};
+    use crate::internal_rep::TypeInfo;
 
     #[test]
     fn build_type_map_test() {
         let mut exprs = Vec::new();
-        exprs.push(Expression::Decl(Declaration::Type(Box::new(TypeDecl::new("foo".to_string(), vec!["domain".to_string()], Vec::new())))));
+        exprs.push(Expression::Decl(Declaration::Type(Box::new(
+            TypeDecl::new("foo".to_string(), vec!["domain".to_string()], Vec::new()),
+        ))));
         let p = Policy::new(exprs);
         let types = build_type_map(&p);
         match types.get("foo") {
@@ -192,10 +209,22 @@ mod tests {
 
     #[test]
     fn organize_type_map_test() {
-        let mut types: HashMap<String, TypeInfo>  = HashMap::new();
-        let foo_type = TypeInfo::new(&TypeDecl::new("foo".to_string(), vec!["domain".to_string()], Vec::new()));
-        let bar_type = TypeInfo::new(&TypeDecl::new("bar".to_string(), vec!["domain".to_string(), "foo".to_string()], Vec::new()));
-        let baz_type = TypeInfo::new(&TypeDecl::new("baz".to_string(), vec!["domain".to_string(), "foo".to_string(), "bar".to_string()], Vec::new()));
+        let mut types: HashMap<String, TypeInfo> = HashMap::new();
+        let foo_type = TypeInfo::new(&TypeDecl::new(
+            "foo".to_string(),
+            vec!["domain".to_string()],
+            Vec::new(),
+        ));
+        let bar_type = TypeInfo::new(&TypeDecl::new(
+            "bar".to_string(),
+            vec!["domain".to_string(), "foo".to_string()],
+            Vec::new(),
+        ));
+        let baz_type = TypeInfo::new(&TypeDecl::new(
+            "baz".to_string(),
+            vec!["domain".to_string(), "foo".to_string(), "bar".to_string()],
+            Vec::new(),
+        ));
         types.insert("foo".to_string(), foo_type);
         types.insert("bar".to_string(), bar_type);
         types.insert("baz".to_string(), baz_type);

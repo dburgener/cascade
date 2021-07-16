@@ -5,9 +5,7 @@ pub struct Policy {
 
 impl Policy {
     pub fn new(v: Vec<Expression>) -> Policy {
-        Policy {
-            exprs: v,
-        }
+        Policy { exprs: v }
     }
 }
 
@@ -31,7 +29,7 @@ impl Virtualable for Declaration {
     fn set_virtual(&mut self) {
         match self {
             Declaration::Type(t) => t.set_virtual(),
-            Declaration::Func(f) => {}, // TODO
+            Declaration::Func(f) => {} // TODO
         }
     }
 }
@@ -46,7 +44,12 @@ pub struct TypeDecl {
 
 impl TypeDecl {
     pub fn new(n: String, i: Vec<String>, e: Vec<Expression>) -> TypeDecl {
-        TypeDecl { name: n, inherits: i, is_virtual: false, expressions: e }
+        TypeDecl {
+            name: n,
+            inherits: i,
+            is_virtual: false,
+            expressions: e,
+        }
     }
 }
 
@@ -56,7 +59,6 @@ impl PartialEq for TypeDecl {
         self.name == other.name
     }
 }
-
 
 impl Virtualable for TypeDecl {
     fn set_virtual(&mut self) {
@@ -86,18 +88,17 @@ impl FuncCall {
         FuncCall {
             class_name: cn,
             name: n,
-            args: a
+            args: a,
         }
     }
 
     pub fn is_builtin(&self) -> bool {
         match self.class_name {
             Some(_) => return false,
-            None=> (),
+            None => (),
         }
         BUILTINS.iter().any(|&i| i == &self.name)
     }
-
 }
 
 #[derive(Debug)]

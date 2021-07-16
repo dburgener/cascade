@@ -2,14 +2,14 @@
 extern crate lalrpop_util;
 
 mod ast;
-mod internal_rep;
 mod compile;
 mod functions;
+mod internal_rep;
 
-use std::fs::{File};
 use std::error::Error;
-use std::io::{Error as IOError, Read, Write};
 use std::fmt;
+use std::fs::File;
+use std::io::{Error as IOError, Read, Write};
 
 lalrpop_mod!(pub parser);
 
@@ -25,7 +25,10 @@ impl fmt::Display for HLLCompileError {
 impl Error for HLLCompileError {}
 
 // TODO: Should use a more specific error type
-pub fn compile_system_policy(input_files: Vec<&mut File>, out_file: &mut File) -> Result<(), Box<dyn Error>> {
+pub fn compile_system_policy(
+    input_files: Vec<&mut File>,
+    out_file: &mut File,
+) -> Result<(), Box<dyn Error>> {
     let mut policies: Vec<Box<ast::Policy>> = Vec::new();
     for f in input_files {
         let mut policy_str = String::new();
@@ -33,7 +36,8 @@ pub fn compile_system_policy(input_files: Vec<&mut File>, out_file: &mut File) -
         let p = parse_policy(&policy_str);
         let p = match p {
             Ok(p) => p,
-            Err(e) => { println!("TODO: Handle parse errors cleanly");
+            Err(e) => {
+                println!("TODO: Handle parse errors cleanly");
                 eprintln!("{}", e);
                 return Err(Box::new(HLLCompileError {}));
             }
@@ -52,13 +56,18 @@ pub fn compile_system_policy(input_files: Vec<&mut File>, out_file: &mut File) -
     Ok(())
 }
 
-fn parse_policy<'a>(policy: &'a str) -> Result<Box<ast::Policy>, lalrpop_util::ParseError<usize, lalrpop_util::lexer::Token<'a>, &'static str>> {
+fn parse_policy<'a>(
+    policy: &'a str,
+) -> Result<
+    Box<ast::Policy>,
+    lalrpop_util::ParseError<usize, lalrpop_util::lexer::Token<'a>, &'static str>,
+> {
     // TODO: Probably should only construct once
     // Why though?
     parser::PolicyParser::new().parse(policy)
 }
 
-fn generate_cil(s: sexp::Sexp) -> String{
+fn generate_cil(s: sexp::Sexp) -> String {
     s.to_string()
 }
 
@@ -95,5 +104,4 @@ mod tests {
         let res = parser::PolicyParser::new().parse(&policy);
         assert!(res.is_ok(), "Parse Error: {:?}", res);
     }
-
 }

@@ -1,17 +1,21 @@
-use sexp::{Sexp, Atom};
+use sexp::{Atom, Sexp};
 
-use crate::ast::{TypeDecl};
+use crate::ast::TypeDecl;
 
 #[derive(Clone, Debug)]
 pub struct TypeInfo {
     pub name: String,
     pub inherits: Vec<String>,
-    is_virtual: bool
+    is_virtual: bool,
 }
 
 impl TypeInfo {
     pub fn new(td: &TypeDecl) -> TypeInfo {
-        TypeInfo { name: td.name.clone(), inherits: td.inherits.clone(), is_virtual: td.is_virtual }
+        TypeInfo {
+            name: td.name.clone(),
+            inherits: td.inherits.clone(),
+            is_virtual: td.is_virtual,
+        }
     }
 }
 
@@ -48,7 +52,11 @@ impl From<AvRule<'_>> for sexp::Sexp {
 
         let mut classpermset = vec![Sexp::Atom(Atom::S(rule.class.to_string()))];
 
-        let perms = rule.perms.into_iter().map(|p| Sexp::Atom(Atom::S(p.to_string()))).collect();
+        let perms = rule
+            .perms
+            .into_iter()
+            .map(|p| Sexp::Atom(Atom::S(p.to_string())))
+            .collect();
 
         classpermset.push(Sexp::List(perms));
 
@@ -66,11 +74,13 @@ mod tests {
 
     #[test]
     fn generate_cil_for_av_rule_test() {
-        let cil_sexp = Sexp::from(AvRule { av_rule_flavor: AvRuleFlavor::Allow,
+        let cil_sexp = Sexp::from(AvRule {
+            av_rule_flavor: AvRuleFlavor::Allow,
             source: &TypeInfo::new(&TypeDecl::new("foo".to_string(), Vec::new(), Vec::new())),
             target: &TypeInfo::new(&TypeDecl::new("bar".to_string(), Vec::new(), Vec::new())),
             class: "file",
-            perms: vec!["read", "getattr"]});
+            perms: vec!["read", "getattr"],
+        });
 
         let cil_expected = "(allow foo bar (file (read getattr)))";
 
