@@ -170,11 +170,7 @@ fn type_list_to_sexp(types: Vec<&TypeInfo>) -> Vec<sexp::Sexp> {
 fn av_list_to_sexp<'a, T>(av_rules: T) -> Vec<sexp::Sexp>
     where T: IntoIterator<Item = AvRule<'a>>
 {
-    let mut ret: Vec<sexp::Sexp> = Vec::new();
-    for a in av_rules {
-        ret.push(generate_cil_for_av_rule(a));
-    }
-    ret
+    av_rules.into_iter().map(|r| generate_cil_for_av_rule(r)).collect()
 }
 
 #[cfg(test)]
