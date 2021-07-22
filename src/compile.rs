@@ -1,5 +1,5 @@
 use sexp::{Atom, Sexp};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::ast::{Argument, Declaration, Expression, FuncCall, Policy, Statement};
 use crate::constants;
@@ -50,6 +50,9 @@ fn find_cycles_or_bad_types(
     visited_types: HashSet<&str>,
 ) -> Vec<HLLError> {
     let mut ret = Vec::new();
+    if type_to_check == "domain" || type_to_check == "resource" {
+        return ret;
+    }
 
     // type_to_check was generated from types.keys(), so it's guaranteed to be Some
     for p in &types.get(&type_to_check.to_string()).unwrap().inherits {
@@ -121,7 +124,7 @@ fn organize_type_map<'a>(
             // should have always been populated with at least domain or resource by the parser.
             // Should probably return an internal error if that hasn't happened
             for key in &ti.inherits {
-                if key != "domain" && key != "resource" && out.iter().any(|&x| &x.name == key) {
+                if key != "domain" && key != "resource" && !out.iter().any(|&x| &x.name == key) {
                     wait = true;
                     continue;
                 }
@@ -134,7 +137,10 @@ fn organize_type_map<'a>(
         if current_pass_types.is_empty() && !tmp_types.is_empty() {
             // We can't satify the parents for all types
             // TODO: Better error handling
-            return Err(generate_type_no_parent_errors(tmp_type_names, types));
+            return Err(generate_type_no_parent_errors(
+                tmp_types.keys().map(|s| *s).collect(),
+                types,
+            ));
         }
         for t in &current_pass_types {
             tmp_types.remove(&t.name);
@@ -194,11 +200,19 @@ fn call_to_av_rule<'a>(
         constants::DONTAUDIT_FUNCTION_NAME => AvRuleFlavor::Dontaudit,
         constants::AUDITALLOW_FUNCTION_NAME => AvRuleFlavor::Auditallow,
         constants::NEVERALLOW_FUNCTION_NAME => AvRuleFlavor::Neverallow,
-        _ => return Err(Box::new(HLLInternalError {})),
+        _ => return Err(HLLError::Internal(HLLInternalError {})),
     };
 
     if c.args.len() != 4 {
-        return Err(Box::new(HLLCompileError {}));
+        return Err(HLLError::Compile(HLLCompileError {
+            filename: "TODO".to_string(),
+            lineno: 0,
+            msg: format!(
+                "Expected 4 args to built in function {}.  Got {}.",
+                c.name.as_str(),
+                c.args.len()
+            ),
+        }));
     }
 
     let source = argument_to_typeinfo(&c.args[0], types)?;

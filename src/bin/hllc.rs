@@ -28,7 +28,7 @@ fn main() -> std::io::Result<()> {
                 eprintln!("{}", e);
             }
         }
-        Ok(s) => out_file.write_all(s.as_bytes())?
+        Ok(s) => out_file.write_all(s.as_bytes())?,
     }
 
     Ok(())

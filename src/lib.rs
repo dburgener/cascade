@@ -10,14 +10,12 @@ mod internal_rep;
 
 use error::HLLError;
 use std::fs::File;
-use std::io::{Error as IOError, Read};
+use std::io::Read;
 
 lalrpop_mod!(pub parser);
 
 // TODO: Should use a more specific error type
-pub fn compile_system_policy(
-    input_files: Vec<&mut File>
-) -> Result<String, Vec<error::HLLError>> {
+pub fn compile_system_policy(input_files: Vec<&mut File>) -> Result<String, Vec<error::HLLError>> {
     let mut policies: Vec<Box<ast::Policy>> = Vec::new();
     for f in input_files {
         let mut policy_str = String::new();
@@ -37,7 +35,6 @@ pub fn compile_system_policy(
     let cil_tree = compile::compile(&*policies[0])?;
 
     Ok(generate_cil(cil_tree))
-
 }
 
 fn parse_policy<'a>(
@@ -61,7 +58,10 @@ mod tests {
 
     use std::fs;
 
+    use super::*;
+
     const POLICIES_DIR: &str = "data/policies/";
+    const ERROR_POLICIES_DIR: &str = "data/error_policies/";
 
     #[test]
     fn basic_expression_parse_test() {
@@ -82,5 +82,15 @@ mod tests {
 
         let res = parser::PolicyParser::new().parse(&policy);
         assert!(res.is_ok(), "Parse Error: {:?}", res);
+    }
+
+    #[test]
+    fn cycle_error_test() {
+        let policy_file = [ERROR_POLICIES_DIR, "cycle.hll"].concat();
+        let mut policy = File::open(policy_file).unwrap();
+
+        let res = compile_system_policy(vec![&mut policy]);
+
+        assert!(res.is_err(), "Cycle compiled successfully");
     }
 }

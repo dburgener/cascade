@@ -1,0 +1,3 @@
+domain foo inherits bar {}
+
+domain bar inherits foo {}
