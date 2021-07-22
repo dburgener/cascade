@@ -2,7 +2,7 @@ use selinuxhll::compile_system_policy;
 
 use std::env;
 use std::fs::File;
-use std::io::{Error, ErrorKind};
+use std::io::{Error, ErrorKind, Write};
 
 fn usage() {
     println!("hllc policy.hll");
@@ -21,14 +21,14 @@ fn main() -> std::io::Result<()> {
     policies.push(&mut in_file);
 
     let mut out_file = File::create("out.cil")?;
-    let res = compile_system_policy(policies, &mut out_file);
+    let res = compile_system_policy(policies);
     match res {
         Err(error_list) => {
             for e in error_list {
                 eprintln!("{}", e);
             }
         }
-        _ => (),
+        Ok(s) => out_file.write_all(s.as_bytes())?
     }
 
     Ok(())

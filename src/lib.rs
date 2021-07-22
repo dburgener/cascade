@@ -10,15 +10,14 @@ mod internal_rep;
 
 use error::HLLError;
 use std::fs::File;
-use std::io::{Error as IOError, Read, Write};
+use std::io::{Error as IOError, Read};
 
 lalrpop_mod!(pub parser);
 
 // TODO: Should use a more specific error type
 pub fn compile_system_policy(
-    input_files: Vec<&mut File>,
-    out_file: &mut File,
-) -> Result<(), Vec<error::HLLError>> {
+    input_files: Vec<&mut File>
+) -> Result<String, Vec<error::HLLError>> {
     let mut policies: Vec<Box<ast::Policy>> = Vec::new();
     for f in input_files {
         let mut policy_str = String::new();
@@ -37,14 +36,8 @@ pub fn compile_system_policy(
     // TODO: Combine multiple files
     let cil_tree = compile::compile(&*policies[0])?;
 
-    let out_str = generate_cil(cil_tree);
+    Ok(generate_cil(cil_tree))
 
-    match write_out_cil(out_file, out_str) {
-        Ok(_) => (),
-        Err(e) => return Err(Vec::from(HLLError::from(e))),
-    }
-
-    Ok(())
 }
 
 fn parse_policy<'a>(
@@ -60,11 +53,6 @@ fn parse_policy<'a>(
 
 fn generate_cil(s: sexp::Sexp) -> String {
     s.to_string()
-}
-
-fn write_out_cil(f: &mut File, s: String) -> Result<(), IOError> {
-    f.write_all(s.as_bytes())?;
-    Ok(())
 }
 
 #[cfg(test)]
