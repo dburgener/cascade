@@ -45,8 +45,11 @@ fn parse_policy<'a>(
     parser::PolicyParser::new().parse(policy)
 }
 
-fn generate_cil(s: sexp::Sexp) -> String {
-    s.to_string()
+fn generate_cil(v: Vec<sexp::Sexp>) -> String {
+    v.iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<String>>()
+        .join("\n")
 }
 
 #[cfg(test)]

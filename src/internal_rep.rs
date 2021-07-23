@@ -100,10 +100,21 @@ pub struct Context<'a> {
 
 impl Context<'_> {
     // All fields except setype is optional.  User and role are replaced with defaults if set to None
-    pub fn new<'a>(is_domain: bool, u: Option<&'a str>, r: Option<&'a str>, t: &'a str, ml: Option<&'a str>, mh: Option<&'a str>) -> Context<'a> {
+    pub fn new<'a>(
+        is_domain: bool,
+        u: Option<&'a str>,
+        r: Option<&'a str>,
+        t: &'a str,
+        ml: Option<&'a str>,
+        mh: Option<&'a str>,
+    ) -> Context<'a> {
         Context {
             user: u.unwrap_or(DEFAULT_USER),
-            role: r.unwrap_or(if is_domain { DEFAULT_DOMAIN_ROLE } else { DEFAULT_OBJECT_ROLE }),
+            role: r.unwrap_or(if is_domain {
+                DEFAULT_DOMAIN_ROLE
+            } else {
+                DEFAULT_OBJECT_ROLE
+            }),
             setype: t,
             mls_low: ml.unwrap_or(DEFAULT_MLS),
             mls_high: mh.unwrap_or(DEFAULT_MLS),
@@ -113,12 +124,16 @@ impl Context<'_> {
 
 impl From<Context<'_>> for sexp::Sexp {
     fn from(c: Context) -> sexp::Sexp {
-        let mls_range = Sexp::List(vec![Sexp::List(vec![atom_s(c.mls_low)]),
-                                        Sexp::List(vec![atom_s(c.mls_high)])]);
-        Sexp::List(vec![atom_s(c.user),
-                        atom_s(c.role),
-                        atom_s(c.setype),
-                        mls_range])
+        let mls_range = Sexp::List(vec![
+            Sexp::List(vec![atom_s(c.mls_low)]),
+            Sexp::List(vec![atom_s(c.mls_high)]),
+        ]);
+        Sexp::List(vec![
+            atom_s(c.user),
+            atom_s(c.role),
+            atom_s(c.setype),
+            mls_range,
+        ])
     }
 }
 
@@ -129,8 +144,9 @@ pub struct Sid<'a> {
 
 impl<'a> Sid<'a> {
     pub fn new(n: &'a str, c: Context<'a>) -> Self {
-        Sid { name: n,
-              context: c
+        Sid {
+            name: n,
+            context: c,
         }
     }
 
@@ -139,9 +155,11 @@ impl<'a> Sid<'a> {
     }
 
     fn get_sidcontext_statement(&self) -> Sexp {
-        Sexp::List(vec![atom_s("sidcontext"),
-                        atom_s(self.name),
-                        Sexp::from(self.context)])
+        Sexp::List(vec![
+            atom_s("sidcontext"),
+            atom_s(self.name),
+            Sexp::from(self.context),
+        ])
     }
 
     fn get_name_as_sexp_atom(&self) -> Sexp {
@@ -157,8 +175,7 @@ pub fn generate_sid_rules(sids: Vec<Sid>) -> Vec<Sexp> {
         ret.push(s.get_sidcontext_statement());
         order.push(s.get_name_as_sexp_atom());
     }
-    ret.push(Sexp::List(vec![atom_s("sidorder"),
-                             Sexp::List(order)]));
+    ret.push(Sexp::List(vec![atom_s("sidorder"), Sexp::List(order)]));
     ret
 }
 
@@ -185,7 +202,14 @@ mod tests {
 
     #[test]
     fn sexp_from_context() {
-        let context_sexp = Sexp::from(Context::new(true, Some("u"), Some("r"), "t", Some("s0"), Some("s0")));
+        let context_sexp = Sexp::from(Context::new(
+            true,
+            Some("u"),
+            Some("r"),
+            "t",
+            Some("s0"),
+            Some("s0"),
+        ));
         let cil_expected = "(u r t ((s0) (s0)))";
         assert_eq!(context_sexp.to_string(), cil_expected.to_string());
     }
@@ -203,16 +227,17 @@ mod tests {
         let sid2 = Sid::new("bar", Context::new(false, None, None, "bar_t", None, None));
 
         let rules = generate_sid_rules(vec![sid1, sid2]);
-        let cil_expected = vec!["(sid foo)",
-                                "(sidcontext foo (system_u system_r foo_t ((s0) (s0))))",
-                                "(sid bar)",
-                                "(sidcontext bar (system_u object_r bar_t ((s0) (s0))))",
-                                "(sidorder (foo bar))"];
+        let cil_expected = vec![
+            "(sid foo)",
+            "(sidcontext foo (system_u system_r foo_t ((s0) (s0))))",
+            "(sid bar)",
+            "(sidcontext bar (system_u object_r bar_t ((s0) (s0))))",
+            "(sidorder (foo bar))",
+        ];
         assert_eq!(rules.len(), cil_expected.len());
         let mut iter = rules.iter().zip(cil_expected.iter());
         while let Some(i) = iter.next() {
             assert_eq!(i.0.to_string(), i.1.to_string());
         }
     }
-
 }

@@ -4,4 +4,3 @@ domain all_processes {
 	allow(all_processes, all_files, file, [read write open getattr append]);
 }
 
-
