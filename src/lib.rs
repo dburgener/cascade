@@ -97,6 +97,15 @@ mod tests {
     }
 
     #[test]
+    fn simple_policy_build_test() {
+        let policy_file = [POLICIES_DIR, "simple.hll"].concat();
+
+        let res = compile_system_policy(vec![&policy_file]);
+
+        assert!(res.is_ok(), "Failed to build simple policy: {:?}", res);
+    }
+
+    #[test]
     fn cycle_error_test() {
         let policy_file = [ERROR_POLICIES_DIR, "cycle.hll"].concat();
 

@@ -90,7 +90,7 @@ impl From<AvRule<'_>> for sexp::Sexp {
 }
 
 #[derive(Copy, Clone)]
-struct Context<'a> {
+pub struct Context<'a> {
     user: &'a str,
     role: &'a str,
     setype: &'a str,
@@ -100,7 +100,7 @@ struct Context<'a> {
 
 impl Context<'_> {
     // All fields except setype is optional.  User and role are replaced with defaults if set to None
-    fn new<'a>(is_domain: bool, u: Option<&'a str>, r: Option<&'a str>, t: &'a str, ml: Option<&'a str>, mh: Option<&'a str>) -> Context<'a> {
+    pub fn new<'a>(is_domain: bool, u: Option<&'a str>, r: Option<&'a str>, t: &'a str, ml: Option<&'a str>, mh: Option<&'a str>) -> Context<'a> {
         Context {
             user: u.unwrap_or(DEFAULT_USER),
             role: r.unwrap_or(if is_domain { DEFAULT_DOMAIN_ROLE } else { DEFAULT_OBJECT_ROLE }),
@@ -114,7 +114,7 @@ impl Context<'_> {
 impl From<Context<'_>> for sexp::Sexp {
     fn from(c: Context) -> sexp::Sexp {
         let mls_range = Sexp::List(vec![Sexp::List(vec![atom_s(c.mls_low)]),
-                                        Sexp::List(vec![atom_s(c.mls_low)])]);
+                                        Sexp::List(vec![atom_s(c.mls_high)])]);
         Sexp::List(vec![atom_s(c.user),
                         atom_s(c.role),
                         atom_s(c.setype),
@@ -122,18 +122,17 @@ impl From<Context<'_>> for sexp::Sexp {
     }
 }
 
-struct Sid<'a> {
+pub struct Sid<'a> {
     name: &'a str,
     context: Context<'a>,
 }
 
 impl<'a> Sid<'a> {
-    fn new(n: &'a str, c: Context<'a>) -> Self {
+    pub fn new(n: &'a str, c: Context<'a>) -> Self {
         Sid { name: n,
               context: c
         }
     }
-
 
     fn get_sid_statement(&self) -> Sexp {
         Sexp::List(vec![atom_s("sid"), atom_s(self.name)])
@@ -150,7 +149,7 @@ impl<'a> Sid<'a> {
     }
 }
 
-fn generate_sid_rules(sids: Vec<Sid>) -> Vec<Sexp> {
+pub fn generate_sid_rules(sids: Vec<Sid>) -> Vec<Sexp> {
     let mut ret = Vec::new();
     let mut order = Vec::new();
     for s in sids {

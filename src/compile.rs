@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use crate::ast::{Argument, Declaration, Expression, FuncCall, Policy, Statement};
 use crate::constants;
 use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
-use crate::internal_rep::{AvRule, AvRuleFlavor, TypeInfo};
+use crate::internal_rep::{generate_sid_rules, AvRule, AvRuleFlavor, Context, Sid, TypeInfo};
 
 pub fn compile(p: &Policy) -> Result<sexp::Sexp, HLLErrors> {
     let type_map = build_type_map(p);
@@ -15,8 +15,10 @@ pub fn compile(p: &Policy) -> Result<sexp::Sexp, HLLErrors> {
     // TODO: The rest of compilation
     let cil_types = type_list_to_sexp(type_decl_list);
     let cil_av_rules = av_list_to_sexp(av_rules);
+    let sid_statements = generate_sid_rules(generate_sids());
     let mut ret = cil_types;
     ret.extend(cil_av_rules.iter().cloned());
+    ret.extend(sid_statements.iter().cloned());
     Ok(Sexp::List(ret))
 }
 
@@ -275,6 +277,26 @@ where
     T: IntoIterator<Item = AvRule<'a>>,
 {
     av_rules.into_iter().map(|r| Sexp::from(r)).collect()
+}
+
+// For now, we use hardcoded values.  In the long terms, these need to be able to be set via the
+// policy.
+// These defaults are taken to match those in secilc/test/policy.cil
+fn generate_sids() -> Vec<Sid<'static>> {
+    vec![
+        Sid::new(
+            "kernel",
+            Context::new(true, None, None, "kernel_t", None, None),
+        ),
+        Sid::new(
+            "security",
+            Context::new(false, None, None, "security_t", None, None),
+        ),
+        Sid::new(
+            "unlabeled",
+            Context::new(false, None, None, "unlabeled_t", None, None),
+        ),
+    ]
 }
 
 #[cfg(test)]
