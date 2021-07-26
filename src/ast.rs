@@ -1,3 +1,8 @@
+pub const ALLOW_FUNCTION_NAME: &'static str = "allow";
+pub const DONTAUDIT_FUNCTION_NAME: &'static str = "dontaudit";
+pub const AUDITALLOW_FUNCTION_NAME: &'static str = "auditallow";
+pub const NEVERALLOW_FUNCTION_NAME: &'static str = "neverallow";
+
 #[derive(Debug)]
 pub struct Policy {
     pub exprs: Vec<Expression>,
@@ -81,7 +86,12 @@ pub struct FuncCall {
     pub args: Vec<Argument>,
 }
 
-const BUILTINS: &'static [&'static str] = &["allow", "dontaudit", "auditallow", "neverallow"];
+const BUILTINS: &'static [&'static str] = &[
+    ALLOW_FUNCTION_NAME,
+    DONTAUDIT_FUNCTION_NAME,
+    AUDITALLOW_FUNCTION_NAME,
+    NEVERALLOW_FUNCTION_NAME,
+];
 
 impl FuncCall {
     pub fn new(cn: Option<String>, n: String, a: Vec<Argument>) -> FuncCall {
