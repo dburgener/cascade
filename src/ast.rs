@@ -6,8 +6,8 @@ pub struct Policy {
 }
 
 impl Policy {
-    pub fn new(v: Vec<Expression>) -> Policy {
-        Policy { exprs: v }
+    pub fn new(exprs: Vec<Expression>) -> Policy {
+        Policy { exprs: exprs }
     }
 }
 
@@ -45,12 +45,12 @@ pub struct TypeDecl {
 }
 
 impl TypeDecl {
-    pub fn new(n: String, i: Vec<String>, e: Vec<Expression>) -> TypeDecl {
+    pub fn new(name: String, inherits: Vec<String>, exprs: Vec<Expression>) -> TypeDecl {
         TypeDecl {
-            name: n,
-            inherits: i,
+            name: name,
+            inherits: inherits,
             is_virtual: false,
-            expressions: e,
+            expressions: exprs,
         }
     }
 }
