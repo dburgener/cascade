@@ -3,6 +3,7 @@ extern crate lalrpop_util;
 
 mod ast;
 mod compile;
+mod constants;
 mod functions;
 mod internal_rep;
 

@@ -2,10 +2,8 @@ use sexp::{Atom, Sexp};
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 
-use crate::ast::{
-    Argument, Declaration, Expression, FuncCall, Policy, Statement, ALLOW_FUNCTION_NAME,
-    AUDITALLOW_FUNCTION_NAME, DONTAUDIT_FUNCTION_NAME, NEVERALLOW_FUNCTION_NAME,
-};
+use crate::ast::{Argument, Declaration, Expression, FuncCall, Policy, Statement};
+use crate::constants;
 use crate::internal_rep::{AvRule, AvRuleFlavor, TypeInfo};
 
 pub fn compile(p: &Policy) -> Result<sexp::Sexp, Box<dyn Error>> {
@@ -143,10 +141,10 @@ fn call_to_av_rule<'a>(
     types: &'a HashMap<String, TypeInfo>,
 ) -> Result<AvRule<'a>, Box<dyn Error>> {
     let flavor = match c.name.as_str() {
-        ALLOW_FUNCTION_NAME => AvRuleFlavor::Allow,
-        DONTAUDIT_FUNCTION_NAME => AvRuleFlavor::Dontaudit,
-        AUDITALLOW_FUNCTION_NAME => AvRuleFlavor::Auditallow,
-        NEVERALLOW_FUNCTION_NAME => AvRuleFlavor::Neverallow,
+        constants::ALLOW_FUNCTION_NAME => AvRuleFlavor::Allow,
+        constants::DONTAUDIT_FUNCTION_NAME => AvRuleFlavor::Dontaudit,
+        constants::AUDITALLOW_FUNCTION_NAME => AvRuleFlavor::Auditallow,
+        constants::NEVERALLOW_FUNCTION_NAME => AvRuleFlavor::Neverallow,
         _ => return Err(Box::new(HLLCompileError {})),
     };
 

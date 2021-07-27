@@ -1,6 +1,7 @@
 use sexp::{Atom, Sexp};
 
 use crate::ast::TypeDecl;
+use crate::constants;
 
 #[derive(Clone, Debug)]
 pub struct TypeInfo {
@@ -41,10 +42,16 @@ impl From<AvRule<'_>> for sexp::Sexp {
         let mut ret = Vec::new();
 
         ret.push(match rule.av_rule_flavor {
-            AvRuleFlavor::Allow => Sexp::Atom(Atom::S("allow".to_string())),
-            AvRuleFlavor::Dontaudit => Sexp::Atom(Atom::S("dontaudit".to_string())),
-            AvRuleFlavor::Auditallow => Sexp::Atom(Atom::S("auditallow".to_string())),
-            AvRuleFlavor::Neverallow => Sexp::Atom(Atom::S("neverallow".to_string())),
+            AvRuleFlavor::Allow => Sexp::Atom(Atom::S(constants::ALLOW_FUNCTION_NAME.to_string())),
+            AvRuleFlavor::Dontaudit => {
+                Sexp::Atom(Atom::S(constants::DONTAUDIT_FUNCTION_NAME.to_string()))
+            }
+            AvRuleFlavor::Auditallow => {
+                Sexp::Atom(Atom::S(constants::AUDITALLOW_FUNCTION_NAME.to_string()))
+            }
+            AvRuleFlavor::Neverallow => {
+                Sexp::Atom(Atom::S(constants::NEVERALLOW_FUNCTION_NAME.to_string()))
+            }
         });
 
         ret.push(Sexp::Atom(Atom::S(rule.source.name.clone())));
