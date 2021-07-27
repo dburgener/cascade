@@ -148,6 +148,10 @@ fn call_to_av_rule<'a>(
         _ => return Err(Box::new(HLLCompileError {})),
     };
 
+    if c.args.len() != 4 {
+        return Err(Box::new(HLLCompileError {}));
+    }
+
     let source = argument_to_typeinfo(&c.args[0], types)?;
     let target = argument_to_typeinfo(&c.args[1], types)?;
     let class = match &c.args[2] {
