@@ -62,16 +62,15 @@ impl Error for HLLCompileError {}
 fn organize_type_map<'a>(
     types: &'a HashMap<String, TypeInfo>,
 ) -> Result<Vec<&'a TypeInfo>, Box<dyn Error>> {
-    let mut tmp_type_names: HashSet<&String> = types.keys().collect();
+    let mut tmp_types: HashMap<&String, &TypeInfo> = types.iter().collect();
 
     let mut out: Vec<&TypeInfo> = Vec::new();
 
-    while !tmp_type_names.is_empty() {
+    while !tmp_types.is_empty() {
         let mut current_pass_types: Vec<&TypeInfo> = Vec::new();
 
-        for t in &tmp_type_names {
+        for (t, ti) in &tmp_types {
             let mut wait = false;
-            let ti = types.get(*t).unwrap(); // will always be Some
 
             // TODO: Do we need to consider the case when inherits is empty?  Theoretically it
             // should have always been populated with at least domain or resource by the parser.
@@ -87,13 +86,13 @@ fn organize_type_map<'a>(
                 current_pass_types.push(ti);
             }
         }
-        if current_pass_types.is_empty() && !tmp_type_names.is_empty() {
+        if current_pass_types.is_empty() && !tmp_types.is_empty() {
             // We can't satify the parents for all types
             // TODO: Better error handling
             return Err(Box::new(HLLCompileError {}));
         }
         for t in &current_pass_types {
-            tmp_type_names.remove(&t.name);
+            tmp_types.remove(&t.name);
         }
         out.append(&mut current_pass_types);
     }
@@ -136,6 +135,7 @@ fn argument_to_typeinfo<'a>(
     t.ok_or(Box::new(HLLCompileError {}))
 }
 
+// TODO: This can be converted into a TryFrom for more compile time gaurantees
 fn call_to_av_rule<'a>(
     c: &'a FuncCall,
     types: &'a HashMap<String, TypeInfo>,
