@@ -1,0 +1,109 @@
+use crate::ast::{Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, Virtualable, FuncCall};
+
+grammar;
+
+// http://lalrpop.github.io/lalrpop/tutorial/006_macros.html
+Comma<T>: Vec<T> = {
+	<mut v:(<T> ",")*> <e:T?> => match e {
+		None => v,
+		Some(e) => {
+			v.push(e);
+			v
+		}
+	}
+};
+
+pub Policy: Box<Policy> = {
+	Expr+ => Box::new(Policy::new(<>)),
+}
+
+pub Expr: Expression = {
+	// TODO: Save annotation info in expression
+	Ann <Expr>,
+	<BaseExpr>
+}
+
+BaseExpr: Expression = {
+	// TODO: other keywords beside virtual?
+	"virtual"? <Decl> => {
+		let mut d = <>;
+		d.set_virtual();
+		Expression::Decl(d)
+	},
+	Stmt => Expression::Stmt(<>),
+};
+
+Decl: Declaration = {
+	TypeDecl => Declaration::Type(<>),
+	FuncDecl => Declaration::Func(<>),
+}
+
+TypeDecl: Box<TypeDecl> = {
+	<dr:BuiltInType> <n:Symbol> <i:InheritList?> "{" <v:Expr*> "}" => {
+		let inherits = match i {
+			None => vec![dr.to_string()],
+			Some(mut i) => {
+				i.push(dr.to_string());
+				i
+			}
+		};
+		Box::new(TypeDecl::new(n, inherits, v))
+	},
+}
+
+InheritList: Vec<String> = {
+	"inherits" <Comma<Symbol>>,
+}
+
+BuiltInType = {
+	"domain",
+	"resource",
+}
+
+FuncDecl: Box<FuncDecl> = {
+	// todo: commas
+	"fn" Symbol "(" Comma<FuncDeclArg> ")" "{" Stmt+ "}" => Box::new(FuncDecl {}),
+}
+
+// TODO: Save the type
+FuncDeclArg: String = {
+	BuiltInType <Symbol>,
+	Symbol <Symbol>,
+	"[" BuiltInType "]" <Symbol>,
+	"[" Symbol "]" <Symbol>,
+}
+
+Stmt: Statement = {
+	<c:Symbol> "." <n:Symbol> "(" <a:Comma<Arg>> ")" ";" => Statement::Call(Box::new(FuncCall::new(Some(c), n, a))),
+	<n:Symbol> "(" <a:Comma<Arg>> ")" ";" => Statement::Call(Box::new(FuncCall::new(None, n, a))),
+}
+
+Ann: Box<Annotation> = {
+	"@" Symbol "(" Comma<Arg> ")" => Box::new(Annotation {}),
+}
+
+Symbol: String = {
+	r"[a-zA-Z_]+"  => <>.to_string(),
+}
+
+List: Vec<String> = {
+	"[" <Symbol+> "]"
+}
+
+Arg: Argument = {
+	Symbol => Argument::Var(<>),
+	List => Argument::List(<>),
+	Quoted_String => Argument::Quote(<>),
+}
+
+Quoted_String: String = {
+	r#"".*""# => <>.to_string(),
+}
+
+// lexing precedence
+match {
+	r"\s*" => { },
+	r"//[^\n\r]*[\n\r]*" => { },
+} else {
+	_
+}
