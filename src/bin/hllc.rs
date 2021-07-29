@@ -1,4 +1,5 @@
 use selinuxhll::compile_system_policy;
+use selinuxhll::error::HLLErrorItem;
 
 use std::env;
 use std::fs::File;
@@ -16,16 +17,17 @@ fn main() -> std::io::Result<()> {
         return Err(Error::new(ErrorKind::InvalidInput, "Missing policy file"));
     }
 
-    let mut policies: Vec<&mut File> = Vec::new();
-    let mut in_file = File::open(&args[1])?;
-    policies.push(&mut in_file);
-
+    let policies: Vec<&str> = vec![&args[1]];
     let mut out_file = File::create("out.cil")?;
     let res = compile_system_policy(policies);
     match res {
         Err(error_list) => {
             for e in error_list {
-                eprintln!("{}", e);
+                if let HLLErrorItem::Parse(p) = e {
+                    p.print_diagnostic();
+                } else {
+                    eprintln!("{}", e);
+                }
             }
         }
         Ok(s) => out_file.write_all(s.as_bytes())?,

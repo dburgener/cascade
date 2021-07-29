@@ -9,22 +9,23 @@ mod functions;
 mod internal_rep;
 
 use error::{HLLErrorItem, HLLErrors};
-use std::fs::File;
-use std::io::Read;
+use lalrpop_util::ParseError;
 
 lalrpop_mod!(pub parser);
 
-pub fn compile_system_policy(input_files: Vec<&mut File>) -> Result<String, error::HLLErrors> {
+pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HLLErrors> {
     let mut policies: Vec<Box<ast::Policy>> = Vec::new();
+    // TODO: collect errors and return an HLLErrors at the end of the loop
     for f in input_files {
-        let mut policy_str = String::new();
-        match f.read_to_string(&mut policy_str) {
-            Ok(_) => (),
-            Err(e) => return Err(HLLErrors::from(HLLErrorItem::from(e))),
-        }
+        let policy_str =
+            std::fs::read_to_string(&f).map_err(|e| HLLErrors::from(HLLErrorItem::from(e)))?;
         let p = match parse_policy(&policy_str) {
             Ok(p) => p,
-            Err(e) => return Err(HLLErrors::from(HLLErrorItem::from(e))),
+            Err(e) => {
+                // TODO: avoid String duplication
+                let err = error::HLLParseError::new(e, f.into(), policy_str.clone());
+                return Err(HLLErrors::from(HLLErrorItem::Parse(err)));
+            }
         };
 
         policies.push(p);
@@ -38,10 +39,7 @@ pub fn compile_system_policy(input_files: Vec<&mut File>) -> Result<String, erro
 
 fn parse_policy<'a>(
     policy: &'a str,
-) -> Result<
-    Box<ast::Policy>,
-    lalrpop_util::ParseError<usize, lalrpop_util::lexer::Token<'a>, &'static str>,
-> {
+) -> Result<Box<ast::Policy>, ParseError<usize, lalrpop_util::lexer::Token<'a>, &'static str>> {
     // TODO: Probably should only construct once
     // Why though?
     parser::PolicyParser::new().parse(policy)
@@ -86,11 +84,8 @@ mod tests {
     #[test]
     fn cycle_error_test() {
         let policy_file = [ERROR_POLICIES_DIR, "cycle.hll"].concat();
-        let mut policy = File::open(policy_file).unwrap();
 
-        let res = compile_system_policy(vec![&mut policy]);
-
-        match res {
+        match compile_system_policy(vec![&policy_file]) {
             Ok(_) => panic!("Cycle compiled successfully"),
             Err(mut e) => {
                 assert!(matches!(e.next(), Some(HLLErrorItem::Compile(_))));
@@ -103,11 +98,8 @@ mod tests {
     #[test]
     fn bad_type_error_test() {
         let policy_file = [ERROR_POLICIES_DIR, "nonexistent_inheritance.hll"].concat();
-        let mut policy = File::open(policy_file).unwrap();
 
-        let res = compile_system_policy(vec![&mut policy]);
-
-        match res {
+        match compile_system_policy(vec![&policy_file]) {
             Ok(_) => panic!("Nonexistent type compiled successfully"),
             Err(mut e) => {
                 assert!(matches!(e.next(), Some(HLLErrorItem::Compile(_))));
@@ -119,11 +111,8 @@ mod tests {
     #[test]
     fn bad_allow_rules_test() {
         let policy_file = [ERROR_POLICIES_DIR, "bad_allow.hll"].concat();
-        let mut policy = File::open(policy_file).unwrap();
 
-        let res = compile_system_policy(vec![&mut policy]);
-
-        match res {
+        match compile_system_policy(vec![&policy_file]) {
             Ok(_) => panic!("Bad allow rules compiled successfully"),
             Err(e) => {
                 for error in e {
