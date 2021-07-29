@@ -1,5 +1,5 @@
 use sexp::{Atom, Sexp};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::error::Error;
 
 use crate::ast::{Argument, Declaration, Expression, FuncCall, Policy, Statement};
@@ -69,7 +69,7 @@ fn organize_type_map<'a>(
     while !tmp_types.is_empty() {
         let mut current_pass_types: Vec<&TypeInfo> = Vec::new();
 
-        for (t, ti) in &tmp_types {
+        for ti in tmp_types.values() {
             let mut wait = false;
 
             // TODO: Do we need to consider the case when inherits is empty?  Theoretically it
@@ -233,7 +233,7 @@ mod tests {
         types.insert("bar".to_string(), bar_type);
         types.insert("baz".to_string(), baz_type);
 
-        let type_vec = organize_type_map(&types).unwrap();
+        let _type_vec = organize_type_map(&types).unwrap();
         //assert_eq!(types.name, "domain");
         //assert_eq!(*types.parent, None);
         //assert_eq!(types.children.len(), 1);

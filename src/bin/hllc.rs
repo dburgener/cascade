@@ -1,4 +1,4 @@
-use SELinuxhll::compile_system_policy;
+use selinuxhll::compile_system_policy;
 
 use std::env;
 use std::fs::File;

@@ -31,7 +31,7 @@ impl Virtualable for Declaration {
     fn set_virtual(&mut self) {
         match self {
             Declaration::Type(t) => t.set_virtual(),
-            Declaration::Func(f) => {} // TODO
+            Declaration::Func(_f) => {} // TODO
         }
     }
 }
