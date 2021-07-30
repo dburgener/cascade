@@ -69,7 +69,11 @@ impl Virtualable for TypeDecl {
 }
 
 #[derive(Debug)]
-pub struct FuncDecl {}
+pub struct FuncDecl {
+    pub class_name: Option<String>,
+    pub name: String,
+    pub args: Vec<DeclaredArgument>,
+}
 
 #[derive(Debug)]
 pub enum Statement {
@@ -109,4 +113,11 @@ pub enum Argument {
     Var(String),
     List(Vec<String>),
     Quote(String),
+}
+
+#[derive(Debug)]
+pub struct DeclaredArgument {
+    pub param_type: String,
+    pub is_list_param: bool,
+    pub name: String,
 }

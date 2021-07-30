@@ -1,4 +1,4 @@
-use crate::ast::{Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, Virtualable, FuncCall};
+use crate::ast::{Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, Virtualable, FuncCall, DeclaredArgument};
 
 grammar;
 
@@ -56,22 +56,21 @@ InheritList: Vec<String> = {
 	"inherits" <Comma<Symbol>>,
 }
 
-BuiltInType = {
-	"domain",
-	"resource",
+BuiltInType: String = {
+	"domain" => <>.to_string(),
+	"resource" => <>.to_string(),
 }
 
 FuncDecl: Box<FuncDecl> = {
 	// todo: commas
-	"fn" Symbol "(" Comma<FuncDeclArg> ")" "{" Stmt+ "}" => Box::new(FuncDecl {}),
+	"fn" <n: Symbol> "(" <a: Comma<FuncDeclArg>> ")" "{" Stmt+ "}" => Box::new(FuncDecl { class_name: None, name: n, args: a }),
 }
 
-// TODO: Save the type
-FuncDeclArg: String = {
-	BuiltInType <Symbol>,
-	Symbol <Symbol>,
-	"[" BuiltInType "]" <Symbol>,
-	"[" Symbol "]" <Symbol>,
+FuncDeclArg: DeclaredArgument = {
+	<t: BuiltInType> <n: Symbol> => DeclaredArgument { param_type: t, is_list_param: false, name: n },
+	<t: Symbol> <n: Symbol> => DeclaredArgument { param_type: t, is_list_param: false, name: n },
+	"[" <t: BuiltInType> "]" <n: Symbol> => DeclaredArgument { param_type: t, is_list_param: true, name: n },
+	"[" <t: Symbol> "]" <n: Symbol> => DeclaredArgument { param_type: t, is_list_param: true, name: n },
 }
 
 Stmt: Statement = {
