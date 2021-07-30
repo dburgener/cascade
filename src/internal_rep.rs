@@ -22,7 +22,12 @@ impl TypeInfo {
 
 impl From<&TypeInfo> for sexp::Sexp {
     fn from(typeinfo: &TypeInfo) -> sexp::Sexp {
-        list(&[atom_s("type"), atom_s(&typeinfo.name)])
+        let flavor = if typeinfo.is_virtual {
+            "attribute"
+        } else {
+            "type"
+        };
+        list(&[atom_s(flavor), atom_s(&typeinfo.name)])
     }
 }
 
