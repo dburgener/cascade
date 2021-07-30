@@ -54,10 +54,18 @@ fn find_cycles_or_bad_types(
         return ret;
     }
 
-    // type_to_check was generated from types.keys(), so it's guaranteed to be Some
-    for p in &types.get(&type_to_check.to_string()).unwrap().inherits {
-        // First, move the bad type check from below up here
+    let ti = match types.get(&type_to_check.to_string()) {
+        Some(i) => i,
+        None => {
+            return vec![HLLError::Compile(HLLCompileError {
+                filename: "TODO".to_string(),
+                lineno: 0,
+                msg: format!("{} is not a valid identifier", type_to_check),
+            })]
+        }
+    };
 
+    for p in &ti.inherits {
         if visited_types.contains(&p as &str) || p == type_to_check {
             // cycle
             return vec![HLLError::Compile(HLLCompileError {
@@ -69,14 +77,6 @@ fn find_cycles_or_bad_types(
         let mut new_visited_types = visited_types.clone();
         new_visited_types.insert(type_to_check);
 
-        // What do I do with this return?
-        // I think I need to be returning an Option<Vec>.  This can be either None, in the event
-        // that this wasn't a bad branch, or a vector of the issues detected.
-        // Then in generate_type_no_parent_errors, we regroup (remove dups, return an internal
-        // error on None.
-        // Probably rather than handle all the error generation here, we should actually just
-        // return info about which type had the issue and which issue.  That will make deduping
-        // easier and we can generate errors a level up
         let mut parent_errors = find_cycles_or_bad_types(&p, types, new_visited_types);
         ret.append(&mut parent_errors)
     }
@@ -155,20 +155,26 @@ fn do_rules_pass<'a>(
     exprs: &'a Vec<Expression>,
 ) -> Result<Vec<AvRule<'a>>, Vec<HLLError>> {
     let mut ret = Vec::new();
+    let mut errors = Vec::new();
     for e in exprs {
         match e {
             Expression::Stmt(Statement::Call(c)) => {
                 if c.is_builtin() {
-                    let av_rule = call_to_av_rule(&**c, types)?;
-                    ret.push(av_rule);
+                    match call_to_av_rule(&**c, types) {
+                        Ok(a) => ret.push(a),
+                        Err(e) => errors.push(e),
+                    }
                 }
             }
-            Expression::Decl(Declaration::Type(t)) => {
-                let child_rules = do_rules_pass(types, &t.expressions)?;
-                ret.extend(child_rules.iter().cloned());
-            }
+            Expression::Decl(Declaration::Type(t)) => match do_rules_pass(types, &t.expressions) {
+                Ok(r) => ret.extend(r.iter().cloned()),
+                Err(e) => errors.extend(e),
+            },
             _ => continue,
         }
+    }
+    if !errors.is_empty() {
+        return Err(errors);
     }
     Ok(ret)
 }

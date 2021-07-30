@@ -14,7 +14,6 @@ use std::io::Read;
 
 lalrpop_mod!(pub parser);
 
-// TODO: Should use a more specific error type
 pub fn compile_system_policy(input_files: Vec<&mut File>) -> Result<String, Vec<error::HLLError>> {
     let mut policies: Vec<Box<ast::Policy>> = Vec::new();
     for f in input_files {
@@ -91,6 +90,47 @@ mod tests {
 
         let res = compile_system_policy(vec![&mut policy]);
 
-        assert!(res.is_err(), "Cycle compiled successfully");
+        match res {
+            Ok(_) => panic!("Cycle compiled successfully"),
+            Err(e) => {
+                assert_eq!(e.len(), 2);
+                assert!(matches!(e[0], HLLError::Compile(_)));
+                assert!(matches!(e[1], HLLError::Compile(_)));
+            }
+        }
+    }
+
+    #[test]
+    fn bad_type_error_test() {
+        let policy_file = [ERROR_POLICIES_DIR, "nonexistent_inheritance.hll"].concat();
+        let mut policy = File::open(policy_file).unwrap();
+
+        let res = compile_system_policy(vec![&mut policy]);
+
+        match res {
+            Ok(_) => panic!("Nonexistent type compiled successfully"),
+            Err(e) => {
+                assert_eq!(e.len(), 1);
+                assert!(matches!(e[0], HLLError::Compile(_)));
+            }
+        }
+    }
+
+    #[test]
+    fn bad_allow_rules_test() {
+        let policy_file = [ERROR_POLICIES_DIR, "bad_allow.hll"].concat();
+        let mut policy = File::open(policy_file).unwrap();
+
+        let res = compile_system_policy(vec![&mut policy]);
+
+        match res {
+            Ok(_) => panic!("Bad allow rules compiled successfully"),
+            Err(e) => {
+                assert_eq!(e.len(), 3);
+                for error in e {
+                    assert!(matches!(error, HLLError::Compile(_)));
+                }
+            }
+        }
     }
 }
