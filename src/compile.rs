@@ -4,7 +4,9 @@ use std::collections::{HashMap, HashSet};
 use crate::ast::{Argument, Declaration, Expression, FuncCall, Policy, Statement};
 use crate::constants;
 use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
-use crate::internal_rep::{generate_sid_rules, AvRule, AvRuleFlavor, Context, Sid, TypeInfo};
+use crate::internal_rep::{
+    generate_sid_rules, AvRule, AvRuleFlavor, ClassList, Context, Sid, TypeInfo,
+};
 
 pub fn compile(p: &Policy) -> Result<Vec<sexp::Sexp>, HLLErrors> {
     let type_map = build_type_map(p);
@@ -14,7 +16,7 @@ pub fn compile(p: &Policy) -> Result<Vec<sexp::Sexp>, HLLErrors> {
 
     // TODO: The rest of compilation
     let cil_types = type_list_to_sexp(type_decl_list);
-    let headers = declare_class_perms();
+    let headers = generate_cil_headers();
     let cil_av_rules = av_list_to_sexp(av_rules);
     let sid_statements = generate_sid_rules(generate_sids());
 
@@ -26,29 +28,25 @@ pub fn compile(p: &Policy) -> Result<Vec<sexp::Sexp>, HLLErrors> {
 }
 
 // These are hardcoded, at least for now.
-// TODO: store these in a struct in internal_rep instead
-// Yes, I know that this is an unreadable mess this way
-fn declare_class_perms() -> Vec<sexp::Sexp> {
-    vec![
+// This sets up MLS, UBAC, and RBAC properties of the system.
+// Version 0.1 won't allow any language control of these properties, but that will come later.
+// Until we can actually set these things in the language, we need some sensible defaults to make
+// secilc happy. As we add the above listed security models, this should be refactored to set them
+// in accordance with the policy
+fn generate_cil_headers() -> Vec<sexp::Sexp> {
+    let mut ret = declare_class_perms();
+    ret.append(&mut vec![
         list(&[atom_s("sensitivity"), atom_s("s0")]),
         list(&[atom_s("sensitivityorder"), list(&[atom_s("s0")])]),
-        list(&[
-            atom_s("class"),
-            atom_s("file"),
-            list(&[
-                atom_s("read"),
-                atom_s("write"),
-                atom_s("open"),
-                atom_s("getattr"),
-                atom_s("append"),
-            ]),
-        ]),
-        list(&[atom_s("classorder"), list(&[atom_s("file")])]),
         list(&[atom_s("user"), atom_s("system_u")]),
         list(&[atom_s("role"), atom_s("system_r")]),
         list(&[atom_s("role"), atom_s("object_r")]),
         list(&[atom_s("userrole"), atom_s("system_u"), atom_s("system_r")]),
-        list(&[atom_s("roletype"), atom_s("system_r"), atom_s("all_processes")]),
+        list(&[
+            atom_s("roletype"),
+            atom_s("system_r"),
+            atom_s("all_processes"),
+        ]),
         list(&[
             atom_s("userlevel"),
             atom_s("system_u"),
@@ -59,7 +57,16 @@ fn declare_class_perms() -> Vec<sexp::Sexp> {
             atom_s("system_u"),
             list(&[list(&[atom_s("s0")]), list(&[atom_s("s0")])]),
         ]),
-    ]
+    ]);
+
+    ret
+}
+
+fn declare_class_perms() -> Vec<sexp::Sexp> {
+    let mut classlist = ClassList::new();
+    classlist.add_class("file", vec!["read", "write", "open", "getattr", "append"]);
+    classlist.add_class("process", vec!["transition", "dyntransition"]);
+    classlist.generate_class_perm_cil()
 }
 
 // TODO: Currently is domains only

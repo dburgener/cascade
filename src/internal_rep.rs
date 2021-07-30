@@ -143,10 +143,10 @@ pub struct Sid<'a> {
 }
 
 impl<'a> Sid<'a> {
-    pub fn new(n: &'a str, c: Context<'a>) -> Self {
+    pub fn new(name: &'a str, context: Context<'a>) -> Self {
         Sid {
-            name: n,
-            context: c,
+            name: name,
+            context: context,
         }
     }
 
@@ -177,6 +177,59 @@ pub fn generate_sid_rules(sids: Vec<Sid>) -> Vec<Sexp> {
     }
     ret.push(Sexp::List(vec![atom_s("sidorder"), Sexp::List(order)]));
     ret
+}
+
+pub struct Class<'a> {
+    pub name: &'a str,
+    pub perms: Vec<&'a str>,
+}
+
+impl From<&Class<'_>> for sexp::Sexp {
+    fn from(c: &Class) -> sexp::Sexp {
+        list(&[
+            atom_s("class"),
+            atom_s(c.name),
+            Sexp::List(c.perms.iter().map(|p| atom_s(p)).collect()),
+        ])
+    }
+}
+
+impl<'a> Class<'a> {
+    pub fn new(name: &'a str, perms: Vec<&'a str>) -> Self {
+        Class {
+            name: name,
+            perms: perms,
+        }
+    }
+}
+
+pub struct ClassList<'a> {
+    pub classes: Vec<Class<'a>>,
+}
+
+impl<'a> ClassList<'a> {
+    pub fn new() -> Self {
+        ClassList {
+            classes: Vec::new(),
+        }
+    }
+
+    pub fn add_class(&mut self, name: &'a str, perms: Vec<&'a str>) {
+        self.classes.push(Class::new(name, perms));
+    }
+
+    pub fn generate_class_perm_cil(&self) -> Vec<Sexp> {
+        let mut ret: Vec<Sexp> = self.classes.iter().map(|c| Sexp::from(c)).collect();
+
+        let classorder = list(&[
+            atom_s("classorder"),
+            Sexp::List(self.classes.iter().map(|c| atom_s(c.name)).collect()),
+        ]);
+
+        ret.push(classorder);
+
+        ret
+    }
 }
 
 #[cfg(test)]
@@ -239,5 +292,22 @@ mod tests {
         while let Some(i) = iter.next() {
             assert_eq!(i.0.to_string(), i.1.to_string());
         }
+    }
+
+    #[test]
+    fn classlist_test() {
+        let mut classlist = ClassList::new();
+        classlist.add_class("file", vec!["read", "write"]);
+        classlist.add_class("capability", vec!["mac_override", "mac_admin"]);
+
+        let cil = classlist.generate_class_perm_cil();
+
+        assert_eq!(cil.len(), 3);
+        assert_eq!(cil[0].to_string(), "(class file (read write))".to_string());
+        assert_eq!(
+            cil[1].to_string(),
+            "(class capability (mac_override mac_admin))".to_string()
+        );
+        assert_eq!(cil[2].to_string(), "(classorder (file capability))");
     }
 }
