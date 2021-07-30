@@ -109,6 +109,19 @@ mod tests {
     }
 
     #[test]
+    fn function_build_test() {
+        let policy_file = [POLICIES_DIR, "function.hll"].concat();
+
+        match compile_system_policy(vec![&policy_file]) {
+            Ok(p) => {
+                assert!(p.contains("macro my_file.read"));
+                assert!(p.contains("call my_file.read"));
+            }
+            Err(e) => panic!("Function compilation failed with {:?}", e),
+        }
+    }
+
+    #[test]
     fn cycle_error_test() {
         let policy_file = [ERROR_POLICIES_DIR, "cycle.hll"].concat();
 

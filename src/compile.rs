@@ -1,28 +1,35 @@
 use sexp::{atom_s, list, Sexp};
 use std::collections::{HashMap, HashSet};
+use std::convert::TryFrom;
 
-use crate::ast::{Argument, Declaration, Expression, FuncCall, Policy, Statement};
-use crate::constants;
+use crate::ast::{Declaration, Expression, Policy};
 use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
 use crate::internal_rep::{
-    generate_sid_rules, AvRule, AvRuleFlavor, ClassList, Context, Sid, TypeInfo,
+    generate_sid_rules, ClassList, Context, FunctionArgument, FunctionInfo, Sid, TypeInfo,
+    ValidatedStatement,
 };
 
 pub fn compile(p: &Policy) -> Result<Vec<sexp::Sexp>, HLLErrors> {
     let type_map = build_type_map(p);
+    let mut func_map = build_func_map(&p.exprs, &type_map, None)?;
+    let func_map_copy = func_map.clone(); // In order to read function info while mutating
+    validate_functions(&mut func_map, &type_map, &func_map_copy)?;
+
     let type_decl_list = organize_type_map(&type_map)?;
 
-    let av_rules = do_rules_pass(&type_map, &p.exprs)?;
+    let policy_rules = do_rules_pass(&p.exprs, &type_map, &func_map, None)?;
 
     // TODO: The rest of compilation
     let cil_types = type_list_to_sexp(type_decl_list);
     let headers = generate_cil_headers();
-    let cil_av_rules = av_list_to_sexp(av_rules);
+    let cil_rules = rules_list_to_sexp(policy_rules);
+    let cil_macros = func_map_to_sexp(func_map)?;
     let sid_statements = generate_sid_rules(generate_sids());
 
     let mut ret = cil_types;
     ret.extend(headers.iter().cloned());
-    ret.extend(cil_av_rules.iter().cloned());
+    ret.extend(cil_macros.iter().cloned());
+    ret.extend(cil_rules.iter().cloned());
     ret.extend(sid_statements.iter().cloned());
     Ok(ret)
 }
@@ -69,11 +76,12 @@ fn declare_class_perms() -> Vec<sexp::Sexp> {
     classlist.generate_class_perm_cil()
 }
 
-// TODO: Currently is domains only
+// TODO: Refactor below nearly identical functions to eliminate redundant code
 fn build_type_map(p: &Policy) -> HashMap<String, TypeInfo> {
     let mut decl_map = HashMap::new();
-    // TODO: This only allows domain declarations at the top level.  Is that okay?  I'm too tired
-    // to think about it
+    // TODO: This only allows declarations at the top level.
+    // Nested declarations are legal, but auto-associate with the parent, so they'll need special
+    // handling when association is implemented
     for e in &p.exprs {
         let d = match e {
             Expression::Decl(d) => d,
@@ -86,6 +94,64 @@ fn build_type_map(p: &Policy) -> HashMap<String, TypeInfo> {
     }
 
     decl_map
+}
+
+fn build_func_map<'a>(
+    exprs: &'a Vec<Expression>,
+    types: &'a HashMap<String, TypeInfo>,
+    parent_type: Option<&'a TypeInfo>,
+) -> Result<HashMap<String, FunctionInfo<'a>>, HLLErrors> {
+    let mut decl_map = HashMap::new();
+    // TODO: This only allows declarations at the top level.
+    for e in exprs {
+        let d = match e {
+            Expression::Decl(d) => d,
+            _ => continue,
+        };
+        match d {
+            Declaration::Type(t) => {
+                let type_being_parsed = match types.get(&t.name) {
+                    Some(t) => t,
+                    None => {
+                        return Err(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))
+                    }
+                };
+                decl_map.extend(build_func_map(
+                    &t.expressions,
+                    types,
+                    Some(type_being_parsed),
+                )?);
+            }
+            Declaration::Func(f) => {
+                decl_map.insert(
+                    f.get_cil_name().clone(),
+                    FunctionInfo::new(&**f, types, parent_type)?,
+                );
+            }
+        };
+    }
+
+    Ok(decl_map)
+}
+
+// Mutate hash map to set the validated body
+fn validate_functions<'a, 'b>(
+    functions: &'a mut HashMap<String, FunctionInfo<'b>>,
+    types: &'b HashMap<String, TypeInfo>,
+    functions_copy: &'b HashMap<String, FunctionInfo<'b>>,
+) -> Result<(), HLLErrors> {
+    let mut errors = HLLErrors::new();
+    for function in functions.values_mut() {
+        match function.validate_body(&functions_copy, types) {
+            Ok(_) => (),
+            Err(mut e) => errors.append(&mut e),
+        }
+    }
+    if errors.is_empty() {
+        return Ok(());
+    } else {
+        return Err(errors);
+    }
 }
 
 // If a type couldn't be organized, it is either a cycle or a non-existant parent somewhere
@@ -207,25 +273,37 @@ fn organize_type_map<'a>(
 }
 
 fn do_rules_pass<'a>(
-    types: &'a HashMap<String, TypeInfo>,
     exprs: &'a Vec<Expression>,
-) -> Result<Vec<AvRule<'a>>, HLLErrors> {
+    types: &'a HashMap<String, TypeInfo>,
+    funcs: &'a HashMap<String, FunctionInfo>,
+    parent_type: Option<&'a TypeInfo>,
+) -> Result<Vec<ValidatedStatement<'a>>, HLLErrors> {
     let mut ret = Vec::new();
     let mut errors = HLLErrors::new();
     for e in exprs {
         match e {
-            Expression::Stmt(Statement::Call(c)) => {
-                if c.is_builtin() {
-                    match call_to_av_rule(&**c, types) {
-                        Ok(a) => ret.push(a),
-                        Err(mut e) => errors.append(&mut e),
-                    }
+            Expression::Stmt(s) => {
+                let func_args = match parent_type {
+                    Some(t) => vec![FunctionArgument::new_this_argument(t)],
+                    None => Vec::new(),
+                };
+                match ValidatedStatement::new(s, funcs, types, &func_args) {
+                    Ok(s) => ret.push(s),
+                    Err(mut e) => errors.append(&mut e),
                 }
             }
-            Expression::Decl(Declaration::Type(t)) => match do_rules_pass(types, &t.expressions) {
-                Ok(r) => ret.extend(r.iter().cloned()),
-                Err(mut e) => errors.append(&mut e),
-            },
+            Expression::Decl(Declaration::Type(t)) => {
+                let type_being_parsed = match types.get(&t.name) {
+                    Some(t) => t,
+                    None => {
+                        return Err(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))
+                    }
+                };
+                match do_rules_pass(&t.expressions, types, funcs, Some(type_being_parsed)) {
+                    Ok(r) => ret.extend(r.iter().cloned()),
+                    Err(mut e) => errors.append(&mut e),
+                }
+            }
             _ => continue,
         }
     }
@@ -233,82 +311,6 @@ fn do_rules_pass<'a>(
         return Err(errors);
     }
     Ok(ret)
-}
-
-fn argument_to_typeinfo<'a>(
-    a: &Argument,
-    types: &'a HashMap<String, TypeInfo>,
-) -> Result<&'a TypeInfo, HLLErrorItem> {
-    // TODO: Handle the "this" keyword
-    let t: Option<&TypeInfo> = match a {
-        Argument::Var(s) => types.get(s),
-        _ => None,
-    };
-
-    t.ok_or(HLLErrorItem::Compile(HLLCompileError {
-        filename: "TODO".to_string(),
-        lineno: 0,
-        msg: format!("{:?} is not a valid type", a),
-    }))
-}
-
-// TODO: This can be converted into a TryFrom for more compile time gaurantees
-fn call_to_av_rule<'a>(
-    c: &'a FuncCall,
-    types: &'a HashMap<String, TypeInfo>,
-) -> Result<AvRule<'a>, HLLErrors> {
-    let flavor = match c.name.as_str() {
-        constants::ALLOW_FUNCTION_NAME => AvRuleFlavor::Allow,
-        constants::DONTAUDIT_FUNCTION_NAME => AvRuleFlavor::Dontaudit,
-        constants::AUDITALLOW_FUNCTION_NAME => AvRuleFlavor::Auditallow,
-        constants::NEVERALLOW_FUNCTION_NAME => AvRuleFlavor::Neverallow,
-        _ => return Err(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {}))),
-    };
-
-    if c.args.len() != 4 {
-        return Err(HLLErrors::from(HLLErrorItem::Compile(HLLCompileError {
-            filename: "TODO".to_string(),
-            lineno: 0,
-            msg: format!(
-                "Expected 4 args to built in function {}.  Got {}.",
-                c.name.as_str(),
-                c.args.len()
-            ),
-        })));
-    }
-
-    let source = argument_to_typeinfo(&c.args[0], types)?;
-    let target = argument_to_typeinfo(&c.args[1], types)?;
-    let class = match &c.args[2] {
-        Argument::Var(s) => s,
-        a => {
-            return Err(HLLErrors::from(HLLErrorItem::Compile(HLLCompileError {
-                filename: "TODO".to_string(),
-                lineno: 0,
-                msg: format!("Expected an object class, got {:?}", a),
-            })))
-        }
-    };
-    let perms = match &c.args[3] {
-        Argument::List(l) => l.iter().map(|s| s as &str).collect(),
-        // TODO, a Var can probably be coerced.  This is the @makelist annotation case
-        p => {
-            return Err(HLLErrors::from(HLLErrorItem::Compile(HLLCompileError {
-                filename: "TODO".to_string(),
-                lineno: 0,
-                msg: format!("Expected a list of permissions, got {:?}", p),
-            })))
-        }
-    };
-
-    // TODO: Validate number of args, lack of class_name
-    Ok(AvRule {
-        av_rule_flavor: flavor,
-        source: source,
-        target: target,
-        class: class,
-        perms: perms,
-    })
 }
 
 fn type_list_to_sexp(types: Vec<&TypeInfo>) -> Vec<sexp::Sexp> {
@@ -319,11 +321,11 @@ fn type_list_to_sexp(types: Vec<&TypeInfo>) -> Vec<sexp::Sexp> {
     ret
 }
 
-fn av_list_to_sexp<'a, T>(av_rules: T) -> Vec<sexp::Sexp>
+fn rules_list_to_sexp<'a, T>(rules: T) -> Vec<sexp::Sexp>
 where
-    T: IntoIterator<Item = AvRule<'a>>,
+    T: IntoIterator<Item = ValidatedStatement<'a>>,
 {
-    av_rules.into_iter().map(|r| Sexp::from(r)).collect()
+    rules.into_iter().map(|r| Sexp::from(&r)).collect()
 }
 
 // For now, we use hardcoded values.  In the long terms, these need to be able to be set via the
@@ -343,6 +345,22 @@ fn generate_sids() -> Vec<Sid<'static>> {
             Context::new(false, None, None, "all_files", None, None),
         ),
     ]
+}
+
+fn func_map_to_sexp(funcs: HashMap<String, FunctionInfo>) -> Result<Vec<sexp::Sexp>, HLLErrors> {
+    let mut ret = Vec::new();
+    let mut errors = HLLErrors::new();
+    for f in funcs.values() {
+        match Sexp::try_from(f) {
+            Ok(f) => ret.push(f),
+            Err(e) => errors.add_error(e),
+        }
+    }
+    if errors.is_empty() {
+        return Ok(ret);
+    } else {
+        return Err(errors);
+    }
 }
 
 #[cfg(test)]

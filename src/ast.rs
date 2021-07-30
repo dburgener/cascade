@@ -1,3 +1,5 @@
+use std::fmt;
+
 use crate::constants;
 
 #[derive(Debug)]
@@ -15,6 +17,15 @@ impl Policy {
 pub enum Expression {
     Decl(Declaration),
     Stmt(Statement),
+}
+
+impl Expression {
+    pub fn set_class_name_if_decl(&mut self, name: String) {
+        match self {
+            Expression::Decl(Declaration::Func(d)) => d.class_name = Some(name),
+            _ => (),
+        }
+    }
 }
 
 pub trait Virtualable {
@@ -73,6 +84,16 @@ pub struct FuncDecl {
     pub class_name: Option<String>,
     pub name: String,
     pub args: Vec<DeclaredArgument>,
+    pub body: Vec<Statement>,
+}
+
+impl FuncDecl {
+    pub fn get_cil_name(&self) -> String {
+        match &self.class_name {
+            Some(class) => format!("{}.{}", class, self.name),
+            None => self.name.clone(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -103,16 +124,31 @@ impl FuncCall {
         }
         constants::BUILTINS.iter().any(|&i| i == &self.name)
     }
+    pub fn get_cil_name(&self) -> String {
+        match &self.class_name {
+            Some(class) => format!("{}.{}", class, self.name),
+            None => self.name.clone(),
+        }
+    }
 }
 
 #[derive(Debug)]
 pub struct Annotation {}
-
 #[derive(Debug)]
 pub enum Argument {
     Var(String),
     List(Vec<String>),
     Quote(String),
+}
+
+impl fmt::Display for Argument {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Argument::Var(a) => write!(f, "'{}'", a),
+            Argument::List(_) => unimplemented!(),
+            Argument::Quote(a) => write!(f, "\"{}\"", a),
+        }
+    }
 }
 
 #[derive(Debug)]

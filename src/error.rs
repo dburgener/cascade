@@ -18,7 +18,7 @@ pub struct HLLCompileError {
 
 impl fmt::Display for HLLCompileError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "TODO")
+        write!(f, "{}:{} {}", self.filename, self.lineno, self.msg)
     }
 }
 

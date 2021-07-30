@@ -40,7 +40,7 @@ Decl: Declaration = {
 }
 
 TypeDecl: Box<TypeDecl> = {
-	<dr:BuiltInType> <n:Symbol> <i:InheritList?> "{" <v:Expr*> "}" => {
+	<dr:BuiltInType> <n:Symbol> <i:InheritList?> "{" <mut v:Expr*> "}" => {
 		let inherits = match i {
 			None => vec![dr.to_string()],
 			Some(mut i) => {
@@ -48,6 +48,7 @@ TypeDecl: Box<TypeDecl> = {
 				i
 			}
 		};
+		v.iter_mut().for_each(|e| e.set_class_name_if_decl(n.clone()));
 		Box::new(TypeDecl::new(n, inherits, v))
 	},
 }
@@ -62,8 +63,7 @@ BuiltInType: String = {
 }
 
 FuncDecl: Box<FuncDecl> = {
-	// todo: commas
-	"fn" <n: Symbol> "(" <a: Comma<FuncDeclArg>> ")" "{" Stmt+ "}" => Box::new(FuncDecl { class_name: None, name: n, args: a }),
+	"fn" <n: Symbol> "(" <a: Comma<FuncDeclArg>> ")" "{" <b: Stmt+> "}" => Box::new(FuncDecl { class_name: None, name: n, args: a, body: b }),
 }
 
 FuncDeclArg: DeclaredArgument = {
