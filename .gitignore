@@ -1,5 +1,5 @@
+*.cil
 /target
 Cargo.lock
-*.cil
-policy.*
 file_contexts
+policy.*
