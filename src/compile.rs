@@ -3,10 +3,10 @@ use std::collections::{HashMap, HashSet};
 
 use crate::ast::{Argument, Declaration, Expression, FuncCall, Policy, Statement};
 use crate::constants;
-use crate::error::{HLLCompileError, HLLError, HLLInternalError};
+use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
 use crate::internal_rep::{AvRule, AvRuleFlavor, TypeInfo};
 
-pub fn compile(p: &Policy) -> Result<sexp::Sexp, Vec<HLLError>> {
+pub fn compile(p: &Policy) -> Result<sexp::Sexp, HLLErrors> {
     let type_map = build_type_map(p);
     let type_decl_list = organize_type_map(&type_map)?;
 
@@ -48,53 +48,60 @@ fn find_cycles_or_bad_types(
     type_to_check: &str,
     types: &HashMap<String, TypeInfo>,
     visited_types: HashSet<&str>,
-) -> Vec<HLLError> {
-    let mut ret = Vec::new();
+) -> Result<(), HLLErrors> {
+    let mut ret = HLLErrors::new();
     if type_to_check == "domain" || type_to_check == "resource" {
-        return ret;
+        return Ok(());
     }
 
     let ti = match types.get(&type_to_check.to_string()) {
         Some(i) => i,
         None => {
-            return vec![HLLError::Compile(HLLCompileError {
+            return Err(HLLErrors::from(HLLErrorItem::Compile(HLLCompileError {
                 filename: "TODO".to_string(),
                 lineno: 0,
                 msg: format!("{} is not a valid identifier", type_to_check),
-            })]
+            })));
         }
     };
 
     for p in &ti.inherits {
         if visited_types.contains(&p as &str) || p == type_to_check {
             // cycle
-            return vec![HLLError::Compile(HLLCompileError {
+            return Err(HLLErrors::from(HLLErrorItem::Compile(HLLCompileError {
                 filename: "TODO".to_string(),
                 lineno: 0,
                 msg: "TODO: Write cycle error message".to_string(),
-            })];
+            })));
         }
         let mut new_visited_types = visited_types.clone();
         new_visited_types.insert(type_to_check);
 
-        let mut parent_errors = find_cycles_or_bad_types(&p, types, new_visited_types);
-        ret.append(&mut parent_errors)
+        match find_cycles_or_bad_types(&p, types, new_visited_types) {
+            Ok(()) => (),
+            Err(mut e) => ret.append(&mut e),
+        }
     }
 
-    ret
+    if ret.is_empty() {
+        Ok(())
+    } else {
+        Err(ret)
+    }
 }
 
 fn generate_type_no_parent_errors(
     missed_types: HashSet<&String>,
     types: &HashMap<String, TypeInfo>,
-) -> Vec<HLLError> {
-    let mut ret = Vec::new();
+) -> HLLErrors {
+    let mut ret = HLLErrors::new();
     for t in &missed_types {
-        let mut errors = find_cycles_or_bad_types(&t, types, HashSet::new());
-        if errors.is_empty() {
-            return vec![HLLError::Internal(HLLInternalError {})];
-        } else {
-            ret.append(&mut errors);
+        match find_cycles_or_bad_types(&t, types, HashSet::new()) {
+            Ok(()) => {
+                ret.add_error(HLLErrorItem::Internal(HLLInternalError {}));
+                return ret;
+            }
+            Err(mut e) => ret.append(&mut e),
         }
     }
     // TODO: Deduplication
@@ -109,7 +116,7 @@ fn generate_type_no_parent_errors(
 // 3. No cycles exist
 fn organize_type_map<'a>(
     types: &'a HashMap<String, TypeInfo>,
-) -> Result<Vec<&'a TypeInfo>, Vec<HLLError>> {
+) -> Result<Vec<&'a TypeInfo>, HLLErrors> {
     let mut tmp_types: HashMap<&String, &TypeInfo> = types.iter().collect();
 
     let mut out: Vec<&TypeInfo> = Vec::new();
@@ -153,22 +160,22 @@ fn organize_type_map<'a>(
 fn do_rules_pass<'a>(
     types: &'a HashMap<String, TypeInfo>,
     exprs: &'a Vec<Expression>,
-) -> Result<Vec<AvRule<'a>>, Vec<HLLError>> {
+) -> Result<Vec<AvRule<'a>>, HLLErrors> {
     let mut ret = Vec::new();
-    let mut errors = Vec::new();
+    let mut errors = HLLErrors::new();
     for e in exprs {
         match e {
             Expression::Stmt(Statement::Call(c)) => {
                 if c.is_builtin() {
                     match call_to_av_rule(&**c, types) {
                         Ok(a) => ret.push(a),
-                        Err(e) => errors.push(e),
+                        Err(mut e) => errors.append(&mut e),
                     }
                 }
             }
             Expression::Decl(Declaration::Type(t)) => match do_rules_pass(types, &t.expressions) {
                 Ok(r) => ret.extend(r.iter().cloned()),
-                Err(e) => errors.extend(e),
+                Err(mut e) => errors.append(&mut e),
             },
             _ => continue,
         }
@@ -182,14 +189,14 @@ fn do_rules_pass<'a>(
 fn argument_to_typeinfo<'a>(
     a: &Argument,
     types: &'a HashMap<String, TypeInfo>,
-) -> Result<&'a TypeInfo, HLLError> {
+) -> Result<&'a TypeInfo, HLLErrorItem> {
     // TODO: Handle the "this" keyword
     let t: Option<&TypeInfo> = match a {
         Argument::Var(s) => types.get(s),
         _ => None,
     };
 
-    t.ok_or(HLLError::Compile(HLLCompileError {
+    t.ok_or(HLLErrorItem::Compile(HLLCompileError {
         filename: "TODO".to_string(),
         lineno: 0,
         msg: format!("{:?} is not a valid type", a),
@@ -200,17 +207,17 @@ fn argument_to_typeinfo<'a>(
 fn call_to_av_rule<'a>(
     c: &'a FuncCall,
     types: &'a HashMap<String, TypeInfo>,
-) -> Result<AvRule<'a>, HLLError> {
+) -> Result<AvRule<'a>, HLLErrors> {
     let flavor = match c.name.as_str() {
         constants::ALLOW_FUNCTION_NAME => AvRuleFlavor::Allow,
         constants::DONTAUDIT_FUNCTION_NAME => AvRuleFlavor::Dontaudit,
         constants::AUDITALLOW_FUNCTION_NAME => AvRuleFlavor::Auditallow,
         constants::NEVERALLOW_FUNCTION_NAME => AvRuleFlavor::Neverallow,
-        _ => return Err(HLLError::Internal(HLLInternalError {})),
+        _ => return Err(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {}))),
     };
 
     if c.args.len() != 4 {
-        return Err(HLLError::Compile(HLLCompileError {
+        return Err(HLLErrors::from(HLLErrorItem::Compile(HLLCompileError {
             filename: "TODO".to_string(),
             lineno: 0,
             msg: format!(
@@ -218,7 +225,7 @@ fn call_to_av_rule<'a>(
                 c.name.as_str(),
                 c.args.len()
             ),
-        }));
+        })));
     }
 
     let source = argument_to_typeinfo(&c.args[0], types)?;
@@ -226,22 +233,22 @@ fn call_to_av_rule<'a>(
     let class = match &c.args[2] {
         Argument::Var(s) => s,
         a => {
-            return Err(HLLError::Compile(HLLCompileError {
+            return Err(HLLErrors::from(HLLErrorItem::Compile(HLLCompileError {
                 filename: "TODO".to_string(),
                 lineno: 0,
                 msg: format!("Expected an object class, got {:?}", a),
-            }))
+            })))
         }
     };
     let perms = match &c.args[3] {
         Argument::List(l) => l.iter().map(|s| s as &str).collect(),
         // TODO, a Var can probably be coerced.  This is the @makelist annotation case
         p => {
-            return Err(HLLError::Compile(HLLCompileError {
+            return Err(HLLErrors::from(HLLErrorItem::Compile(HLLCompileError {
                 filename: "TODO".to_string(),
                 lineno: 0,
                 msg: format!("Expected a list of permissions, got {:?}", p),
-            }))
+            })))
         }
     };
 

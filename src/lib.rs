@@ -8,23 +8,23 @@ pub mod error;
 mod functions;
 mod internal_rep;
 
-use error::HLLError;
+use error::{HLLErrorItem, HLLErrors};
 use std::fs::File;
 use std::io::Read;
 
 lalrpop_mod!(pub parser);
 
-pub fn compile_system_policy(input_files: Vec<&mut File>) -> Result<String, Vec<error::HLLError>> {
+pub fn compile_system_policy(input_files: Vec<&mut File>) -> Result<String, error::HLLErrors> {
     let mut policies: Vec<Box<ast::Policy>> = Vec::new();
     for f in input_files {
         let mut policy_str = String::new();
         match f.read_to_string(&mut policy_str) {
             Ok(_) => (),
-            Err(e) => return Err(Vec::from(HLLError::from(e))),
+            Err(e) => return Err(HLLErrors::from(HLLErrorItem::from(e))),
         }
         let p = match parse_policy(&policy_str) {
             Ok(p) => p,
-            Err(e) => return Err(Vec::from(HLLError::from(e))),
+            Err(e) => return Err(HLLErrors::from(HLLErrorItem::from(e))),
         };
 
         policies.push(p);

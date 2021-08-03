@@ -38,43 +38,80 @@ impl fmt::Display for HLLParseError {
 }
 
 #[derive(Debug)]
-pub enum HLLError {
+pub enum HLLErrorItem {
     Compile(HLLCompileError),
     Internal(HLLInternalError),
     Parse(HLLParseError),
     IO(io::Error),
 }
 
-impl fmt::Display for HLLError {
+impl fmt::Display for HLLErrorItem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            HLLError::Compile(e) => write!(f, "Error: {}", e),
-            HLLError::Parse(e) => write!(f, "Error: {}", e),
-            HLLError::Internal(e) => write!(f, "Internal Error: {}", e),
-            HLLError::IO(e) => write!(f, "IO Error: {}", e),
+            HLLErrorItem::Compile(e) => write!(f, "Error: {}", e),
+            HLLErrorItem::Parse(e) => write!(f, "Error: {}", e),
+            HLLErrorItem::Internal(e) => write!(f, "Internal Error: {}", e),
+            HLLErrorItem::IO(e) => write!(f, "IO Error: {}", e),
         }
     }
 }
 
-impl From<HLLError> for Vec<HLLError> {
-    fn from(error: HLLError) -> Self {
+impl From<HLLErrorItem> for Vec<HLLErrorItem> {
+    fn from(error: HLLErrorItem) -> Self {
         vec![error]
     }
 }
 
-impl From<io::Error> for HLLError {
+impl From<io::Error> for HLLErrorItem {
     fn from(error: io::Error) -> Self {
-        HLLError::IO(error)
+        HLLErrorItem::IO(error)
     }
 }
 
 impl<'a> From<lalrpop_util::ParseError<usize, lalrpop_util::lexer::Token<'a>, &'static str>>
-    for HLLError
+    for HLLErrorItem
 {
     fn from(
         error: lalrpop_util::ParseError<usize, lalrpop_util::lexer::Token<'a>, &'static str>,
     ) -> Self {
         // TODO
-        HLLError::Parse(HLLParseError {})
+        HLLErrorItem::Parse(HLLParseError {})
+    }
+}
+
+pub struct HLLErrors {
+    errors: Vec<HLLErrorItem>,
+}
+
+impl HLLErrors {
+    pub fn new() -> Self {
+        HLLErrors { errors: Vec::new() }
+    }
+
+    pub fn add_error(&mut self, error: HLLErrorItem) {
+        self.errors.push(error);
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.errors.is_empty()
+    }
+
+    pub fn append(&mut self, other: &mut HLLErrors) {
+        self.errors.append(&mut other.errors);
+    }
+}
+
+impl From<HLLErrorItem> for HLLErrors {
+    fn from(error: HLLErrorItem) -> Self {
+        HLLErrors {
+            errors: vec![error],
+        }
+    }
+}
+
+impl Iterator for HLLErrors {
+    type Item = HLLErrorItem;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.errors.pop() // TODO: This reverses the list of errors
     }
 }
