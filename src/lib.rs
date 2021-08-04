@@ -92,10 +92,10 @@ mod tests {
 
         match res {
             Ok(_) => panic!("Cycle compiled successfully"),
-            Err(e) => {
-                assert_eq!(e.len(), 2);
-                assert!(matches!(e[0], HLLError::Compile(_)));
-                assert!(matches!(e[1], HLLError::Compile(_)));
+            Err(mut e) => {
+                assert!(matches!(e.next(), Some(HLLErrorItem::Compile(_))));
+                assert!(matches!(e.next(), Some(HLLErrorItem::Compile(_))));
+                assert!(matches!(e.next(), None));
             }
         }
     }
@@ -109,9 +109,9 @@ mod tests {
 
         match res {
             Ok(_) => panic!("Nonexistent type compiled successfully"),
-            Err(e) => {
-                assert_eq!(e.len(), 1);
-                assert!(matches!(e[0], HLLError::Compile(_)));
+            Err(mut e) => {
+                assert!(matches!(e.next(), Some(HLLErrorItem::Compile(_))));
+                assert!(matches!(e.next(), None));
             }
         }
     }
@@ -125,10 +125,9 @@ mod tests {
 
         match res {
             Ok(_) => panic!("Bad allow rules compiled successfully"),
-            Err(e) => {
-                assert_eq!(e.len(), 3);
+            Err(mut e) => {
                 for error in e {
-                    assert!(matches!(error, HLLError::Compile(_)));
+                    assert!(matches!(error, HLLErrorItem::Compile(_)));
                 }
             }
         }

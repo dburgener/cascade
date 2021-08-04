@@ -79,6 +79,7 @@ impl<'a> From<lalrpop_util::ParseError<usize, lalrpop_util::lexer::Token<'a>, &'
     }
 }
 
+#[derive(Debug)]
 pub struct HLLErrors {
     errors: Vec<HLLErrorItem>,
 }
