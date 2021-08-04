@@ -125,7 +125,7 @@ mod tests {
 
         match res {
             Ok(_) => panic!("Bad allow rules compiled successfully"),
-            Err(mut e) => {
+            Err(e) => {
                 for error in e {
                     assert!(matches!(error, HLLErrorItem::Compile(_)));
                 }
