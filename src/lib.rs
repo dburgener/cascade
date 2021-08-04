@@ -53,6 +53,8 @@ fn generate_cil(s: sexp::Sexp) -> String {
 mod tests {
     lalrpop_mod!(pub parser);
 
+    use crate::error::HLLParseError;
+    use codespan_reporting::diagnostic::Diagnostic;
     use std::fs;
 
     use super::*;
@@ -117,6 +119,75 @@ mod tests {
             Err(e) => {
                 for error in e {
                     assert!(matches!(error, HLLErrorItem::Compile(_)));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn parsing_unrecognized_token() {
+        let policy_file = [ERROR_POLICIES_DIR, "parse_unrecognized_token.hll"].concat();
+
+        match compile_system_policy(vec![&policy_file]) {
+            Ok(_) => panic!("Bad grammar compiled successfully"),
+            Err(e) => {
+                for error in e {
+                    assert!(matches!(
+                                error,
+                                HLLErrorItem::Parse(HLLParseError {
+                                    diagnostic: Diagnostic {
+                                        message: msg,
+                                        ..
+                                    },
+                                    ..
+                                })
+                                if msg == "Unexpected character \".\"".to_string()));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn parsing_unknown_token() {
+        let policy_file = [ERROR_POLICIES_DIR, "parse_unknown_token.hll"].concat();
+
+        match compile_system_policy(vec![&policy_file]) {
+            Ok(_) => panic!("Bad grammar compiled successfully"),
+            Err(e) => {
+                for error in e {
+                    assert!(matches!(
+                                error,
+                                HLLErrorItem::Parse(HLLParseError {
+                                    diagnostic: Diagnostic {
+                                        message: msg,
+                                        ..
+                                    },
+                                    ..
+                                })
+                                if msg == "Unknown character".to_string()));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn parsing_unexpected_eof() {
+        let policy_file = [ERROR_POLICIES_DIR, "parse_unexpected_eof.hll"].concat();
+
+        match compile_system_policy(vec![&policy_file]) {
+            Ok(_) => panic!("Bad grammar compiled successfully"),
+            Err(e) => {
+                for error in e {
+                    assert!(matches!(
+                                error,
+                                HLLErrorItem::Parse(HLLParseError {
+                                    diagnostic: Diagnostic {
+                                        message: msg,
+                                        ..
+                                    },
+                                    ..
+                                })
+                                if msg == "Unexpected end of file".to_string()));
                 }
             }
         }
