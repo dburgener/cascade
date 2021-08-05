@@ -57,24 +57,14 @@ extends:
           - task: Bash@3
             displayName: 'Restore'
             inputs:
-              filePath: '$(Build.SourcesDirectory)/restore.sh'
+              filePath: '$(Build.SourcesDirectory)/.pipelines/restore.sh'
 
           - task: Bash@3
             displayName: 'Build'
             inputs:
-              filePath: '$(Build.SourcesDirectory)/build.sh'
+              filePath: '$(Build.SourcesDirectory)/.pipelines/build.sh'
 
           - task: Bash@3
-            displayName: 'Package'
+            displayName: 'Test'
             inputs:
-              filePath: '$(Build.SourcesDirectory)/package.sh'
-
-          - task: Bash@3
-            displayName: 'Copy Extra Files'
-            inputs:
-              targetType: 'inline'
-              script: |
-                mkdir -p $(Build.SourcesDirectory)/out
-                cp -a $(Build.SourcesDirectory)/linux_deploy $(Build.SourcesDirectory)/out
-                cp $(Build.SourcesDirectory)/*.tgz $(Build.SourcesDirectory)/out
-                cp $(Build.SourcesDirectory)/*.tgz.sha256 $(Build.SourcesDirectory)/out
+              filePath: '$(Build.SourcesDirectory)/.pipelines/test.sh'
