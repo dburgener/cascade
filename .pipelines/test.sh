@@ -2,4 +2,4 @@
 
 set -e -u -o pipefail
 
-cargo test --verbose
+rustup run stable cargo test --verbose

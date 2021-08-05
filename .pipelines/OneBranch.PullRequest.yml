@@ -68,3 +68,8 @@ extends:
             displayName: 'Test'
             inputs:
               filePath: '$(Build.SourcesDirectory)/.pipelines/test.sh'
+
+          - task: Bash@3
+            displayName: 'Nightly'
+            inputs:
+              filePath: '$(Build.SourcesDirectory)/.pipelines/nightly.sh'
