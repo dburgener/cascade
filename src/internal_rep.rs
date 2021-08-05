@@ -1,4 +1,4 @@
-use sexp::{Atom, Sexp};
+use sexp::{atom_s, list, Atom, Sexp};
 
 use crate::ast::TypeDecl;
 use crate::constants;
@@ -17,6 +17,17 @@ impl TypeInfo {
             inherits: td.inherits.clone(),
             is_virtual: td.is_virtual,
         }
+    }
+}
+
+impl From<&TypeInfo> for sexp::Sexp {
+    fn from(typeinfo: &TypeInfo) -> sexp::Sexp {
+        let flavor = if typeinfo.is_virtual {
+            "attribute"
+        } else {
+            "type"
+        };
+        list(&[atom_s(flavor), atom_s(&typeinfo.name)])
     }
 }
 

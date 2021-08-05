@@ -25,9 +25,10 @@ pub Expr: Expression = {
 
 BaseExpr: Expression = {
 	// TODO: other keywords beside virtual?
-	"virtual"? <Decl> => {
-		let mut d = <>;
-		d.set_virtual();
+	<v: "virtual"?> <mut d: Decl> => {
+		if v.is_some() {
+			d.set_virtual();
+		}
 		Expression::Decl(d)
 	},
 	Stmt => Expression::Stmt(<>),

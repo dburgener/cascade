@@ -1,0 +1,3 @@
+virtual domain user_type {}
+
+domain staff inherits user_type {}

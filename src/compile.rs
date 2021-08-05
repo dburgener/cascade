@@ -1,4 +1,4 @@
-use sexp::{Atom, Sexp};
+use sexp::Sexp;
 use std::collections::{HashMap, HashSet};
 
 use crate::ast::{Argument, Declaration, Expression, FuncCall, Policy, Statement};
@@ -265,10 +265,7 @@ fn call_to_av_rule<'a>(
 fn type_list_to_sexp(types: Vec<&TypeInfo>) -> Vec<sexp::Sexp> {
     let mut ret = Vec::new();
     for t in types {
-        ret.push(Sexp::List(vec![
-            Sexp::Atom(Atom::S("type".to_string())),
-            Sexp::Atom(Atom::S(t.name.clone())),
-        ]))
+        ret.push(Sexp::from(t));
     }
     ret
 }

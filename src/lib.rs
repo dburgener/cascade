@@ -84,6 +84,19 @@ mod tests {
     }
 
     #[test]
+    fn attributes_test() {
+        let policy_file = [POLICIES_DIR, "attribute.hll"].concat();
+
+        match compile_system_policy(vec![&policy_file]) {
+            Ok(p) => {
+                assert!(p.contains("attribute user_type"));
+                assert!(p.contains("type staff"));
+            }
+            Err(e) => panic!("Attribute compilation failed with {:?}", e),
+        }
+    }
+
+    #[test]
     fn cycle_error_test() {
         let policy_file = [ERROR_POLICIES_DIR, "cycle.hll"].concat();
 
