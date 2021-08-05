@@ -70,6 +70,11 @@ extends:
               filePath: '$(Build.SourcesDirectory)/.pipelines/test.sh'
 
           - task: Bash@3
+            displayName: 'Format'
+            inputs:
+              filePath: '$(Build.SourcesDirectory)/.pipelines/format.sh'
+
+          - task: Bash@3
             displayName: 'Documentation'
             inputs:
               filePath: '$(Build.SourcesDirectory)/.pipelines/doc.sh'
