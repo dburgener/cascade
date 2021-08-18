@@ -45,8 +45,11 @@ fn parse_policy<'a>(
     parser::PolicyParser::new().parse(policy)
 }
 
-fn generate_cil(s: sexp::Sexp) -> String {
-    s.to_string()
+fn generate_cil(v: Vec<sexp::Sexp>) -> String {
+    v.iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<String>>()
+        .join("\n")
 }
 
 #[cfg(test)]
@@ -94,6 +97,15 @@ mod tests {
             }
             Err(e) => panic!("Attribute compilation failed with {:?}", e),
         }
+    }
+
+    #[test]
+    fn simple_policy_build_test() {
+        let policy_file = [POLICIES_DIR, "simple.hll"].concat();
+
+        let res = compile_system_policy(vec![&policy_file]);
+
+        assert!(res.is_ok(), "Failed to build simple policy: {:?}", res);
     }
 
     #[test]

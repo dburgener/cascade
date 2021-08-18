@@ -1,12 +1,14 @@
-use sexp::Sexp;
+use sexp::{atom_s, list, Sexp};
 use std::collections::{HashMap, HashSet};
 
 use crate::ast::{Argument, Declaration, Expression, FuncCall, Policy, Statement};
 use crate::constants;
 use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
-use crate::internal_rep::{AvRule, AvRuleFlavor, TypeInfo};
+use crate::internal_rep::{
+    generate_sid_rules, AvRule, AvRuleFlavor, ClassList, Context, Sid, TypeInfo,
+};
 
-pub fn compile(p: &Policy) -> Result<sexp::Sexp, HLLErrors> {
+pub fn compile(p: &Policy) -> Result<Vec<sexp::Sexp>, HLLErrors> {
     let type_map = build_type_map(p);
     let type_decl_list = organize_type_map(&type_map)?;
 
@@ -14,10 +16,57 @@ pub fn compile(p: &Policy) -> Result<sexp::Sexp, HLLErrors> {
 
     // TODO: The rest of compilation
     let cil_types = type_list_to_sexp(type_decl_list);
+    let headers = generate_cil_headers();
     let cil_av_rules = av_list_to_sexp(av_rules);
+    let sid_statements = generate_sid_rules(generate_sids());
+
     let mut ret = cil_types;
+    ret.extend(headers.iter().cloned());
     ret.extend(cil_av_rules.iter().cloned());
-    Ok(Sexp::List(ret))
+    ret.extend(sid_statements.iter().cloned());
+    Ok(ret)
+}
+
+// These are hardcoded, at least for now.
+// This sets up MLS, UBAC, and RBAC properties of the system.
+// Version 0.1 won't allow any language control of these properties, but that will come later.
+// Until we can actually set these things in the language, we need some sensible defaults to make
+// secilc happy. As we add the above listed security models, this should be refactored to set them
+// in accordance with the policy
+fn generate_cil_headers() -> Vec<sexp::Sexp> {
+    let mut ret = declare_class_perms();
+    ret.append(&mut vec![
+        list(&[atom_s("sensitivity"), atom_s("s0")]),
+        list(&[atom_s("sensitivityorder"), list(&[atom_s("s0")])]),
+        list(&[atom_s("user"), atom_s("system_u")]),
+        list(&[atom_s("role"), atom_s("system_r")]),
+        list(&[atom_s("role"), atom_s("object_r")]),
+        list(&[atom_s("userrole"), atom_s("system_u"), atom_s("system_r")]),
+        list(&[
+            atom_s("roletype"),
+            atom_s("system_r"),
+            atom_s("all_processes"),
+        ]),
+        list(&[
+            atom_s("userlevel"),
+            atom_s("system_u"),
+            list(&[atom_s("s0")]),
+        ]),
+        list(&[
+            atom_s("userrange"),
+            atom_s("system_u"),
+            list(&[list(&[atom_s("s0")]), list(&[atom_s("s0")])]),
+        ]),
+    ]);
+
+    ret
+}
+
+fn declare_class_perms() -> Vec<sexp::Sexp> {
+    let mut classlist = ClassList::new();
+    classlist.add_class("file", vec!["read", "write", "open", "getattr", "append"]);
+    classlist.add_class("process", vec!["transition", "dyntransition"]);
+    classlist.generate_class_perm_cil()
 }
 
 // TODO: Currently is domains only
@@ -277,6 +326,25 @@ where
     av_rules.into_iter().map(|r| Sexp::from(r)).collect()
 }
 
+// For now, we use hardcoded values.  In the long terms, these need to be able to be set via the
+// policy.
+fn generate_sids() -> Vec<Sid<'static>> {
+    vec![
+        Sid::new(
+            "kernel",
+            Context::new(true, None, None, "all_processes", None, None),
+        ),
+        Sid::new(
+            "security",
+            Context::new(false, None, None, "all_files", None, None),
+        ),
+        Sid::new(
+            "unlabeled",
+            Context::new(false, None, None, "all_files", None, None),
+        ),
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -319,14 +387,10 @@ mod tests {
         types.insert("bar".to_string(), bar_type);
         types.insert("baz".to_string(), baz_type);
 
-        let _type_vec = organize_type_map(&types).unwrap();
-        //assert_eq!(types.name, "domain");
-        //assert_eq!(*types.parent, None);
-        //assert_eq!(types.children.len(), 1);
-        //assert_eq!(types.children[0].name, "foo");
-        // TODO: This is hard to satisfy the borrow checker with.  Let's get everything else
-        // working and come back to it
-        //assert_eq!(*types.children[0].parent, Some(types));
-        //assert_eq!(types.children[0].children.len(), 0);
+        let type_vec = organize_type_map(&types).unwrap();
+
+        assert_eq!(type_vec[0].name, "foo");
+        assert_eq!(type_vec[1].name, "bar");
+        assert_eq!(type_vec[2].name, "baz");
     }
 }
