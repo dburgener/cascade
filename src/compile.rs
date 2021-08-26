@@ -8,6 +8,7 @@ use crate::internal_rep::{
     generate_sid_rules, ClassList, Context, FunctionArgument, FunctionInfo, Sid, TypeInfo,
     ValidatedStatement,
 };
+use crate::obj_class::declare_class_perms;
 
 pub fn compile(p: &Policy) -> Result<Vec<sexp::Sexp>, HLLErrors> {
     let type_map = build_type_map(p);
@@ -62,13 +63,6 @@ fn generate_cil_headers() -> Vec<sexp::Sexp> {
     ]);
 
     ret
-}
-
-fn declare_class_perms() -> Vec<sexp::Sexp> {
-    let mut classlist = ClassList::new();
-    classlist.add_class("file", vec!["read", "write", "open", "getattr", "append"]);
-    classlist.add_class("process", vec!["transition", "dyntransition"]);
-    classlist.generate_class_perm_cil()
 }
 
 // TODO: Refactor below nearly identical functions to eliminate redundant code
