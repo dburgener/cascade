@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use sexp::{atom_s, list, Atom, Sexp};
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -274,31 +276,74 @@ impl<'a> Class<'a> {
 }
 
 pub struct ClassList<'a> {
-    pub classes: Vec<Class<'a>>,
+    pub classes: HashMap<&'a str, Class<'a>>,
 }
 
 impl<'a> ClassList<'a> {
     pub fn new() -> Self {
         ClassList {
-            classes: Vec::new(),
+            classes: HashMap::new(),
         }
     }
 
     pub fn add_class(&mut self, name: &'a str, perms: Vec<&'a str>) {
-        self.classes.push(Class::new(name, perms));
+        self.classes.insert(name, Class::new(name, perms));
     }
 
     pub fn generate_class_perm_cil(&self) -> Vec<Sexp> {
-        let mut ret: Vec<Sexp> = self.classes.iter().map(|c| Sexp::from(c)).collect();
+        let mut ret: Vec<Sexp> = self.classes.values().map(|c| Sexp::from(c)).collect();
 
         let classorder = list(&[
             atom_s("classorder"),
-            Sexp::List(self.classes.iter().map(|c| atom_s(c.name)).collect()),
+            Sexp::List(self.classes.values().map(|c| atom_s(c.name)).collect()),
         ]);
 
         ret.push(classorder);
 
         ret
+    }
+
+    // In base SELinux, object classes with more than 31 permissions, have a second object class
+    // for overflow permissions.  In HLL, we treat all of those the same.  This function needs to
+    // handle that conversion in lookups.  If a permission wasn't found for capability, we check
+    // capability2
+    pub fn verify_permission(&self, class: &str, permission: &str) -> Result<(), HLLCompileError> {
+        let class_struct = match self.classes.get(class) {
+            Some(c) => c,
+            None => {
+                return Err(HLLCompileError {
+                    msg: format!("No such object class: {}", class),
+                    lineno: 0,
+                    filename: "TODO".to_string(),
+                })
+            }
+        };
+
+        if class_struct.perms.contains(&permission) {
+            return Ok(());
+        } else {
+            match class {
+                "capability" => {
+                    return self.verify_permission("capability2", permission);
+                }
+                "process" => {
+                    return self.verify_permission("process2", permission);
+                }
+                "cap_userns" => {
+                    return self.verify_permission("cap2_userns", permission);
+                }
+                _ => (),
+            }
+
+            return Err(HLLCompileError {
+                msg: format!(
+                    "Permission {} is not defined for object class {}",
+                    permission, class
+                ),
+                lineno: 0,
+                filename: "TODO".to_string(),
+            });
+        }
     }
 }
 
@@ -684,5 +729,30 @@ mod tests {
             "(class capability (mac_override mac_admin))".to_string()
         );
         assert_eq!(cil[2].to_string(), "(classorder (file capability))");
+    }
+
+    #[test]
+    fn verify_permissions_test() {
+        let mut classlist = ClassList::new();
+        classlist.add_class("foo", vec!["bar", "baz"]);
+        classlist.add_class("capability", vec!["cap_foo"]);
+        classlist.add_class("capability2", vec!["cap_bar"]);
+        classlist.add_class("process", vec!["not_foo"]);
+        classlist.add_class("process2", vec!["foo"]);
+
+        assert!(classlist.verify_permission("foo", "bar").is_ok());
+        assert!(classlist.verify_permission("foo", "baz").is_ok());
+        assert!(classlist.verify_permission("capability", "cap_bar").is_ok());
+        assert!(classlist.verify_permission("process", "foo").is_ok());
+
+        match classlist.verify_permission("bar", "baz") {
+            Ok(_) => panic!("Nonexistent class verified"),
+            Err(e) => assert!(e.msg.contains("No such object class")),
+        }
+
+        match classlist.verify_permission("foo", "cap_bar") {
+            Ok(_) => panic!("Nonexistent permission verified"),
+            Err(e) => assert!(e.msg.contains("cap_bar is not defined for")),
+        }
     }
 }
