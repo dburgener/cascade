@@ -147,11 +147,7 @@ fn validate_functions<'a, 'b>(
             Err(mut e) => errors.append(&mut e),
         }
     }
-    if errors.is_empty() {
-        return Ok(());
-    } else {
-        return Err(errors);
-    }
+    errors.into_result(())
 }
 
 // If a type couldn't be organized, it is either a cycle or a non-existant parent somewhere
@@ -198,11 +194,7 @@ fn find_cycles_or_bad_types(
         }
     }
 
-    if ret.is_empty() {
-        Ok(())
-    } else {
-        Err(ret)
-    }
+    ret.into_result(())
 }
 
 fn generate_type_no_parent_errors(
@@ -307,10 +299,7 @@ fn do_rules_pass<'a>(
             _ => continue,
         }
     }
-    if !errors.is_empty() {
-        return Err(errors);
-    }
-    Ok(ret)
+    errors.into_result(ret)
 }
 
 fn type_list_to_sexp(types: Vec<&TypeInfo>) -> Vec<sexp::Sexp> {
@@ -356,11 +345,7 @@ fn func_map_to_sexp(funcs: HashMap<String, FunctionInfo>) -> Result<Vec<sexp::Se
             Err(e) => errors.add_error(e),
         }
     }
-    if errors.is_empty() {
-        return Ok(ret);
-    } else {
-        return Err(errors);
-    }
+    errors.into_result(ret)
 }
 
 #[cfg(test)]

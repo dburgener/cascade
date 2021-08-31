@@ -384,13 +384,7 @@ impl<'a> FunctionInfo<'a> {
             }
         }
 
-        if !errors.is_empty() {
-            return Err(errors);
-        }
-
-        println!("ABout to return a FunctionInfo from {:?}", funcdecl);
-
-        Ok(FunctionInfo {
+        errors.into_result(FunctionInfo {
             name: funcdecl.get_cil_name(),
             args: args,
             original_body: &funcdecl.body,
@@ -412,11 +406,8 @@ impl<'a> FunctionInfo<'a> {
                 Err(mut e) => errors.append(&mut e),
             }
         }
-        if !errors.is_empty() {
-            return Err(errors);
-        }
         self.body = Some(new_body);
-        Ok(())
+        errors.into_result(())
     }
 }
 
@@ -583,16 +574,16 @@ fn validate_argument(
     let arg_typeinfo = argument_to_typeinfo(arg, types, args)?;
 
     if arg_typeinfo.is_child_or_actual_type(target_argument.param_type, types) {
-        return Ok(arg_typeinfo.name.clone());
+        Ok(arg_typeinfo.name.clone())
     } else {
-        return Err(HLLErrorItem::Compile(HLLCompileError {
+        Err(HLLErrorItem::Compile(HLLCompileError {
             filename: "TODO".to_string(),
             lineno: 0,
             msg: format!(
                 "Expected type inheriting {}, got {}",
                 target_argument.param_type.name, arg_typeinfo.name
             ),
-        }));
+        }))
     }
 }
 
