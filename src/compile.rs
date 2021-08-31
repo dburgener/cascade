@@ -5,8 +5,7 @@ use std::convert::TryFrom;
 use crate::ast::{Declaration, Expression, Policy};
 use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
 use crate::internal_rep::{
-    generate_sid_rules, ClassList, Context, FunctionArgument, FunctionInfo, Sid, TypeInfo,
-    ValidatedStatement,
+    generate_sid_rules, Context, FunctionArgument, FunctionInfo, Sid, TypeInfo, ValidatedStatement,
 };
 use crate::obj_class::declare_class_perms;
 

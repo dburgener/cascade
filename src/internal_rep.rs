@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use sexp::{atom_s, list, Atom, Sexp};
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -723,12 +721,14 @@ mod tests {
         let cil = classlist.generate_class_perm_cil();
 
         assert_eq!(cil.len(), 3);
-        assert_eq!(cil[0].to_string(), "(class file (read write))".to_string());
-        assert_eq!(
-            cil[1].to_string(),
-            "(class capability (mac_override mac_admin))".to_string()
+        // generate_class_perm_cil() doesn't provide an ordering guarantee
+        let cil = Sexp::List(cil).to_string();
+        assert!(cil.contains("(class capability (mac_override mac_admin))"));
+        assert!(cil.contains("(class file (read write))"));
+        assert!(
+            cil.contains("(classorder (capability file))")
+                || cil.contains("(classorder (file capability))")
         );
-        assert_eq!(cil[2].to_string(), "(classorder (file capability))");
     }
 
     #[test]
