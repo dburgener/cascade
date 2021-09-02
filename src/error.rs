@@ -18,7 +18,7 @@ pub struct HLLCompileError {
 
 impl fmt::Display for HLLCompileError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "TODO")
+        write!(f, "{}:{} {}", self.filename, self.lineno, self.msg)
     }
 }
 
@@ -169,12 +169,20 @@ impl HLLErrors {
         self.errors.push(error);
     }
 
-    pub fn is_empty(&self) -> bool {
+    fn is_empty(&self) -> bool {
         self.errors.is_empty()
     }
 
     pub fn append(&mut self, other: &mut HLLErrors) {
         self.errors.append(&mut other.errors);
+    }
+
+    pub fn into_result<T>(self, ok: T) -> Result<T, HLLErrors> {
+        if self.is_empty() {
+            Ok(ok)
+        } else {
+            Err(self)
+        }
     }
 }
 

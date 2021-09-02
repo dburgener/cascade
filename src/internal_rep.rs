@@ -1,7 +1,10 @@
 use sexp::{atom_s, list, Atom, Sexp};
+use std::collections::HashMap;
+use std::convert::TryFrom;
 
-use crate::ast::TypeDecl;
+use crate::ast::{Argument, DeclaredArgument, FuncCall, FuncDecl, Statement, TypeDecl};
 use crate::constants;
+use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
 
 const DEFAULT_USER: &str = "system_u";
 const DEFAULT_OBJECT_ROLE: &str = "object_r";
@@ -23,6 +26,27 @@ impl TypeInfo {
             is_virtual: td.is_virtual,
         }
     }
+
+    pub fn is_child_or_actual_type(
+        &self,
+        target: &TypeInfo,
+        types: &HashMap<String, TypeInfo>,
+    ) -> bool {
+        if self.name == target.name {
+            return true;
+        }
+
+        for parent in &self.inherits {
+            let parent_typeinfo = match types.get(parent) {
+                Some(t) => t,
+                None => continue,
+            };
+            if parent_typeinfo.is_child_or_actual_type(target, types) {
+                return true;
+            }
+        }
+        return false;
+    }
 }
 
 impl From<&TypeInfo> for sexp::Sexp {
@@ -34,6 +58,44 @@ impl From<&TypeInfo> for sexp::Sexp {
         };
         list(&[atom_s(flavor), atom_s(&typeinfo.name)])
     }
+}
+
+fn arg_in_context<'a>(
+    arg: &str,
+    context: Option<&Vec<FunctionArgument<'a>>>,
+) -> Option<&'a TypeInfo> {
+    match context {
+        Some(context) => {
+            for context_arg in context {
+                if arg == context_arg.name {
+                    return Some(context_arg.param_type);
+                }
+            }
+            None
+        }
+        None => None,
+    }
+}
+
+fn argument_to_typeinfo<'a>(
+    a: &Argument,
+    types: &'a HashMap<String, TypeInfo>,
+    context: Option<&Vec<FunctionArgument<'a>>>,
+) -> Result<&'a TypeInfo, HLLErrorItem> {
+    // TODO: Handle the "this" keyword
+    let t: Option<&TypeInfo> = match a {
+        Argument::Var(s) => match arg_in_context(s, context) {
+            Some(res) => Some(res),
+            None => types.get(s),
+        },
+        _ => None,
+    };
+
+    t.ok_or(HLLErrorItem::Compile(HLLCompileError {
+        filename: "TODO".to_string(),
+        lineno: 0,
+        msg: format!("{} is not a valid type", a),
+    }))
 }
 
 #[derive(Clone, Debug)]
@@ -53,8 +115,8 @@ pub struct AvRule<'a> {
     pub perms: Vec<&'a str>,
 }
 
-impl From<AvRule<'_>> for sexp::Sexp {
-    fn from(rule: AvRule) -> sexp::Sexp {
+impl From<&AvRule<'_>> for sexp::Sexp {
+    fn from(rule: &AvRule) -> sexp::Sexp {
         let mut ret = Vec::new();
 
         ret.push(match rule.av_rule_flavor {
@@ -77,7 +139,7 @@ impl From<AvRule<'_>> for sexp::Sexp {
 
         let perms = rule
             .perms
-            .into_iter()
+            .iter()
             .map(|p| Sexp::Atom(Atom::S(p.to_string())))
             .collect();
 
@@ -232,6 +294,311 @@ impl<'a> ClassList<'a> {
     }
 }
 
+// TODO: This can be converted into a TryFrom for more compile time gaurantees
+fn call_to_av_rule<'a>(
+    c: &'a FuncCall,
+    types: &'a HashMap<String, TypeInfo>,
+    args: Option<&Vec<FunctionArgument<'a>>>,
+) -> Result<AvRule<'a>, HLLErrors> {
+    let flavor = match c.name.as_str() {
+        constants::ALLOW_FUNCTION_NAME => AvRuleFlavor::Allow,
+        constants::DONTAUDIT_FUNCTION_NAME => AvRuleFlavor::Dontaudit,
+        constants::AUDITALLOW_FUNCTION_NAME => AvRuleFlavor::Auditallow,
+        constants::NEVERALLOW_FUNCTION_NAME => AvRuleFlavor::Neverallow,
+        _ => return Err(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {}))),
+    };
+
+    if c.args.len() != 4 {
+        return Err(HLLErrors::from(HLLErrorItem::Compile(HLLCompileError {
+            filename: "TODO".to_string(),
+            lineno: 0,
+            msg: format!(
+                "Expected 4 args to built in function {}.  Got {}.",
+                c.name.as_str(),
+                c.args.len()
+            ),
+        })));
+    }
+
+    let source = argument_to_typeinfo(&c.args[0], types, args)?;
+    let target = argument_to_typeinfo(&c.args[1], types, args)?;
+    let class = match &c.args[2] {
+        Argument::Var(s) => s,
+        a => {
+            return Err(HLLErrors::from(HLLErrorItem::Compile(HLLCompileError {
+                filename: "TODO".to_string(),
+                lineno: 0,
+                msg: format!("Expected an object class, got {:?}", a),
+            })))
+        }
+    };
+    let perms = match &c.args[3] {
+        Argument::List(l) => l.iter().map(|s| s as &str).collect(),
+        // TODO, a Var can probably be coerced.  This is the @makelist annotation case
+        p => {
+            return Err(HLLErrors::from(HLLErrorItem::Compile(HLLCompileError {
+                filename: "TODO".to_string(),
+                lineno: 0,
+                msg: format!("Expected a list of permissions, got {:?}", p),
+            })))
+        }
+    };
+
+    // TODO: Validate number of args, lack of class_name
+    Ok(AvRule {
+        av_rule_flavor: flavor,
+        source: source,
+        target: target,
+        class: class,
+        perms: perms,
+    })
+}
+
+#[derive(Debug, Clone)]
+pub struct FunctionInfo<'a> {
+    pub name: String,
+    pub args: Vec<FunctionArgument<'a>>,
+    pub original_body: &'a Vec<Statement>,
+    pub body: Option<Vec<ValidatedStatement<'a>>>,
+}
+
+impl<'a> FunctionInfo<'a> {
+    pub fn new(
+        funcdecl: &'a FuncDecl,
+        types: &'a HashMap<String, TypeInfo>,
+        parent_type: Option<&'a TypeInfo>,
+    ) -> Result<FunctionInfo<'a>, HLLErrors> {
+        let mut args = Vec::new();
+        let mut errors = HLLErrors::new();
+
+        // All member functions automatically have "this" available as a reference to their type
+        match parent_type {
+            Some(parent_type) => args.push(FunctionArgument::new_this_argument(parent_type)),
+            None => (),
+        }
+
+        for a in &funcdecl.args {
+            match FunctionArgument::new(&a, types) {
+                Ok(a) => args.push(a),
+                Err(e) => errors.add_error(e),
+            }
+        }
+
+        errors.into_result(FunctionInfo {
+            name: funcdecl.get_cil_name(),
+            args: args,
+            original_body: &funcdecl.body,
+            body: None,
+        })
+    }
+
+    pub fn validate_body(
+        &mut self,
+        functions: &'a HashMap<String, FunctionInfo>,
+        types: &'a HashMap<String, TypeInfo>,
+    ) -> Result<(), HLLErrors> {
+        let mut new_body = Vec::new();
+        let mut errors = HLLErrors::new();
+
+        for statement in self.original_body {
+            match ValidatedStatement::new(statement, functions, types, &self.args) {
+                Ok(s) => new_body.push(s),
+                Err(mut e) => errors.append(&mut e),
+            }
+        }
+        self.body = Some(new_body);
+        errors.into_result(())
+    }
+}
+
+impl TryFrom<&FunctionInfo<'_>> for sexp::Sexp {
+    type Error = HLLErrorItem;
+
+    fn try_from(f: &FunctionInfo) -> Result<sexp::Sexp, HLLErrorItem> {
+        let mut macro_cil = vec![
+            atom_s("macro"),
+            atom_s(&f.name),
+            Sexp::List(f.args.iter().map(|a| Sexp::from(a)).collect()),
+        ];
+        match &f.body {
+            None => return Err(HLLErrorItem::Internal(HLLInternalError {})),
+            Some(statements) => {
+                for statement in statements {
+                    match statement {
+                        ValidatedStatement::Call(c) => macro_cil.push(Sexp::from(&**c)),
+                        ValidatedStatement::AvRule(a) => macro_cil.push(Sexp::from(&*a)),
+                    }
+                }
+            }
+        }
+        Ok(Sexp::List(macro_cil))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FunctionArgument<'a> {
+    pub param_type: &'a TypeInfo,
+    pub name: String,
+    pub is_list_param: bool,
+}
+
+impl<'a> FunctionArgument<'a> {
+    pub fn new(
+        declared_arg: &DeclaredArgument,
+        types: &'a HashMap<String, TypeInfo>,
+    ) -> Result<Self, HLLErrorItem> {
+        let param_type = match types.get(&declared_arg.param_type) {
+            Some(ti) => ti,
+            None => {
+                return Err(HLLErrorItem::Compile(HLLCompileError {
+                    filename: "TODO".to_string(),
+                    lineno: 0,
+                    msg: format!("No such type or attribute: {}", &declared_arg.param_type),
+                }));
+            }
+        };
+
+        // TODO list parameters
+
+        Ok(FunctionArgument {
+            param_type: param_type,
+            name: declared_arg.name.clone(),
+            is_list_param: false, //TODO
+        })
+    }
+
+    pub fn new_this_argument(parent_type: &'a TypeInfo) -> Self {
+        FunctionArgument {
+            param_type: parent_type,
+            name: "this".to_string(),
+            is_list_param: false,
+        }
+    }
+}
+
+impl From<&FunctionArgument<'_>> for sexp::Sexp {
+    fn from(f: &FunctionArgument) -> sexp::Sexp {
+        list(&[Sexp::from(f.param_type), atom_s(&f.name)])
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ValidatedStatement<'a> {
+    Call(Box<ValidatedCall>),
+    AvRule(AvRule<'a>),
+}
+
+impl<'a> ValidatedStatement<'a> {
+    pub fn new(
+        statement: &'a Statement,
+        functions: &HashMap<String, FunctionInfo>,
+        types: &'a HashMap<String, TypeInfo>,
+        args: &Vec<FunctionArgument<'a>>,
+    ) -> Result<ValidatedStatement<'a>, HLLErrors> {
+        match statement {
+            Statement::Call(c) => {
+                if c.is_builtin() {
+                    return Ok(ValidatedStatement::AvRule(call_to_av_rule(
+                        c,
+                        types,
+                        Some(args),
+                    )?));
+                } else {
+                    return Ok(ValidatedStatement::Call(Box::new(ValidatedCall::new(
+                        c,
+                        functions,
+                        types,
+                        Some(args),
+                    )?)));
+                }
+            }
+        }
+    }
+}
+
+impl From<&ValidatedStatement<'_>> for sexp::Sexp {
+    fn from(statement: &ValidatedStatement) -> sexp::Sexp {
+        match statement {
+            ValidatedStatement::Call(c) => Sexp::from(&**c),
+            ValidatedStatement::AvRule(a) => Sexp::from(a),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ValidatedCall {
+    cil_name: String,
+    args: Vec<String>,
+}
+
+impl ValidatedCall {
+    fn new(
+        call: &FuncCall,
+        functions: &HashMap<String, FunctionInfo>,
+        types: &HashMap<String, TypeInfo>,
+        parent_args: Option<&Vec<FunctionArgument>>,
+    ) -> Result<ValidatedCall, HLLErrors> {
+        let cil_name = call.get_cil_name();
+        let function_info = match functions.get(&cil_name) {
+            Some(function_info) => function_info,
+            None => {
+                return Err(HLLErrors::from(HLLErrorItem::Compile(HLLCompileError {
+                    filename: "TODO".to_string(),
+                    lineno: 0,
+                    msg: format!("No such function: {}", cil_name),
+                })));
+            }
+        };
+
+        // Each argument must match the type the function signature expects
+        let mut args = Vec::new();
+        let mut function_args_iter = function_info.args.iter();
+        function_args_iter.next(); // The first argument to function_info.args is the implicit 'this'
+        for (a, fa) in call.args.iter().zip(function_args_iter) {
+            args.push(validate_argument(a, fa, types, parent_args)?);
+        }
+
+        Ok(ValidatedCall {
+            cil_name: cil_name,
+            args: args,
+        })
+    }
+}
+
+fn validate_argument(
+    arg: &Argument,
+    target_argument: &FunctionArgument,
+    types: &HashMap<String, TypeInfo>,
+    args: Option<&Vec<FunctionArgument>>,
+) -> Result<String, HLLErrorItem> {
+    let arg_typeinfo = argument_to_typeinfo(arg, types, args)?;
+
+    if arg_typeinfo.is_child_or_actual_type(target_argument.param_type, types) {
+        Ok(arg_typeinfo.name.clone())
+    } else {
+        Err(HLLErrorItem::Compile(HLLCompileError {
+            filename: "TODO".to_string(),
+            lineno: 0,
+            msg: format!(
+                "Expected type inheriting {}, got {}",
+                target_argument.param_type.name, arg_typeinfo.name
+            ),
+        }))
+    }
+}
+
+impl From<&ValidatedCall> for sexp::Sexp {
+    fn from(call: &ValidatedCall) -> sexp::Sexp {
+        let args = call.args.iter().map(|a| atom_s(a)).collect::<Vec<Sexp>>();
+
+        Sexp::List(vec![
+            atom_s("call"),
+            atom_s(&call.cil_name),
+            Sexp::List(args),
+        ])
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -240,7 +607,7 @@ mod tests {
 
     #[test]
     fn generate_cil_for_av_rule_test() {
-        let cil_sexp = Sexp::from(AvRule {
+        let cil_sexp = Sexp::from(&AvRule {
             av_rule_flavor: AvRuleFlavor::Allow,
             source: &TypeInfo::new(&TypeDecl::new("foo".to_string(), Vec::new(), Vec::new())),
             target: &TypeInfo::new(&TypeDecl::new("bar".to_string(), Vec::new(), Vec::new())),

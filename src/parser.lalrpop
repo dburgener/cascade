@@ -1,4 +1,4 @@
-use crate::ast::{Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, Virtualable, FuncCall};
+use crate::ast::{Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, Virtualable, FuncCall, DeclaredArgument};
 
 grammar;
 
@@ -40,7 +40,7 @@ Decl: Declaration = {
 }
 
 TypeDecl: Box<TypeDecl> = {
-	<dr:BuiltInType> <n:Symbol> <i:InheritList?> "{" <v:Expr*> "}" => {
+	<dr:BuiltInType> <n:Symbol> <i:InheritList?> "{" <mut v:Expr*> "}" => {
 		let inherits = match i {
 			None => vec![dr.to_string()],
 			Some(mut i) => {
@@ -48,6 +48,7 @@ TypeDecl: Box<TypeDecl> = {
 				i
 			}
 		};
+		v.iter_mut().for_each(|e| e.set_class_name_if_decl(n.clone()));
 		Box::new(TypeDecl::new(n, inherits, v))
 	},
 }
@@ -56,22 +57,20 @@ InheritList: Vec<String> = {
 	"inherits" <Comma<Symbol>>,
 }
 
-BuiltInType = {
-	"domain",
-	"resource",
+BuiltInType: String = {
+	"domain" => <>.to_string(),
+	"resource" => <>.to_string(),
 }
 
 FuncDecl: Box<FuncDecl> = {
-	// todo: commas
-	"fn" Symbol "(" Comma<FuncDeclArg> ")" "{" Stmt+ "}" => Box::new(FuncDecl {}),
+	"fn" <n: Symbol> "(" <a: Comma<FuncDeclArg>> ")" "{" <b: Stmt+> "}" => Box::new(FuncDecl { class_name: None, name: n, args: a, body: b }),
 }
 
-// TODO: Save the type
-FuncDeclArg: String = {
-	BuiltInType <Symbol>,
-	Symbol <Symbol>,
-	"[" BuiltInType "]" <Symbol>,
-	"[" Symbol "]" <Symbol>,
+FuncDeclArg: DeclaredArgument = {
+	<t: BuiltInType> <n: Symbol> => DeclaredArgument { param_type: t, is_list_param: false, name: n },
+	<t: Symbol> <n: Symbol> => DeclaredArgument { param_type: t, is_list_param: false, name: n },
+	"[" <t: BuiltInType> "]" <n: Symbol> => DeclaredArgument { param_type: t, is_list_param: true, name: n },
+	"[" <t: Symbol> "]" <n: Symbol> => DeclaredArgument { param_type: t, is_list_param: true, name: n },
 }
 
 Stmt: Statement = {
