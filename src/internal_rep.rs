@@ -622,18 +622,28 @@ impl ValidatedCall {
         };
 
         // Each argument must match the type the function signature expects
-        let mut args = Vec::new();
-        let mut function_args_iter = function_info.args.iter();
-        function_args_iter.next(); // The first argument to function_info.args is the implicit 'this'
-        for (a, fa) in call.args.iter().zip(function_args_iter) {
-            args.push(validate_argument(a, fa, types, parent_args)?);
-        }
+        let args = validate_arguments(call, &function_info.args, types, parent_args)?;
 
         Ok(ValidatedCall {
             cil_name: cil_name,
             args: args,
         })
     }
+}
+
+fn validate_arguments(
+    call: &FuncCall,
+    function_args: &Vec<FunctionArgument>,
+    types: &HashMap<String, TypeInfo>,
+    parent_args: Option<&Vec<FunctionArgument>>,
+) -> Result<Vec<String>, HLLErrors> {
+    let mut args = Vec::new();
+    let mut function_args_iter = function_args.iter();
+    function_args_iter.next(); // The first argument to function_info.args is the implicit 'this'
+    for (a, fa) in call.args.iter().zip(function_args_iter) {
+        args.push(validate_argument(a, fa, types, parent_args)?);
+    }
+    Ok(args)
 }
 
 fn validate_argument(
