@@ -15,7 +15,7 @@ const DEFAULT_MLS: &str = "s0";
 pub struct TypeInfo {
     pub name: String,
     pub inherits: Vec<String>,
-    is_virtual: bool,
+    pub is_virtual: bool,
 }
 
 impl TypeInfo {

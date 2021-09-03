@@ -26,8 +26,8 @@ pub fn compile(p: &Policy) -> Result<Vec<sexp::Sexp>, HLLErrors> {
     let cil_macros = func_map_to_sexp(func_map)?;
     let sid_statements = generate_sid_rules(generate_sids());
 
-    let mut ret = cil_types;
-    ret.extend(headers.iter().cloned());
+    let mut ret = headers;
+    ret.extend(cil_types.iter().cloned());
     ret.extend(cil_macros.iter().cloned());
     ret.extend(cil_rules.iter().cloned());
     ret.extend(sid_statements.iter().cloned());
@@ -49,11 +49,6 @@ fn generate_cil_headers() -> Vec<sexp::Sexp> {
         list(&[atom_s("role"), atom_s("system_r")]),
         list(&[atom_s("role"), atom_s("object_r")]),
         list(&[atom_s("userrole"), atom_s("system_u"), atom_s("system_r")]),
-        list(&[
-            atom_s("roletype"),
-            atom_s("system_r"),
-            atom_s("all_processes"),
-        ]),
         list(&[
             atom_s("userlevel"),
             atom_s("system_u"),
@@ -306,6 +301,13 @@ fn type_list_to_sexp(types: Vec<&TypeInfo>) -> Vec<sexp::Sexp> {
     let mut ret = Vec::new();
     for t in types {
         ret.push(Sexp::from(t));
+        if !t.is_virtual {
+            ret.push(list(&[
+                atom_s("roletype"),
+                atom_s("system_r"),
+                atom_s(&t.name),
+            ]));
+        }
     }
     ret
 }

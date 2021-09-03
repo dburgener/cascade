@@ -1,0 +1,5 @@
+resource foo {}
+
+domain my_domain {
+	dontaudit(this, foo, file, [read]);
+}

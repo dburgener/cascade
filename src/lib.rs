@@ -122,6 +122,30 @@ mod tests {
     }
 
     #[test]
+    fn auditallow_test() {
+        let policy_file = [POLICIES_DIR, "auditallow.hll"].concat();
+
+        match compile_system_policy(vec![&policy_file]) {
+            Ok(p) => {
+                assert!(p.contains("(auditallow my_domain foo"));
+            }
+            Err(e) => panic!("Auditallow compilation failed with {:?}", e),
+        }
+    }
+
+    #[test]
+    fn dontaudit_test() {
+        let policy_file = [POLICIES_DIR, "dontaudit.hll"].concat();
+
+        match compile_system_policy(vec![&policy_file]) {
+            Ok(p) => {
+                assert!(p.contains("(dontaudit my_domain foo"));
+            }
+            Err(e) => panic!("Dontaudit compilation failed with {:?}", e),
+        }
+    }
+
+    #[test]
     fn cycle_error_test() {
         let policy_file = [ERROR_POLICIES_DIR, "cycle.hll"].concat();
 
