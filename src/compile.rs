@@ -86,7 +86,7 @@ fn build_type_map(p: &Policy) -> HashMap<String, TypeInfo> {
 
 fn get_built_in_types_map() -> HashMap<String, TypeInfo> {
     let mut built_in_types = HashMap::new();
-    for built_in in &["domain", "resource"] {
+    for built_in in &["domain", "resource", "path", "string"] {
         let built_in = built_in.to_string();
         built_in_types.insert(built_in.clone(), TypeInfo::make_built_in(built_in));
     }
@@ -368,6 +368,10 @@ mod tests {
             Some(foo) => assert_eq!(foo.name, "foo"),
             None => panic!("Foo is not in hash map"),
         }
+        match types.get("domain") {
+            Some(foo) => assert_eq!(foo.name, "domain"),
+            None => panic!("Domain is not in hash map"),
+        }
     }
 
     #[test]
@@ -394,11 +398,9 @@ mod tests {
 
         let type_vec = organize_type_map(&types).unwrap();
 
-        // The order of domain and resource is not defined
-        assert!(type_vec[0].name == "resource" || type_vec[1].name == "resource");
-        assert!(type_vec[0].name == "domain" || type_vec[1].name == "domain");
-        assert_eq!(type_vec[2].name, "foo");
-        assert_eq!(type_vec[3].name, "bar");
-        assert_eq!(type_vec[4].name, "baz");
+        // Skip built in types
+        assert_eq!(type_vec[type_vec.len() - 3].name, "foo");
+        assert_eq!(type_vec[type_vec.len() - 2].name, "bar");
+        assert_eq!(type_vec[type_vec.len() - 1].name, "baz");
     }
 }

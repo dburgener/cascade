@@ -55,16 +55,35 @@ impl TypeInfo {
         }
         return false;
     }
+
+    // Get the type that cil is aware of that this ti falls into
+    pub fn get_cil_type(&self) -> &str {
+        for name_type in &["path", "string"] {
+            if self.name == *name_type {
+                return "name";
+            }
+        }
+        if self.is_virtual {
+            "attribute"
+        } else {
+            "type"
+        }
+    }
 }
 
 impl From<&TypeInfo> for sexp::Sexp {
     fn from(typeinfo: &TypeInfo) -> sexp::Sexp {
-        let flavor = if typeinfo.is_virtual {
-            "attribute"
-        } else {
-            "type"
-        };
+        let flavor = typeinfo.get_cil_type();
         list(&[atom_s(flavor), atom_s(&typeinfo.name)])
+    }
+}
+
+// strings may be paths or strings
+pub fn type_name_from_string(string: &str) -> String {
+    if string.contains("/") {
+        "path".to_string()
+    } else {
+        "string".to_string()
     }
 }
 
@@ -96,6 +115,7 @@ fn argument_to_typeinfo<'a>(
             Some(res) => Some(res),
             None => types.get(s),
         },
+        Argument::Quote(s) => types.get(&type_name_from_string(s)),
         _ => None,
     };
 
@@ -529,7 +549,7 @@ impl<'a> FunctionArgument<'a> {
 
 impl From<&FunctionArgument<'_>> for sexp::Sexp {
     fn from(f: &FunctionArgument) -> sexp::Sexp {
-        list(&[Sexp::from(f.param_type), atom_s(&f.name)])
+        list(&[atom_s(f.param_type.get_cil_type()), atom_s(&f.name)])
     }
 }
 
