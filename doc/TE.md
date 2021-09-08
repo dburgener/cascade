@@ -120,10 +120,10 @@ Default contexts specify what labels should be applied to objects that cannot st
 
 Reference Policy implementations treat these types of labeling independently, which reflects how they are handled at a kernel/system level, but not how high level users conceptualize them.  In HLL, all forms of labeling for a given resource are specified in its resource block.
 
-Dynamic transitions are achieved through the dynamic_transition() built in function, which has the following prototypes:
+Runtime resource transitions are achieved through the resource_transition() built in function, which has the following prototypes:
 
-    fn dynamic_transition(resource target, source domain, resource parent_dir, class obj_class);
-    fn dynamic_transition(resource target, source domain, resource parent_dir, [class] obj_classes);
+    fn resource_transition(resource target, source domain, resource parent_dir, class obj_class);
+    fn resource_transition(resource target, source domain, resource parent_dir, [class] obj_classes);
 
 The target field is first so that it can be passed in when called as a member function from resources.
 
