@@ -1,5 +1,5 @@
 resource my_file {
-	fn read(my_domain source) {
+	fn read(domain source) {
 		allow(source, this, file, [ read open getattr ]);
 	}
 }

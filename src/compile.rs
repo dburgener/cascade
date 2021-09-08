@@ -73,7 +73,7 @@ fn declare_class_perms() -> Vec<sexp::Sexp> {
 
 // TODO: Refactor below nearly identical functions to eliminate redundant code
 fn build_type_map(p: &Policy) -> HashMap<String, TypeInfo> {
-    let mut decl_map = HashMap::new();
+    let mut decl_map = get_built_in_types_map();
     // TODO: This only allows declarations at the top level.
     // Nested declarations are legal, but auto-associate with the parent, so they'll need special
     // handling when association is implemented
@@ -89,6 +89,16 @@ fn build_type_map(p: &Policy) -> HashMap<String, TypeInfo> {
     }
 
     decl_map
+}
+
+fn get_built_in_types_map() -> HashMap<String, TypeInfo> {
+    let mut built_in_types = HashMap::new();
+    for built_in in &["domain", "resource"] {
+        let built_in = built_in.to_string();
+        built_in_types.insert(built_in.clone(), TypeInfo::make_built_in(built_in));
+    }
+
+    built_in_types
 }
 
 fn build_func_map<'a>(
@@ -156,9 +166,6 @@ fn find_cycles_or_bad_types(
     visited_types: HashSet<&str>,
 ) -> Result<(), HLLErrors> {
     let mut ret = HLLErrors::new();
-    if type_to_check == "domain" || type_to_check == "resource" {
-        return Ok(());
-    }
 
     let ti = match types.get(&type_to_check.to_string()) {
         Some(i) => i,
@@ -233,7 +240,7 @@ fn organize_type_map<'a>(
             // should have always been populated with at least domain or resource by the parser.
             // Should probably return an internal error if that hasn't happened
             for key in &ti.inherits {
-                if key != "domain" && key != "resource" && !out.iter().any(|&x| &x.name == key) {
+                if !out.iter().any(|&x| &x.name == key) {
                     wait = true;
                     continue;
                 }
@@ -372,7 +379,7 @@ mod tests {
 
     #[test]
     fn organize_type_map_test() {
-        let mut types: HashMap<String, TypeInfo> = HashMap::new();
+        let mut types = get_built_in_types_map();
         let foo_type = TypeInfo::new(&TypeDecl::new(
             "foo".to_string(),
             vec!["domain".to_string()],
@@ -394,8 +401,11 @@ mod tests {
 
         let type_vec = organize_type_map(&types).unwrap();
 
-        assert_eq!(type_vec[0].name, "foo");
-        assert_eq!(type_vec[1].name, "bar");
-        assert_eq!(type_vec[2].name, "baz");
+        // The order of domain and resource is not defined
+        assert!(type_vec[0].name == "resource" || type_vec[1].name == "resource");
+        assert!(type_vec[0].name == "domain" || type_vec[1].name == "domain");
+        assert_eq!(type_vec[2].name, "foo");
+        assert_eq!(type_vec[3].name, "bar");
+        assert_eq!(type_vec[4].name, "baz");
     }
 }

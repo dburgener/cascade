@@ -27,6 +27,14 @@ impl TypeInfo {
         }
     }
 
+    pub fn make_built_in(name: String) -> TypeInfo {
+        TypeInfo {
+            name: name,
+            inherits: Vec::new(),
+            is_virtual: true,
+        }
+    }
+
     pub fn is_child_or_actual_type(
         &self,
         target: &TypeInfo,
