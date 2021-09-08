@@ -5,23 +5,25 @@ use std::convert::TryFrom;
 use crate::ast::{Declaration, Expression, Policy};
 use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
 use crate::internal_rep::{
-    generate_sid_rules, Context, FunctionArgument, FunctionInfo, Sid, TypeInfo, ValidatedStatement,
+    generate_sid_rules, ClassList, Context, FunctionArgument, FunctionInfo, Sid, TypeInfo,
+    ValidatedStatement,
 };
-use crate::obj_class::declare_class_perms;
+use crate::obj_class::make_classlist;
 
 pub fn compile(p: &Policy) -> Result<Vec<sexp::Sexp>, HLLErrors> {
+    let classlist = make_classlist();
     let type_map = build_type_map(p);
     let mut func_map = build_func_map(&p.exprs, &type_map, None)?;
     let func_map_copy = func_map.clone(); // In order to read function info while mutating
-    validate_functions(&mut func_map, &type_map, &func_map_copy)?;
+    validate_functions(&mut func_map, &type_map, &classlist, &func_map_copy)?;
 
     let type_decl_list = organize_type_map(&type_map)?;
 
-    let policy_rules = do_rules_pass(&p.exprs, &type_map, &func_map, None)?;
+    let policy_rules = do_rules_pass(&p.exprs, &type_map, &func_map, &classlist, None)?;
 
     // TODO: The rest of compilation
     let cil_types = type_list_to_sexp(type_decl_list);
-    let headers = generate_cil_headers();
+    let headers = generate_cil_headers(&classlist);
     let cil_rules = rules_list_to_sexp(policy_rules);
     let cil_macros = func_map_to_sexp(func_map)?;
     let sid_statements = generate_sid_rules(generate_sids());
@@ -40,8 +42,8 @@ pub fn compile(p: &Policy) -> Result<Vec<sexp::Sexp>, HLLErrors> {
 // Until we can actually set these things in the language, we need some sensible defaults to make
 // secilc happy. As we add the above listed security models, this should be refactored to set them
 // in accordance with the policy
-fn generate_cil_headers() -> Vec<sexp::Sexp> {
-    let mut ret = declare_class_perms();
+fn generate_cil_headers(classlist: &ClassList) -> Vec<sexp::Sexp> {
+    let mut ret = classlist.generate_class_perm_cil();
     ret.append(&mut vec![
         list(&[atom_s("sensitivity"), atom_s("s0")]),
         list(&[atom_s("sensitivityorder"), list(&[atom_s("s0")])]),
@@ -86,7 +88,7 @@ fn build_type_map(p: &Policy) -> HashMap<String, TypeInfo> {
 
 fn get_built_in_types_map() -> HashMap<String, TypeInfo> {
     let mut built_in_types = HashMap::new();
-    for built_in in &["domain", "resource", "path", "string"] {
+    for built_in in &["domain", "resource", "path", "string", "obj_class", "perm"] {
         let built_in = built_in.to_string();
         built_in_types.insert(built_in.clone(), TypeInfo::make_built_in(built_in));
     }
@@ -136,11 +138,12 @@ fn build_func_map<'a>(
 fn validate_functions<'a, 'b>(
     functions: &'a mut HashMap<String, FunctionInfo<'b>>,
     types: &'b HashMap<String, TypeInfo>,
+    class_perms: &'b ClassList,
     functions_copy: &'b HashMap<String, FunctionInfo<'b>>,
 ) -> Result<(), HLLErrors> {
     let mut errors = HLLErrors::new();
     for function in functions.values_mut() {
-        match function.validate_body(&functions_copy, types) {
+        match function.validate_body(&functions_copy, types, class_perms) {
             Ok(_) => (),
             Err(mut e) => errors.append(&mut e),
         }
@@ -263,6 +266,7 @@ fn do_rules_pass<'a>(
     exprs: &'a Vec<Expression>,
     types: &'a HashMap<String, TypeInfo>,
     funcs: &'a HashMap<String, FunctionInfo>,
+    class_perms: &ClassList<'a>,
     parent_type: Option<&'a TypeInfo>,
 ) -> Result<Vec<ValidatedStatement<'a>>, HLLErrors> {
     let mut ret = Vec::new();
@@ -274,7 +278,7 @@ fn do_rules_pass<'a>(
                     Some(t) => vec![FunctionArgument::new_this_argument(t)],
                     None => Vec::new(),
                 };
-                match ValidatedStatement::new(s, funcs, types, &func_args) {
+                match ValidatedStatement::new(s, funcs, types, class_perms, &func_args) {
                     Ok(s) => ret.push(s),
                     Err(mut e) => errors.append(&mut e),
                 }
@@ -286,7 +290,13 @@ fn do_rules_pass<'a>(
                         return Err(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))
                     }
                 };
-                match do_rules_pass(&t.expressions, types, funcs, Some(type_being_parsed)) {
+                match do_rules_pass(
+                    &t.expressions,
+                    types,
+                    funcs,
+                    class_perms,
+                    Some(type_being_parsed),
+                ) {
                     Ok(r) => ret.extend(r.iter().cloned()),
                     Err(mut e) => errors.append(&mut e),
                 }

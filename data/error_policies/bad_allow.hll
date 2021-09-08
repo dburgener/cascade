@@ -1,3 +1,5 @@
+resource bar {}
+
 domain foo {
 	allow(this);
 	allow(this, bar, file, read);
