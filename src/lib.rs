@@ -7,6 +7,7 @@ mod constants;
 pub mod error;
 mod functions;
 mod internal_rep;
+mod obj_class;
 
 use error::{HLLErrorItem, HLLErrors};
 use lalrpop_util::ParseError;
