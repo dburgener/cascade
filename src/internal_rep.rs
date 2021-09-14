@@ -494,7 +494,10 @@ fn call_to_av_rule<'a>(
         return Err(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})));
     }
 
-    // TODO: Validate number of args, lack of class_name
+    for p in &perms {
+        class_perms.verify_permission(&class, &p)?;
+    }
+
     Ok(AvRule {
         av_rule_flavor: flavor,
         source: source,
@@ -765,7 +768,13 @@ impl<'a> TypeInstance<'a> {
 
     fn new(arg: &'a Argument, ti: &'a TypeInfo) -> Self {
         let instance_value = match arg {
-            Argument::Var(_) => TypeValue::SEType, // TODO: This may not hold if this is an argument name
+            Argument::Var(s) => {
+                if s == &ti.name {
+                    TypeValue::SEType
+                } else {
+                    TypeValue::Str(s)
+                }
+            }
             Argument::List(vec) => TypeValue::Vector(vec.iter().map(|s| s as &str).collect()),
             Argument::Quote(q) => TypeValue::Str(q),
         };

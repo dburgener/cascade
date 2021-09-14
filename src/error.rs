@@ -155,6 +155,12 @@ impl From<io::Error> for HLLErrorItem {
     }
 }
 
+impl From<HLLCompileError> for HLLErrorItem {
+    fn from(error: HLLCompileError) -> Self {
+        HLLErrorItem::Compile(error)
+    }
+}
+
 #[derive(Debug)]
 pub struct HLLErrors {
     errors: Vec<HLLErrorItem>,
@@ -184,6 +190,10 @@ impl HLLErrors {
             Err(self)
         }
     }
+
+    pub fn error_count(&self) -> usize {
+        self.errors.len()
+    }
 }
 
 impl From<HLLErrorItem> for HLLErrors {
@@ -191,6 +201,12 @@ impl From<HLLErrorItem> for HLLErrors {
         HLLErrors {
             errors: vec![error],
         }
+    }
+}
+
+impl From<HLLCompileError> for HLLErrors {
+    fn from(error: HLLCompileError) -> Self {
+        HLLErrors::from(HLLErrorItem::from(error))
     }
 }
 
