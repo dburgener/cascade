@@ -132,6 +132,11 @@ impl Statement {
     }
 }
 
+pub enum BuiltIns {
+    AvRule,
+    FileContext,
+}
+
 #[derive(Debug)]
 pub struct FuncCall {
     pub class_name: Option<String>,
@@ -150,12 +155,18 @@ impl FuncCall {
         }
     }
 
-    pub fn is_builtin(&self) -> bool {
+    pub fn check_builtin(&self) -> Option<BuiltIns> {
         match self.class_name {
-            Some(_) => return false,
+            Some(_) => return None,
             None => (),
         }
-        constants::BUILTINS.iter().any(|&i| i == &self.name)
+        if constants::AV_RULES.iter().any(|&i| i == &self.name) {
+            return Some(BuiltIns::AvRule);
+        }
+        if &self.name == constants::FILE_CONTEXT_FUNCTION_NAME {
+            return Some(BuiltIns::FileContext);
+        }
+        None
     }
 
     pub fn get_display_name(&self) -> String {

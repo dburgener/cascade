@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt;
 
-use crate::ast::{Argument, DeclaredArgument, FuncCall, FuncDecl, Statement, TypeDecl};
+use crate::ast::{Argument, BuiltIns, DeclaredArgument, FuncCall, FuncDecl, Statement, TypeDecl};
 use crate::constants;
 use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
 
@@ -657,24 +657,26 @@ impl<'a> ValidatedStatement<'a> {
         args: &Vec<FunctionArgument<'a>>,
     ) -> Result<ValidatedStatement<'a>, HLLErrors> {
         match statement {
-            Statement::Call(c) => {
-                if c.is_builtin() {
+            Statement::Call(c) => match c.check_builtin() {
+                Some(BuiltIns::AvRule) => {
                     return Ok(ValidatedStatement::AvRule(call_to_av_rule(
                         c,
                         types,
                         class_perms,
                         Some(args),
-                    )?));
-                } else {
+                    )?))
+                }
+                Some(BuiltIns::FileContext) => unimplemented!(),
+                None => {
                     return Ok(ValidatedStatement::Call(Box::new(ValidatedCall::new(
                         c,
                         functions,
                         types,
                         class_perms,
                         Some(args),
-                    )?)));
+                    )?)))
                 }
-            }
+            },
         }
     }
 }
