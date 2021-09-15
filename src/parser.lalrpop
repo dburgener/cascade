@@ -1,4 +1,4 @@
-use crate::ast::{Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, Virtualable, FuncCall, DeclaredArgument};
+use crate::ast::{Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, Annotations, Virtualable, FuncCall, DeclaredArgument};
 
 grammar;
 
@@ -18,8 +18,10 @@ pub Policy: Box<Policy> = {
 }
 
 pub Expr: Expression = {
-	// TODO: Save annotation info in expression
-	Ann <Expr>,
+	<a:Ann> <mut e:Expr> => {
+		e.add_annotation(a);
+		e
+	},
 	<BaseExpr>
 }
 
@@ -63,7 +65,7 @@ BuiltInType: String = {
 }
 
 FuncDecl: Box<FuncDecl> = {
-	"fn" <n: Symbol> "(" <a: Comma<FuncDeclArg>> ")" "{" <b: Stmt+> "}" => Box::new(FuncDecl { class_name: None, name: n, args: a, body: b }),
+	"fn" <n: Symbol> "(" <a: Comma<FuncDeclArg>> ")" "{" <b: Stmt+> "}" => Box::new(FuncDecl { class_name: None, name: n, args: a, body: b, annotations: Annotations::new() }),
 }
 
 FuncDeclArg: DeclaredArgument = {
@@ -78,8 +80,8 @@ Stmt: Statement = {
 	<n:Symbol> "(" <a:Comma<Arg>> ")" ";" => Statement::Call(Box::new(FuncCall::new(None, n, a))),
 }
 
-Ann: Box<Annotation> = {
-	"@" Symbol "(" Comma<Arg> ")" => Box::new(Annotation {}),
+Ann: Annotation = {
+	"@" <s:Symbol> "(" Comma<Arg> ")" => Annotation {name: s},
 }
 
 Symbol: String = {

@@ -26,6 +26,13 @@ impl Expression {
             _ => (),
         }
     }
+
+    pub fn add_annotation(&mut self, annotation: Annotation) {
+        match self {
+            Expression::Decl(d) => d.add_annotation(annotation),
+            Expression::Stmt(s) => s.add_annotation(annotation),
+        }
+    }
 }
 
 pub trait Virtualable {
@@ -47,12 +54,22 @@ impl Virtualable for Declaration {
     }
 }
 
+impl Declaration {
+    pub fn add_annotation(&mut self, annotation: Annotation) {
+        match self {
+            Declaration::Type(t) => t.annotations.push(annotation),
+            Declaration::Func(f) => f.annotations.push(annotation),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct TypeDecl {
     pub name: String,
     pub inherits: Vec<String>,
     pub is_virtual: bool,
     pub expressions: Vec<Expression>,
+    pub annotations: Annotations,
 }
 
 impl TypeDecl {
@@ -62,6 +79,7 @@ impl TypeDecl {
             inherits: inherits,
             is_virtual: false,
             expressions: exprs,
+            annotations: Annotations::new(),
         }
     }
 }
@@ -85,6 +103,7 @@ pub struct FuncDecl {
     pub name: String,
     pub args: Vec<DeclaredArgument>,
     pub body: Vec<Statement>,
+    pub annotations: Annotations,
 }
 
 impl FuncDecl {
@@ -94,6 +113,10 @@ impl FuncDecl {
             None => self.name.clone(),
         }
     }
+
+    pub fn add_annotation(&mut self, annotation: Annotation) {
+        self.annotations.push(annotation);
+    }
 }
 
 #[derive(Debug)]
@@ -101,11 +124,20 @@ pub enum Statement {
     Call(Box<FuncCall>),
 }
 
+impl Statement {
+    pub fn add_annotation(&mut self, annotation: Annotation) {
+        match self {
+            Statement::Call(c) => c.add_annotation(annotation),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct FuncCall {
     pub class_name: Option<String>,
     pub name: String,
     pub args: Vec<Argument>,
+    pub annotations: Annotations,
 }
 
 impl FuncCall {
@@ -114,6 +146,7 @@ impl FuncCall {
             class_name: cn,
             name: n,
             args: a,
+            annotations: Annotations::new(),
         }
     }
 
@@ -135,10 +168,34 @@ impl FuncCall {
     pub fn get_cil_name(&self) -> String {
         self.get_display_name()
     }
+
+    pub fn add_annotation(&mut self, annotation: Annotation) {
+        self.annotations.push(annotation);
+    }
 }
 
 #[derive(Debug)]
-pub struct Annotation {}
+pub struct Annotation {
+    pub name: String,
+}
+
+#[derive(Debug)]
+pub struct Annotations {
+    pub annotations: Vec<Annotation>,
+}
+
+impl Annotations {
+    pub fn push(&mut self, annotation: Annotation) {
+        self.annotations.push(annotation);
+    }
+
+    pub fn new() -> Self {
+        Annotations {
+            annotations: Vec::new(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Argument {
     Var(String),
