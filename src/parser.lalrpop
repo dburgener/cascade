@@ -97,7 +97,7 @@ Arg: Argument = {
 }
 
 Quoted_String: String = {
-	r#"".*""# => <>.to_string(),
+	r#""[^"]*""# => <>.to_string(),
 }
 
 // lexing precedence

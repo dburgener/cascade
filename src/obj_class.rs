@@ -105,7 +105,7 @@ const COMMON_CAP2_PERMS: &'static [&'static str] = &[
     "checkpoint_restore",
 ];
 
-pub fn declare_class_perms() -> Vec<sexp::Sexp> {
+pub fn make_classlist() -> ClassList<'static> {
     let mut classlist = ClassList::new();
 
     classlist.add_class(
@@ -559,5 +559,5 @@ pub fn declare_class_perms() -> Vec<sexp::Sexp> {
         [COMMON_FILE_SOCK_PERMS, COMMON_FILE_PERMS].concat(),
     );
 
-    classlist.generate_class_perm_cil()
+    classlist
 }

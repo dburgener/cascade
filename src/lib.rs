@@ -147,6 +147,20 @@ mod tests {
     }
 
     #[test]
+    fn arguments_test() {
+        let policy_file = [POLICIES_DIR, "arguments.hll"].concat();
+
+        match compile_system_policy(vec![&policy_file]) {
+            Ok(p) => {
+                assert!(p.contains(
+                    "(macro foo.some_func ((type this) (name a) (name b) (type c) (attribute d))"
+                ));
+            }
+            Err(e) => panic!("Argument test compilation failed with {:?}", e),
+        }
+    }
+
+    #[test]
     fn cycle_error_test() {
         let policy_file = [ERROR_POLICIES_DIR, "cycle.hll"].concat();
 
@@ -180,6 +194,7 @@ mod tests {
         match compile_system_policy(vec![&policy_file]) {
             Ok(_) => panic!("Bad allow rules compiled successfully"),
             Err(e) => {
+                assert_eq!(e.error_count(), 4);
                 for error in e {
                     assert!(matches!(error, HLLErrorItem::Compile(_)));
                 }

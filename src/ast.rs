@@ -124,11 +124,16 @@ impl FuncCall {
         }
         constants::BUILTINS.iter().any(|&i| i == &self.name)
     }
-    pub fn get_cil_name(&self) -> String {
+
+    pub fn get_display_name(&self) -> String {
         match &self.class_name {
             Some(class) => format!("{}.{}", class, self.name),
             None => self.name.clone(),
         }
+    }
+
+    pub fn get_cil_name(&self) -> String {
+        self.get_display_name()
     }
 }
 
@@ -145,7 +150,7 @@ impl fmt::Display for Argument {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Argument::Var(a) => write!(f, "'{}'", a),
-            Argument::List(_) => unimplemented!(),
+            Argument::List(_) => write!(f, "[TODO]",),
             Argument::Quote(a) => write!(f, "\"{}\"", a),
         }
     }
