@@ -212,7 +212,7 @@ impl From<&AvRule<'_>> for sexp::Sexp {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Context<'a> {
     user: &'a str,
     role: &'a str,
@@ -505,6 +505,55 @@ fn call_to_av_rule<'a>(
         class: class,
         perms: perms,
     })
+}
+
+#[derive(Debug)]
+enum FileType {
+    File,
+    Directory,
+    SymLink,
+    CharDev,
+    BlockDev,
+    Socket,
+    Pipe,
+    Any,
+}
+
+impl fmt::Display for FileType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                FileType::File => "file",
+                FileType::Directory => "dir",
+                FileType::SymLink => "symlink",
+                FileType::CharDev => "char",
+                FileType::BlockDev => "block",
+                FileType::Socket => "socket",
+                FileType::Pipe => "pipe",
+                FileType::Any => "any",
+            }
+        )
+    }
+}
+
+#[derive(Debug)]
+struct FileContextRule<'a> {
+    pub regex_string: String,
+    pub file_type: FileType,
+    pub context: Context<'a>,
+}
+
+impl From<&FileContextRule<'_>> for sexp::Sexp {
+    fn from(f: &FileContextRule) -> sexp::Sexp {
+        list(&[
+            atom_s("filecon"),
+            atom_s(&format!("\"{}\"", &f.regex_string)),
+            Sexp::Atom(Atom::S(f.file_type.to_string())),
+            Sexp::from(f.context),
+        ])
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -897,6 +946,7 @@ mod tests {
     use super::*;
     use crate::ast::TypeDecl;
     use crate::internal_rep::TypeInfo;
+    use crate::sexp_internal;
 
     #[test]
     fn generate_cil_for_av_rule_test() {
@@ -1002,5 +1052,18 @@ mod tests {
             Ok(_) => panic!("Nonexistent permission verified"),
             Err(e) => assert!(e.msg.contains("cap_bar is not defined for")),
         }
+    }
+
+    #[test]
+    fn filecon_to_sexp_test() {
+        let fc = FileContextRule {
+            regex_string: "/bin".to_string(),
+            file_type: FileType::File,
+            context: Context::new(false, Some("u"), Some("r"), "bin_t", None, None),
+        };
+        assert_eq!(
+            "(filecon \"/bin\" file (u r bin_t ((s0) (s0))))".to_string(),
+            sexp_internal::display_cil(&Sexp::from(&fc))
+        );
     }
 }
