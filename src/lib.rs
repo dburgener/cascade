@@ -8,6 +8,7 @@ pub mod error;
 mod functions;
 mod internal_rep;
 mod obj_class;
+mod sexp_internal;
 
 use error::{HLLErrorItem, HLLErrors};
 use lalrpop_util::ParseError;
@@ -48,7 +49,7 @@ fn parse_policy<'a>(
 
 fn generate_cil(v: Vec<sexp::Sexp>) -> String {
     v.iter()
-        .map(|s| s.to_string())
+        .map(|s| sexp_internal::display_cil(s))
         .collect::<Vec<String>>()
         .join("\n")
 }
