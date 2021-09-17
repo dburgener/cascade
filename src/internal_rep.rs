@@ -2,6 +2,7 @@ use sexp::{atom_s, list, Atom, Sexp};
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt;
+use std::str::FromStr;
 
 use crate::ast::{Argument, BuiltIns, DeclaredArgument, FuncCall, FuncDecl, Statement, TypeDecl};
 use crate::constants;
@@ -69,6 +70,14 @@ impl TypeInfo {
         } else {
             "type"
         }
+    }
+
+    pub fn is_resource(&self, types: &HashMap<String, TypeInfo>) -> bool {
+        let resource_ti = match types.get(&"resource".to_string()) {
+            Some(ti) => ti,
+            None => return false,
+        };
+        self.is_child_or_actual_type(resource_ti, types)
     }
 }
 
@@ -257,6 +266,58 @@ impl From<Context<'_>> for sexp::Sexp {
             atom_s(c.setype),
             mls_range,
         ])
+    }
+}
+
+// A context can be generated from any of the following patterns:
+// type
+// user:role:type
+// user:role:type:sensitivity
+// user:role:type:sensitivity:category
+// That means that splitting on : yields 1, 3, 4 or 5 fields.  Any other number of fields is an
+// error
+// These contexts are always resources
+impl<'a> TryFrom<&'a str> for Context<'a> {
+    type Error = HLLErrorItem;
+    fn try_from(s: &'a str) -> Result<Context<'a>, HLLErrorItem> {
+        let error_ret = HLLCompileError {
+            filename: "TODO".to_string(),
+            lineno: 0,
+            msg: format!("{} is not a valid context", s),
+        };
+        let mut split_string = s.split(":");
+        let first_field = split_string
+            .next()
+            .ok_or(HLLErrorItem::Compile(error_ret.clone()))?;
+        let second_field = split_string.next();
+
+        let role = match second_field {
+            None => return Ok(Context::new(false, None, None, first_field, None, None)),
+            Some(role) => role,
+        };
+
+        let user = first_field; // The one field case was already handled.  In all other cases, the first field is user
+
+        let context_type = split_string
+            .next()
+            .ok_or(HLLErrorItem::Compile(error_ret))?;
+
+        let sensitivity = split_string.next(); // Sensitivity and category are optional
+
+        // Iterators may start returning Some again after None
+        let category = match &sensitivity {
+            Some(_) => split_string.next(),
+            None => None,
+        };
+
+        return Ok(Context::new(
+            false,
+            Some(user),
+            Some(role),
+            context_type,
+            sensitivity,
+            category,
+        ));
     }
 }
 
@@ -507,8 +568,8 @@ fn call_to_av_rule<'a>(
     })
 }
 
-#[derive(Debug)]
-enum FileType {
+#[derive(Clone, Debug)]
+pub enum FileType {
     File,
     Directory,
     SymLink,
@@ -526,7 +587,6 @@ impl fmt::Display for FileType {
             "{}",
             match self {
                 FileType::File => "file",
-                FileType::Directory => "dir",
                 FileType::SymLink => "symlink",
                 FileType::CharDev => "char",
                 FileType::BlockDev => "block",
@@ -538,8 +598,29 @@ impl fmt::Display for FileType {
     }
 }
 
-#[derive(Debug)]
-struct FileContextRule<'a> {
+impl FromStr for FileType {
+    type Err = HLLErrorItem;
+    fn from_str(s: &str) -> Result<FileType, HLLErrorItem> {
+        match s {
+            "file" => Ok(FileType::File),
+            "dir" => Ok(FileType::Directory),
+            "symlink" => Ok(FileType::SymLink),
+            "char_dev" => Ok(FileType::CharDev),
+            "block_dev" => Ok(FileType::BlockDev),
+            "socket" => Ok(FileType::Socket),
+            "pipe" => Ok(FileType::Pipe),
+            "" => Ok(FileType::Any),
+            s => Err(HLLErrorItem::Compile(HLLCompileError {
+                filename: "TODO".to_string(),
+                lineno: 0,
+                msg: format!("Not a valid file type: {}", s),
+            })),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct FileContextRule<'a> {
     pub regex_string: String,
     pub file_type: FileType,
     pub context: Context<'a>,
@@ -549,16 +630,76 @@ impl From<&FileContextRule<'_>> for sexp::Sexp {
     fn from(f: &FileContextRule) -> sexp::Sexp {
         list(&[
             atom_s("filecon"),
-            atom_s(&format!("\"{}\"", &f.regex_string)),
+            atom_s(&f.regex_string),
             Sexp::Atom(Atom::S(f.file_type.to_string())),
             Sexp::from(f.context),
         ])
     }
 }
 
+fn call_to_fc_rule<'a>(
+    c: &'a FuncCall,
+    types: &'a HashMap<String, TypeInfo>,
+    class_perms: &ClassList,
+    args: Option<&Vec<FunctionArgument<'a>>>,
+) -> Result<FileContextRule<'a>, HLLErrors> {
+    let target_args = vec![
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: "path".to_string(),
+                is_list_param: false,
+                name: "path_regex".to_string(),
+            },
+            types,
+        )?,
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: "obj_class".to_string(), //TODO: not really
+                is_list_param: true,
+                name: "file_type".to_string(),
+            },
+            types,
+        )?,
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: "resource".to_string(),
+                is_list_param: false,
+                name: "file_context".to_string(),
+            },
+            types,
+        )?,
+    ];
+
+    let validated_args = validate_arguments(c, &target_args, types, class_perms, args)?;
+    let mut args_iter = validated_args.iter();
+
+    let regex_string = args_iter
+        .next()
+        .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
+        .get_name_or_string()?
+        .to_string();
+    let file_type = args_iter
+        .next()
+        .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
+        .get_list()?[0] // TODO: don't ignore the rest of the list!
+        .parse::<FileType>()?;
+    let context = args_iter
+        .next()
+        .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
+        .get_name_or_string()?;
+    let context = Context::try_from(context)?;
+
+    Ok(FileContextRule {
+        regex_string: regex_string,
+        file_type: file_type,
+        context: context,
+    })
+}
+
 #[derive(Debug, Clone)]
 pub struct FunctionInfo<'a> {
     pub name: String,
+    pub class: Option<&'a TypeInfo>,
     pub args: Vec<FunctionArgument<'a>>,
     pub original_body: &'a Vec<Statement>,
     pub body: Option<Vec<ValidatedStatement<'a>>>,
@@ -588,6 +729,7 @@ impl<'a> FunctionInfo<'a> {
 
         errors.into_result(FunctionInfo {
             name: funcdecl.get_cil_name(),
+            class: parent_type,
             args: args,
             original_body: &funcdecl.body,
             body: None,
@@ -604,7 +746,14 @@ impl<'a> FunctionInfo<'a> {
         let mut errors = HLLErrors::new();
 
         for statement in self.original_body {
-            match ValidatedStatement::new(statement, functions, types, class_perms, &self.args) {
+            match ValidatedStatement::new(
+                statement,
+                functions,
+                types,
+                class_perms,
+                &self.args,
+                self.class,
+            ) {
                 Ok(s) => new_body.push(s),
                 Err(mut e) => errors.append(&mut e),
             }
@@ -630,6 +779,7 @@ impl TryFrom<&FunctionInfo<'_>> for sexp::Sexp {
                     match statement {
                         ValidatedStatement::Call(c) => macro_cil.push(Sexp::from(&**c)),
                         ValidatedStatement::AvRule(a) => macro_cil.push(Sexp::from(&*a)),
+                        ValidatedStatement::FcRule(f) => macro_cil.push(Sexp::from(&*f)),
                     }
                 }
             }
@@ -695,6 +845,7 @@ impl fmt::Display for FunctionArgument<'_> {
 pub enum ValidatedStatement<'a> {
     Call(Box<ValidatedCall>),
     AvRule(AvRule<'a>),
+    FcRule(FileContextRule<'a>),
 }
 
 impl<'a> ValidatedStatement<'a> {
@@ -704,6 +855,7 @@ impl<'a> ValidatedStatement<'a> {
         types: &'a HashMap<String, TypeInfo>,
         class_perms: &ClassList<'a>,
         args: &Vec<FunctionArgument<'a>>,
+        parent_type: Option<&TypeInfo>,
     ) -> Result<ValidatedStatement<'a>, HLLErrors> {
         match statement {
             Statement::Call(c) => match c.check_builtin() {
@@ -715,7 +867,27 @@ impl<'a> ValidatedStatement<'a> {
                         Some(args),
                     )?))
                 }
-                Some(BuiltIns::FileContext) => unimplemented!(),
+                Some(BuiltIns::FileContext) => {
+                    let in_resource = match parent_type {
+                        Some(t) => t.is_resource(types),
+                        None => false,
+                    };
+                    if in_resource {
+                        return Ok(ValidatedStatement::FcRule(call_to_fc_rule(
+                            c,
+                            types,
+                            class_perms,
+                            Some(args),
+                        )?));
+                    } else {
+                        Err(HLLErrors::from(HLLErrorItem::Compile(HLLCompileError {
+                            filename: "TODO".to_string(),
+                            lineno: 0,
+                            msg: "File context statements are only allowed in resources"
+                                .to_string(),
+                        })))
+                    }
+                }
                 None => {
                     return Ok(ValidatedStatement::Call(Box::new(ValidatedCall::new(
                         c,
@@ -735,6 +907,7 @@ impl From<&ValidatedStatement<'_>> for sexp::Sexp {
         match statement {
             ValidatedStatement::Call(c) => Sexp::from(&**c),
             ValidatedStatement::AvRule(a) => Sexp::from(a),
+            ValidatedStatement::FcRule(f) => Sexp::from(f),
         }
     }
 }
@@ -1057,7 +1230,7 @@ mod tests {
     #[test]
     fn filecon_to_sexp_test() {
         let fc = FileContextRule {
-            regex_string: "/bin".to_string(),
+            regex_string: "\"/bin\"".to_string(),
             file_type: FileType::File,
             context: Context::new(false, Some("u"), Some("r"), "bin_t", None, None),
         };
@@ -1065,5 +1238,36 @@ mod tests {
             "(filecon \"/bin\" file (u r bin_t ((s0) (s0))))".to_string(),
             sexp_internal::display_cil(&Sexp::from(&fc))
         );
+    }
+
+    #[test]
+    fn context_from_string_test() {
+        let context = Context::try_from("u:r:foo").unwrap();
+        assert_eq!(context.user, "u");
+        assert_eq!(context.role, "r");
+        assert_eq!(context.setype, "foo");
+        assert_eq!(context.mls_low, DEFAULT_MLS);
+        assert_eq!(context.mls_high, DEFAULT_MLS);
+        let context = Context::try_from("foo").unwrap();
+        assert_eq!(context.user, DEFAULT_USER);
+        assert_eq!(context.role, DEFAULT_OBJECT_ROLE);
+        assert_eq!(context.setype, "foo");
+        assert_eq!(context.mls_low, DEFAULT_MLS);
+        assert_eq!(context.mls_high, DEFAULT_MLS);
+        let context = Context::try_from("foo:bar");
+        match context {
+            Ok(_) => panic!("Bad context compiled successfully"),
+            Err(e) => assert!(matches!(e, HLLErrorItem::Compile(_))),
+        }
+    }
+
+    #[test]
+    fn file_type_from_string_test() {
+        let file_type = "file".parse::<FileType>().unwrap();
+        assert!(matches!(file_type, FileType::File));
+        let file_type = "".parse::<FileType>().unwrap();
+        assert!(matches!(file_type, FileType::Any));
+
+        assert!("bad_type".parse::<FileType>().is_err());
     }
 }

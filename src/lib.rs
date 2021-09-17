@@ -58,7 +58,7 @@ fn generate_cil(v: Vec<sexp::Sexp>) -> String {
 mod tests {
     lalrpop_mod!(pub parser);
 
-    use crate::error::HLLParseError;
+    use crate::error::{HLLCompileError, HLLParseError};
     use codespan_reporting::diagnostic::Diagnostic;
     use std::fs;
 
@@ -158,6 +158,19 @@ mod tests {
                 ));
             }
             Err(e) => panic!("Argument test compilation failed with {:?}", e),
+        }
+    }
+
+    #[test]
+    fn filecon_test() {
+        let policy_file = [POLICIES_DIR, "filecon.hll"].concat();
+
+        match compile_system_policy(vec![&policy_file]) {
+            Ok(p) => {
+                assert!(p.contains("(filecon \"/bin\" file ("));
+                //assert!(p.contains("(filecon \"/bin\" dir ("));
+            }
+            Err(e) => panic!("Filecon test compilation failed with {:?}", e),
         }
     }
 
@@ -267,6 +280,23 @@ mod tests {
                                     ..
                                 })
                                 if msg == "Unexpected end of file".to_string()));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn domain_filecon_test() {
+        let policy_file = [ERROR_POLICIES_DIR, "domain_filecon.hll"].concat();
+
+        match compile_system_policy(vec![&policy_file]) {
+            Ok(_) => panic!("file_context() in domain compiled successfully"),
+            Err(e) => {
+                for error in e {
+                    assert!(
+                        matches!(error, HLLErrorItem::Compile(HLLCompileError { msg: message, .. })
+                                     if message.contains("File context statements are only allowed in resources"))
+                    );
                 }
             }
         }
