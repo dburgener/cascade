@@ -168,7 +168,7 @@ mod tests {
         match compile_system_policy(vec![&policy_file]) {
             Ok(p) => {
                 assert!(p.contains("(filecon \"/bin\" file ("));
-                //assert!(p.contains("(filecon \"/bin\" dir ("));
+                assert!(p.contains("(filecon \"/bin\" dir ("));
             }
             Err(e) => panic!("Filecon test compilation failed with {:?}", e),
         }

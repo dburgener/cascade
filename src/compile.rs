@@ -288,7 +288,7 @@ fn do_rules_pass<'a>(
                 };
                 match ValidatedStatement::new(s, funcs, types, class_perms, &func_args, parent_type)
                 {
-                    Ok(s) => ret.push(s),
+                    Ok(mut s) => ret.append(&mut s),
                     Err(mut e) => errors.append(&mut e),
                 }
             }

@@ -587,6 +587,7 @@ impl fmt::Display for FileType {
             "{}",
             match self {
                 FileType::File => "file",
+                FileType::Directory => "dir",
                 FileType::SymLink => "symlink",
                 FileType::CharDev => "char",
                 FileType::BlockDev => "block",
@@ -637,12 +638,12 @@ impl From<&FileContextRule<'_>> for sexp::Sexp {
     }
 }
 
-fn call_to_fc_rule<'a>(
+fn call_to_fc_rules<'a>(
     c: &'a FuncCall,
     types: &'a HashMap<String, TypeInfo>,
     class_perms: &ClassList,
     args: Option<&Vec<FunctionArgument<'a>>>,
-) -> Result<FileContextRule<'a>, HLLErrors> {
+) -> Result<Vec<FileContextRule<'a>>, HLLErrors> {
     let target_args = vec![
         FunctionArgument::new(
             &DeclaredArgument {
@@ -672,28 +673,32 @@ fn call_to_fc_rule<'a>(
 
     let validated_args = validate_arguments(c, &target_args, types, class_perms, args)?;
     let mut args_iter = validated_args.iter();
+    let mut ret = Vec::new();
 
     let regex_string = args_iter
         .next()
         .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
         .get_name_or_string()?
         .to_string();
-    let file_type = args_iter
+    let file_types = args_iter
         .next()
         .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
-        .get_list()?[0] // TODO: don't ignore the rest of the list!
-        .parse::<FileType>()?;
+        .get_list()?;
     let context = args_iter
         .next()
         .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
         .get_name_or_string()?;
     let context = Context::try_from(context)?;
 
-    Ok(FileContextRule {
-        regex_string: regex_string,
-        file_type: file_type,
-        context: context,
-    })
+    for file_type in file_types {
+        ret.push(FileContextRule {
+            regex_string: regex_string.clone(),
+            file_type: file_type.parse::<FileType>()?,
+            context: context.clone(),
+        });
+    }
+
+    Ok(ret)
 }
 
 #[derive(Debug, Clone)]
@@ -754,7 +759,7 @@ impl<'a> FunctionInfo<'a> {
                 &self.args,
                 self.class,
             ) {
-                Ok(s) => new_body.push(s),
+                Ok(mut s) => new_body.append(&mut s),
                 Err(mut e) => errors.append(&mut e),
             }
         }
@@ -856,16 +861,16 @@ impl<'a> ValidatedStatement<'a> {
         class_perms: &ClassList<'a>,
         args: &Vec<FunctionArgument<'a>>,
         parent_type: Option<&TypeInfo>,
-    ) -> Result<ValidatedStatement<'a>, HLLErrors> {
+    ) -> Result<Vec<ValidatedStatement<'a>>, HLLErrors> {
         match statement {
             Statement::Call(c) => match c.check_builtin() {
                 Some(BuiltIns::AvRule) => {
-                    return Ok(ValidatedStatement::AvRule(call_to_av_rule(
+                    return Ok(vec![ValidatedStatement::AvRule(call_to_av_rule(
                         c,
                         types,
                         class_perms,
                         Some(args),
-                    )?))
+                    )?)])
                 }
                 Some(BuiltIns::FileContext) => {
                     let in_resource = match parent_type {
@@ -873,12 +878,10 @@ impl<'a> ValidatedStatement<'a> {
                         None => false,
                     };
                     if in_resource {
-                        return Ok(ValidatedStatement::FcRule(call_to_fc_rule(
-                            c,
-                            types,
-                            class_perms,
-                            Some(args),
-                        )?));
+                        return Ok(call_to_fc_rules(c, types, class_perms, Some(args))?
+                            .into_iter()
+                            .map(|f| ValidatedStatement::FcRule(f))
+                            .collect());
                     } else {
                         Err(HLLErrors::from(HLLErrorItem::Compile(HLLCompileError {
                             filename: "TODO".to_string(),
@@ -889,13 +892,9 @@ impl<'a> ValidatedStatement<'a> {
                     }
                 }
                 None => {
-                    return Ok(ValidatedStatement::Call(Box::new(ValidatedCall::new(
-                        c,
-                        functions,
-                        types,
-                        class_perms,
-                        Some(args),
-                    )?)))
+                    return Ok(vec![ValidatedStatement::Call(Box::new(
+                        ValidatedCall::new(c, functions, types, class_perms, Some(args))?,
+                    ))])
                 }
             },
         }
