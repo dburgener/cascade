@@ -148,18 +148,18 @@ fn typeinfo_from_string<'a>(
 }
 
 fn argument_to_typeinfo<'a>(
-    a: &Argument,
+    a: &ArgForValidation<'_>,
     types: &'a HashMap<String, TypeInfo>,
     class_perms: &ClassList,
     context: Option<&Vec<FunctionArgument<'a>>>,
 ) -> Result<&'a TypeInfo, HLLErrorItem> {
     let t: Option<&TypeInfo> = match a {
-        Argument::Var(s) => match arg_in_context(s, context) {
+        ArgForValidation::Var(s) => match arg_in_context(s, context) {
             Some(res) => Some(res),
             None => typeinfo_from_string(s, types, class_perms),
         },
-        Argument::Quote(s) => types.get(&type_name_from_string(s)),
-        Argument::List(_) => None,
+        ArgForValidation::Quote(s) => types.get(&type_name_from_string(s)),
+        ArgForValidation::List(_) => None,
     };
 
     t.ok_or(HLLErrorItem::Compile(HLLCompileError {
@@ -170,7 +170,7 @@ fn argument_to_typeinfo<'a>(
 }
 
 fn argument_to_typeinfo_vec<'a>(
-    arg: &Vec<String>,
+    arg: &Vec<&str>,
     types: &'a HashMap<String, TypeInfo>,
     class_perms: &ClassList,
     context: Option<&Vec<FunctionArgument<'a>>>,
@@ -178,7 +178,7 @@ fn argument_to_typeinfo_vec<'a>(
     let mut ret = Vec::new();
     for s in arg {
         ret.push(argument_to_typeinfo(
-            &Argument::Var(s.to_string()),
+            &ArgForValidation::Var(s),
             types,
             class_perms,
             context,
@@ -1014,17 +1014,17 @@ impl<'a> TypeInstance<'a> {
         }
     }
 
-    fn new(arg: &'a Argument, ti: &'a TypeInfo) -> Self {
+    fn new(arg: &ArgForValidation<'a>, ti: &'a TypeInfo) -> Self {
         let instance_value = match arg {
-            Argument::Var(s) => {
+            ArgForValidation::Var(s) => {
                 if s == &ti.name {
                     TypeValue::SEType
                 } else {
                     TypeValue::Str(s)
                 }
             }
-            Argument::List(vec) => TypeValue::Vector(vec.iter().map(|s| s as &str).collect()),
-            Argument::Quote(q) => TypeValue::Str(q),
+            ArgForValidation::List(vec) => TypeValue::Vector(vec.clone()),
+            ArgForValidation::Quote(q) => TypeValue::Str(q),
         };
 
         TypeInstance {
@@ -1059,20 +1059,48 @@ fn validate_arguments<'a>(
 
     let mut args = Vec::new();
     for (a, fa) in call.args.iter().zip(function_args_iter) {
-        args.push(validate_argument(a, fa, types, class_perms, parent_args)?);
+        args.push(validate_argument(ArgForValidation::from(a), fa, types, class_perms, parent_args)?);
     }
     Ok(args)
 }
 
+// The ast Argument owns the data, this struct is similar, but has references to the owned data in
+// the ast, so we can make copies and manipulate
+enum ArgForValidation<'a> {
+    Var(&'a str),
+    List(Vec<&'a str>),
+    Quote(&'a str)
+}
+
+impl<'a> From<&'a Argument> for ArgForValidation<'a> {
+    fn from(a: &'a Argument) -> Self {
+        match a {
+            Argument::Var(s) => ArgForValidation::Var(&s),
+            Argument::List(v) => ArgForValidation::List(v.iter().map(|s| s as &str).collect()),
+            Argument::Quote(s) => ArgForValidation::Quote(&s),
+        }
+    }
+}
+
+impl fmt::Display for ArgForValidation<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ArgForValidation::Var(a) => write!(f, "'{}'", a),
+            ArgForValidation::List(_) => write!(f, "[TODO]",),
+            ArgForValidation::Quote(a) => write!(f, "\"{}\"", a),
+        }
+    }
+}
+
 fn validate_argument<'a>(
-    arg: &'a Argument,
+    arg: ArgForValidation<'a>,
     target_argument: &FunctionArgument,
     types: &'a HashMap<String, TypeInfo>,
     class_perms: &ClassList,
     args: Option<&Vec<FunctionArgument<'a>>>,
 ) -> Result<TypeInstance<'a>, HLLErrorItem> {
-    match arg {
-        Argument::List(v) => {
+    match &arg {
+        ArgForValidation::List(v) => {
             if !target_argument.is_list_param {
                 return Err(HLLErrorItem::Compile(HLLCompileError {
                     filename: "TODO".to_string(),
@@ -1084,7 +1112,7 @@ fn validate_argument<'a>(
                 Some(t) => t,
                 None => return Err(HLLErrorItem::Internal(HLLInternalError {})),
             };
-            let arg_typeinfo_vec = argument_to_typeinfo_vec(v, types, class_perms, args)?;
+            let arg_typeinfo_vec = argument_to_typeinfo_vec(&v, types, class_perms, args)?;
 
             for arg in arg_typeinfo_vec {
                 if !arg.is_child_or_actual_type(target_argument.param_type, types) {
@@ -1098,7 +1126,7 @@ fn validate_argument<'a>(
                     }));
                 }
             }
-            Ok(TypeInstance::new(arg, &target_ti))
+            Ok(TypeInstance::new(&arg, &target_ti))
         }
         _ => {
             if target_argument.is_list_param {
@@ -1108,10 +1136,10 @@ fn validate_argument<'a>(
                     msg: format!("Expected list, got {}", arg),
                 }));
             }
-            let arg_typeinfo = argument_to_typeinfo(arg, types, class_perms, args)?;
+            let arg_typeinfo = argument_to_typeinfo(&arg, types, class_perms, args)?;
 
             if arg_typeinfo.is_child_or_actual_type(target_argument.param_type, types) {
-                Ok(TypeInstance::new(arg, &arg_typeinfo))
+                Ok(TypeInstance::new(&arg, &arg_typeinfo))
             } else {
                 Err(HLLErrorItem::Compile(HLLCompileError {
                     filename: "TODO".to_string(),
