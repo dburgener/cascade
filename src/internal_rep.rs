@@ -1092,6 +1092,17 @@ impl fmt::Display for ArgForValidation<'_> {
     }
 }
 
+impl<'a> ArgForValidation<'a> {
+    fn coerce_list(a: ArgForValidation<'a>) -> Self {
+        let vec = match a {
+            ArgForValidation::Var(s) => vec![s],
+            ArgForValidation::List(v) => v,
+            ArgForValidation::Quote(s) => vec![s],
+        };
+        ArgForValidation::List(vec)
+    }
+}
+
 fn validate_argument<'a>(
     arg: ArgForValidation<'a>,
     target_argument: &FunctionArgument,
@@ -1129,14 +1140,17 @@ fn validate_argument<'a>(
             Ok(TypeInstance::new(&arg, &target_ti))
         }
         _ => {
+            let arg_typeinfo = argument_to_typeinfo(&arg, types, class_perms, args)?;
             if target_argument.is_list_param {
+                if arg_typeinfo.list_coercion {
+                    return validate_argument(ArgForValidation::coerce_list(arg), target_argument, types, class_perms, args);
+                }
                 return Err(HLLErrorItem::Compile(HLLCompileError {
                     filename: "TODO".to_string(),
                     lineno: 0,
                     msg: format!("Expected list, got {}", arg),
                 }));
             }
-            let arg_typeinfo = argument_to_typeinfo(&arg, types, class_perms, args)?;
 
             if arg_typeinfo.is_child_or_actual_type(target_argument.param_type, types) {
                 Ok(TypeInstance::new(&arg, &arg_typeinfo))

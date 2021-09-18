@@ -204,7 +204,7 @@ mod tests {
         match compile_system_policy(vec![&policy_file]) {
             Ok(_) => panic!("Bad allow rules compiled successfully"),
             Err(e) => {
-                assert_eq!(e.error_count(), 4);
+                assert_eq!(e.error_count(), 3);
                 for error in e {
                     assert!(matches!(error, HLLErrorItem::Compile(_)));
                 }

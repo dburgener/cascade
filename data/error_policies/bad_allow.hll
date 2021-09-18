@@ -2,7 +2,6 @@ resource bar {}
 
 domain foo {
 	allow(this);
-	allow(this, bar, file, read);
 	allow(this, bar, [file dir], [read write]);
 	allow(this, bar, file, bad_perm);
 }
