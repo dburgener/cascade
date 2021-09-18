@@ -208,6 +208,15 @@ impl Annotations {
             annotations: Vec::new(),
         }
     }
+
+    pub fn has_annotation(&self, annotation_name: &str) -> bool {
+        for a in &self.annotations {
+            if a.name == annotation_name {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 #[derive(Debug)]

@@ -18,6 +18,7 @@ pub struct TypeInfo {
     pub name: String,
     pub inherits: Vec<String>,
     pub is_virtual: bool,
+    pub list_coercion: bool, // Automatically transform single instances of this type to a single element list
 }
 
 impl TypeInfo {
@@ -26,14 +27,16 @@ impl TypeInfo {
             name: td.name.clone(),
             inherits: td.inherits.clone(),
             is_virtual: td.is_virtual,
+            list_coercion: td.annotations.has_annotation("makelist"),
         }
     }
 
-    pub fn make_built_in(name: String) -> TypeInfo {
+    pub fn make_built_in(name: String, makelist: bool) -> TypeInfo {
         TypeInfo {
             name: name,
             inherits: Vec::new(),
             is_virtual: true,
+            list_coercion: makelist,
         }
     }
 

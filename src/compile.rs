@@ -91,9 +91,14 @@ fn build_type_map(p: &Policy) -> HashMap<String, TypeInfo> {
 
 fn get_built_in_types_map() -> HashMap<String, TypeInfo> {
     let mut built_in_types = HashMap::new();
-    for built_in in constants::BUILT_IN_TYPES {
+    let list_coercions = constants::BUILT_IN_TYPES.iter().map(|t| *t == "perm");
+
+    for (built_in, list_coercion) in constants::BUILT_IN_TYPES.iter().zip(list_coercions) {
         let built_in = built_in.to_string();
-        built_in_types.insert(built_in.clone(), TypeInfo::make_built_in(built_in));
+        built_in_types.insert(
+            built_in.clone(),
+            TypeInfo::make_built_in(built_in, list_coercion),
+        );
     }
 
     //Special handling for sids.  These are temporary built in types that are handled differently
@@ -101,18 +106,21 @@ fn get_built_in_types_map() -> HashMap<String, TypeInfo> {
         name: "kernel_sid".to_string(),
         inherits: vec!["domain".to_string()],
         is_virtual: false,
+        list_coercion: false,
     };
 
     let security_sid = TypeInfo {
         name: "security_sid".to_string(),
         inherits: vec!["resource".to_string()],
         is_virtual: false,
+        list_coercion: false,
     };
 
     let unlabeled_sid = TypeInfo {
         name: "unlabeled_sid".to_string(),
         inherits: vec!["resource".to_string()],
         is_virtual: false,
+        list_coercion: false,
     };
 
     for sid in [kernel_sid, security_sid, unlabeled_sid] {
