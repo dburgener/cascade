@@ -67,6 +67,19 @@ mod tests {
     const POLICIES_DIR: &str = "data/policies/";
     const ERROR_POLICIES_DIR: &str = "data/error_policies/";
 
+    fn valid_policy_test(filename: &str, expected_contents: &[&str]) {
+        let policy_file = [POLICIES_DIR, filename].concat();
+        match compile_system_policy(vec![&policy_file]) {
+            Ok(p) => {
+                for query in expected_contents {
+                    assert!(p.contains(query));
+                }
+            }
+            Err(e) => panic!("Compilation of {} failed with {:?}", filename, e),
+        }
+
+    }
+
     #[test]
     fn basic_expression_parse_test() {
         let res = parser::ExprParser::new().parse("domain foo {}");
@@ -90,88 +103,37 @@ mod tests {
 
     #[test]
     fn attributes_test() {
-        let policy_file = [POLICIES_DIR, "attribute.hll"].concat();
-
-        match compile_system_policy(vec![&policy_file]) {
-            Ok(p) => {
-                assert!(p.contains("attribute user_type"));
-                assert!(p.contains("type staff"));
-            }
-            Err(e) => panic!("Attribute compilation failed with {:?}", e),
-        }
+        valid_policy_test("attribute.hll", &["attribute user_type", "type staff"]);
     }
 
     #[test]
     fn simple_policy_build_test() {
-        let policy_file = [POLICIES_DIR, "simple.hll"].concat();
-
-        let res = compile_system_policy(vec![&policy_file]);
-
-        assert!(res.is_ok(), "Failed to build simple policy: {:?}", res);
+        valid_policy_test("simple.hll", &[]);
     }
 
     #[test]
     fn function_build_test() {
-        let policy_file = [POLICIES_DIR, "function.hll"].concat();
-
-        match compile_system_policy(vec![&policy_file]) {
-            Ok(p) => {
-                assert!(p.contains("macro my_file.read"));
-                assert!(p.contains("call my_file.read"));
-            }
-            Err(e) => panic!("Function compilation failed with {:?}", e),
-        }
+        valid_policy_test("function.hll", &["macro my_file.read", "call my_file.read"]);
     }
 
     #[test]
     fn auditallow_test() {
-        let policy_file = [POLICIES_DIR, "auditallow.hll"].concat();
-
-        match compile_system_policy(vec![&policy_file]) {
-            Ok(p) => {
-                assert!(p.contains("(auditallow my_domain foo"));
-            }
-            Err(e) => panic!("Auditallow compilation failed with {:?}", e),
-        }
+        valid_policy_test("auditallow.hll", &["auditallow my_domain foo"]);
     }
 
     #[test]
     fn dontaudit_test() {
-        let policy_file = [POLICIES_DIR, "dontaudit.hll"].concat();
-
-        match compile_system_policy(vec![&policy_file]) {
-            Ok(p) => {
-                assert!(p.contains("(dontaudit my_domain foo"));
-            }
-            Err(e) => panic!("Dontaudit compilation failed with {:?}", e),
-        }
+        valid_policy_test("dontaudit.hll", &["(dontaudit my_domain foo"]);
     }
 
     #[test]
     fn arguments_test() {
-        let policy_file = [POLICIES_DIR, "arguments.hll"].concat();
-
-        match compile_system_policy(vec![&policy_file]) {
-            Ok(p) => {
-                assert!(p.contains(
-                    "(macro foo.some_func ((type this) (name a) (name b) (type c) (type d))"
-                ));
-            }
-            Err(e) => panic!("Argument test compilation failed with {:?}", e),
-        }
+        valid_policy_test("arguments.hll", &["(macro foo.some_func ((type this) (name a) (name b) (type c) (type d))"]);
     }
 
     #[test]
     fn filecon_test() {
-        let policy_file = [POLICIES_DIR, "filecon.hll"].concat();
-
-        match compile_system_policy(vec![&policy_file]) {
-            Ok(p) => {
-                assert!(p.contains("(filecon \"/bin\" file ("));
-                assert!(p.contains("(filecon \"/bin\" dir ("));
-            }
-            Err(e) => panic!("Filecon test compilation failed with {:?}", e),
-        }
+        valid_policy_test("filecon.hll", &["(filecon \"/bin\" file (", "(filecon \"/bin\" dir ("]); 
     }
 
     #[test]
