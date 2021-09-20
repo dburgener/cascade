@@ -69,9 +69,7 @@ FuncDecl: Box<FuncDecl> = {
 }
 
 FuncDeclArg: DeclaredArgument = {
-	<t: BuiltInType> <n: Symbol> => DeclaredArgument { param_type: t, is_list_param: false, name: n },
 	<t: Symbol> <n: Symbol> => DeclaredArgument { param_type: t, is_list_param: false, name: n },
-	"[" <t: BuiltInType> "]" <n: Symbol> => DeclaredArgument { param_type: t, is_list_param: true, name: n },
 	"[" <t: Symbol> "]" <n: Symbol> => DeclaredArgument { param_type: t, is_list_param: true, name: n },
 }
 
@@ -86,6 +84,7 @@ Ann: Annotation = {
 
 Symbol: String = {
 	r"[a-zA-Z_]+"  => <>.to_string(),
+	BuiltInType
 }
 
 List: Vec<String> = {
