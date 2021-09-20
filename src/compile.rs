@@ -23,7 +23,7 @@ pub fn compile(p: &Policy) -> Result<Vec<sexp::Sexp>, HLLErrors> {
     let policy_rules = do_rules_pass(&p.exprs, &type_map, &func_map, &classlist, None)?;
 
     // TODO: The rest of compilation
-    let cil_types = type_list_to_sexp(type_decl_list);
+    let cil_types = type_list_to_sexp(type_decl_list, &type_map);
     let headers = generate_cil_headers(&classlist);
     let cil_rules = rules_list_to_sexp(policy_rules);
     let cil_macros = func_map_to_sexp(func_map)?;
@@ -309,16 +309,22 @@ fn do_rules_pass<'a>(
     errors.into_result(ret)
 }
 
-fn type_list_to_sexp(types: Vec<&TypeInfo>) -> Vec<sexp::Sexp> {
+fn type_list_to_sexp(type_list: Vec<&TypeInfo>, type_map: &HashMap<String, TypeInfo>) -> Vec<sexp::Sexp> {
     let mut ret = Vec::new();
-    for t in types {
+    for t in type_list {
         match Option::<sexp::Sexp>::from(t) {
             Some(s) => {
                 ret.push(s);
                 if !t.is_virtual {
+                    let role_assoc = if t.is_resource(type_map) {
+                        "object_r"
+                    } else {
+                        "system_r"
+                    };
+
                     ret.push(list(&[
                         atom_s("roletype"),
-                        atom_s("system_r"),
+                        atom_s(role_assoc),
                         atom_s(&t.name),
                     ]));
                 }
