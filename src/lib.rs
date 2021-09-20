@@ -154,7 +154,7 @@ mod tests {
         match compile_system_policy(vec![&policy_file]) {
             Ok(p) => {
                 assert!(p.contains(
-                    "(macro foo.some_func ((type this) (name a) (name b) (type c) (attribute d))"
+                    "(macro foo.some_func ((type this) (name a) (name b) (type c) (type d))"
                 ));
             }
             Err(e) => panic!("Argument test compilation failed with {:?}", e),

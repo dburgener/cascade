@@ -10,3 +10,13 @@ pub const AV_RULES: &'static [&'static str] = &[
     AUDITALLOW_FUNCTION_NAME,
     NEVERALLOW_FUNCTION_NAME,
 ];
+
+pub const BUILT_IN_TYPES: &'static [&'static str] = &[
+    "domain",
+    "resource",
+    "path",
+    "string",
+    "obj_class",
+    "perm",
+    "context",
+];

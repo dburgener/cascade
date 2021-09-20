@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 
 use crate::ast::{Declaration, Expression, Policy};
+use crate::constants;
 use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
 use crate::internal_rep::{
     generate_sid_rules, ClassList, Context, FunctionArgument, FunctionInfo, Sid, TypeInfo,
@@ -88,15 +89,7 @@ fn build_type_map(p: &Policy) -> HashMap<String, TypeInfo> {
 
 fn get_built_in_types_map() -> HashMap<String, TypeInfo> {
     let mut built_in_types = HashMap::new();
-    for built_in in &[
-        "domain",
-        "resource",
-        "path",
-        "string",
-        "obj_class",
-        "perm",
-        "context",
-    ] {
+    for built_in in constants::BUILT_IN_TYPES {
         let built_in = built_in.to_string();
         built_in_types.insert(built_in.clone(), TypeInfo::make_built_in(built_in));
     }
@@ -319,13 +312,18 @@ fn do_rules_pass<'a>(
 fn type_list_to_sexp(types: Vec<&TypeInfo>) -> Vec<sexp::Sexp> {
     let mut ret = Vec::new();
     for t in types {
-        ret.push(Sexp::from(t));
-        if !t.is_virtual {
-            ret.push(list(&[
-                atom_s("roletype"),
-                atom_s("system_r"),
-                atom_s(&t.name),
-            ]));
+        match Option::<sexp::Sexp>::from(t) {
+            Some(s) => {
+                ret.push(s);
+                if !t.is_virtual {
+                    ret.push(list(&[
+                        atom_s("roletype"),
+                        atom_s("system_r"),
+                        atom_s(&t.name),
+                    ]));
+                }
+            }
+            None => (),
         }
     }
     ret
