@@ -61,6 +61,9 @@ mod tests {
     use crate::error::{HLLCompileError, HLLParseError};
     use codespan_reporting::diagnostic::Diagnostic;
     use std::fs;
+    use std::io::Write;
+    use std::process::Command;
+    use std::str;
 
     use super::*;
 
@@ -69,15 +72,36 @@ mod tests {
 
     fn valid_policy_test(filename: &str, expected_contents: &[&str]) {
         let policy_file = [POLICIES_DIR, filename].concat();
-        match compile_system_policy(vec![&policy_file]) {
-            Ok(p) => {
-                for query in expected_contents {
-                    assert!(p.contains(query));
-                }
-            }
+        let policy_contents = match compile_system_policy(vec![&policy_file]) {
+            Ok(p) => p,
             Err(e) => panic!("Compilation of {} failed with {:?}", filename, e),
+        };
+        for query in expected_contents {
+            assert!(policy_contents.contains(query));
         }
+        let file_out_path = &[filename, "_test.cil"].concat();
+        let cil_out_path = &[filename, "_test_out_policy"].concat();
+        let mut out_file = fs::File::create(&file_out_path).unwrap();
+        out_file.write_all(policy_contents.as_bytes()).unwrap();
 
+        let output = Command::new("secilc")
+            .arg(["--output=", cil_out_path].concat())
+            .arg(file_out_path)
+            .output()
+            .unwrap();
+
+        assert!(
+            output.status.success(),
+            "secilc compilation of {} failed with {}",
+            filename,
+            str::from_utf8(&output.stderr).unwrap()
+        );
+
+        let mut err = false;
+        for f in &[file_out_path, cil_out_path] {
+            err |= fs::remove_file(f).is_err();
+        }
+        assert!(!err, "Error removing generated policy files");
     }
 
     #[test]
@@ -128,12 +152,18 @@ mod tests {
 
     #[test]
     fn arguments_test() {
-        valid_policy_test("arguments.hll", &["(macro foo.some_func ((type this) (name a) (name b) (type c) (type d))"]);
+        valid_policy_test(
+            "arguments.hll",
+            &["(macro foo.some_func ((type this) (name a) (name b) (type c) (type d))"],
+        );
     }
 
     #[test]
     fn filecon_test() {
-        valid_policy_test("filecon.hll", &["(filecon \"/bin\" file (", "(filecon \"/bin\" dir ("]); 
+        valid_policy_test(
+            "filecon.hll",
+            &["(filecon \"/bin\" file (", "(filecon \"/bin\" dir ("],
+        );
     }
 
     #[test]
