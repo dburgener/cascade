@@ -52,6 +52,7 @@ fn generate_cil_headers(classlist: &ClassList) -> Vec<sexp::Sexp> {
         list(&[atom_s("role"), atom_s("system_r")]),
         list(&[atom_s("role"), atom_s("object_r")]),
         list(&[atom_s("userrole"), atom_s("system_u"), atom_s("system_r")]),
+        list(&[atom_s("userrole"), atom_s("system_u"), atom_s("object_r")]),
         list(&[
             atom_s("userlevel"),
             atom_s("system_u"),
