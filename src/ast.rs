@@ -109,7 +109,7 @@ pub struct FuncDecl {
 impl FuncDecl {
     pub fn get_cil_name(&self) -> String {
         match &self.class_name {
-            Some(class) => format!("{}.{}", class, self.name),
+            Some(class) => format!("{}-{}", class, self.name),
             None => self.name.clone(),
         }
     }
@@ -177,7 +177,10 @@ impl FuncCall {
     }
 
     pub fn get_cil_name(&self) -> String {
-        self.get_display_name()
+         match &self.class_name {
+            Some(class) => format!("{}-{}", class, self.name),
+            None => self.name.clone(),
+        }
     }
 
     pub fn add_annotation(&mut self, annotation: Annotation) {

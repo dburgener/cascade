@@ -77,7 +77,7 @@ mod tests {
             Err(e) => panic!("Compilation of {} failed with {:?}", filename, e),
         };
         for query in expected_contents {
-            assert!(policy_contents.contains(query));
+            assert!(policy_contents.contains(query), "Output policy does not contain {}", query);
         }
         let file_out_path = &[filename, "_test.cil"].concat();
         let cil_out_path = &[filename, "_test_out_policy"].concat();
@@ -137,7 +137,7 @@ mod tests {
 
     #[test]
     fn function_build_test() {
-        valid_policy_test("function.hll", &["macro my_file.read", "call my_file.read"]);
+        valid_policy_test("function.hll", &["macro my_file-read", "call my_file-read"]);
     }
 
     #[test]
@@ -154,7 +154,7 @@ mod tests {
     fn arguments_test() {
         valid_policy_test(
             "arguments.hll",
-            &["(macro foo.some_func ((type this) (name a) (name b) (type c) (type d))"],
+            &["(macro foo-some_func ((type this) (name a) (name b) (type c) (type d))"],
         );
     }
 
