@@ -966,7 +966,7 @@ impl ValidatedCall {
         };
 
         for arg in validate_arguments(call, &function_info.args, types, class_perms, parent_args)? {
-            args.push(arg.get_name_or_string()?.to_string());
+            args.push(arg.get_name_or_string()?.to_string()); // TODO: Handle lists
         }
 
         Ok(ValidatedCall {
@@ -994,10 +994,10 @@ impl<'a> TypeInstance<'a> {
     fn get_name_or_string(&self) -> Result<&'a str, HLLErrorItem> {
         match &self.instance_value {
             TypeValue::Str(s) => Ok(&s),
-            TypeValue::Vector(_) => Err(HLLErrorItem::Compile(HLLCompileError {
+            TypeValue::Vector(v) => Err(HLLErrorItem::Compile(HLLCompileError {
                 filename: "TODO".to_string(),
                 lineno: 0,
-                msg: format!("Unexpected list"),
+                msg: format!("Unexpected list: {:?}", v),
             })),
             TypeValue::SEType => Ok(&self.type_info.name),
         }
@@ -1059,7 +1059,13 @@ fn validate_arguments<'a>(
 
     let mut args = Vec::new();
     for (a, fa) in call.args.iter().zip(function_args_iter) {
-        args.push(validate_argument(ArgForValidation::from(a), fa, types, class_perms, parent_args)?);
+        args.push(validate_argument(
+            ArgForValidation::from(a),
+            fa,
+            types,
+            class_perms,
+            parent_args,
+        )?);
     }
     Ok(args)
 }
@@ -1069,7 +1075,7 @@ fn validate_arguments<'a>(
 enum ArgForValidation<'a> {
     Var(&'a str),
     List(Vec<&'a str>),
-    Quote(&'a str)
+    Quote(&'a str),
 }
 
 impl<'a> From<&'a Argument> for ArgForValidation<'a> {
@@ -1143,7 +1149,13 @@ fn validate_argument<'a>(
             let arg_typeinfo = argument_to_typeinfo(&arg, types, class_perms, args)?;
             if target_argument.is_list_param {
                 if arg_typeinfo.list_coercion {
-                    return validate_argument(ArgForValidation::coerce_list(arg), target_argument, types, class_perms, args);
+                    return validate_argument(
+                        ArgForValidation::coerce_list(arg),
+                        target_argument,
+                        types,
+                        class_perms,
+                        args,
+                    );
                 }
                 return Err(HLLErrorItem::Compile(HLLCompileError {
                     filename: "TODO".to_string(),
