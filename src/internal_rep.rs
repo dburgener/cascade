@@ -957,7 +957,10 @@ impl ValidatedCall {
         };
 
         // Each argument must match the type the function signature expects
-        let mut args = Vec::new();
+        let mut args = match &call.class_name {
+            Some(c) => vec![c.clone()], // "this"
+            None => Vec::new(),
+        };
 
         for arg in validate_arguments(call, &function_info.args, types, class_perms, parent_args)? {
             args.push(arg.get_name_or_string()?.to_string());
