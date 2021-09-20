@@ -177,7 +177,7 @@ impl FuncCall {
     }
 
     pub fn get_cil_name(&self) -> String {
-         match &self.class_name {
+        match &self.class_name {
             Some(class) => format!("{}-{}", class, self.name),
             None => self.name.clone(),
         }

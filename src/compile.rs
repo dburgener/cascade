@@ -27,7 +27,8 @@ pub fn compile(p: &Policy) -> Result<Vec<sexp::Sexp>, HLLErrors> {
     let headers = generate_cil_headers(&classlist);
     let cil_rules = rules_list_to_sexp(policy_rules);
     let cil_macros = func_map_to_sexp(func_map)?;
-    let sid_statements = generate_sid_rules(generate_sids("kernel_sid", "security_sid", "unlabeled_sid"));
+    let sid_statements =
+        generate_sid_rules(generate_sids("kernel_sid", "security_sid", "unlabeled_sid"));
 
     let mut ret = headers;
     ret.extend(cil_types.iter().cloned());
@@ -99,7 +100,7 @@ fn get_built_in_types_map() -> HashMap<String, TypeInfo> {
     let kernel_sid = TypeInfo {
         name: "kernel_sid".to_string(),
         inherits: vec!["domain".to_string()],
-        is_virtual: false
+        is_virtual: false,
     };
 
     let security_sid = TypeInfo {
@@ -333,7 +334,10 @@ fn do_rules_pass<'a>(
     errors.into_result(ret)
 }
 
-fn type_list_to_sexp(type_list: Vec<&TypeInfo>, type_map: &HashMap<String, TypeInfo>) -> Vec<sexp::Sexp> {
+fn type_list_to_sexp(
+    type_list: Vec<&TypeInfo>,
+    type_map: &HashMap<String, TypeInfo>,
+) -> Vec<sexp::Sexp> {
     let mut ret = Vec::new();
     for t in type_list {
         match Option::<sexp::Sexp>::from(t) {
@@ -366,7 +370,11 @@ where
     rules.into_iter().map(|r| Sexp::from(&r)).collect()
 }
 
-fn generate_sids<'a>(kernel_sid: &'a str, security_sid: &'a str, unlabeled_sid: &'a str) -> Vec<Sid<'a>> {
+fn generate_sids<'a>(
+    kernel_sid: &'a str,
+    security_sid: &'a str,
+    unlabeled_sid: &'a str,
+) -> Vec<Sid<'a>> {
     vec![
         Sid::new(
             "kernel",

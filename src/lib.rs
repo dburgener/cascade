@@ -77,7 +77,11 @@ mod tests {
             Err(e) => panic!("Compilation of {} failed with {:?}", filename, e),
         };
         for query in expected_contents {
-            assert!(policy_contents.contains(query), "Output policy does not contain {}", query);
+            assert!(
+                policy_contents.contains(query),
+                "Output policy does not contain {}",
+                query
+            );
         }
         let file_out_path = &[filename, "_test.cil"].concat();
         let cil_out_path = &[filename, "_test_out_policy"].concat();
