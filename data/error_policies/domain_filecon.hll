@@ -1,0 +1,3 @@
+domain foo {
+	file_context("/bin", [file dir]);
+}

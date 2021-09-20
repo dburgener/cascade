@@ -88,7 +88,15 @@ fn build_type_map(p: &Policy) -> HashMap<String, TypeInfo> {
 
 fn get_built_in_types_map() -> HashMap<String, TypeInfo> {
     let mut built_in_types = HashMap::new();
-    for built_in in &["domain", "resource", "path", "string", "obj_class", "perm"] {
+    for built_in in &[
+        "domain",
+        "resource",
+        "path",
+        "string",
+        "obj_class",
+        "perm",
+        "context",
+    ] {
         let built_in = built_in.to_string();
         built_in_types.insert(built_in.clone(), TypeInfo::make_built_in(built_in));
     }
@@ -278,8 +286,9 @@ fn do_rules_pass<'a>(
                     Some(t) => vec![FunctionArgument::new_this_argument(t)],
                     None => Vec::new(),
                 };
-                match ValidatedStatement::new(s, funcs, types, class_perms, &func_args) {
-                    Ok(s) => ret.push(s),
+                match ValidatedStatement::new(s, funcs, types, class_perms, &func_args, parent_type)
+                {
+                    Ok(mut s) => ret.append(&mut s),
                     Err(mut e) => errors.append(&mut e),
                 }
             }
