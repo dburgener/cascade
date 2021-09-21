@@ -80,6 +80,7 @@ Stmt: Statement = {
 
 Ann: Annotation = {
 	"@" <s:Symbol> "(" Comma<Arg> ")" => Annotation {name: s},
+	"@" <s:Symbol> => Annotation {name: s},
 }
 
 Symbol: String = {
