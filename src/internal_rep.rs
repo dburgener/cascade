@@ -846,6 +846,11 @@ fn call_to_domain_transition<'a>(
     })
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum HookType {
+    Associate,
+}
+
 #[derive(Debug, Clone)]
 pub struct FunctionInfo<'a> {
     pub name: String,
@@ -854,6 +859,7 @@ pub struct FunctionInfo<'a> {
     pub original_body: &'a Vec<Statement>,
     pub body: Option<Vec<ValidatedStatement<'a>>>,
     pub declaration_file: &'a SimpleFile<String, String>,
+    pub hook_type: Option<HookType>,
 }
 
 impl<'a> FunctionInfo<'a> {
@@ -879,6 +885,75 @@ impl<'a> FunctionInfo<'a> {
             }
         }
 
+        let mut hook_type = None;
+
+        // Only allow a set of specific annotation names and strictly check their arguments.
+        // TODO: Add tests to verify these checks.
+        for hook in funcdecl.annotations.annotations.iter() {
+            match hook.name.as_ref() {
+                "hook_push" => {
+                    let mut args = hook.arguments.iter();
+                    let name = match args.next() {
+                        None => {
+                            return Err(HLLErrors::from(
+                                HLLErrorItem::make_compile_or_internal_error(
+                                    //format!("Missing hook name in the hook_push annotation for {}", funcdecl.name),
+                                    "Missing hook name in the hook_push annotation",
+                                    None,
+                                    None,
+                                    "TODO",
+                                ),
+                            ));
+                        }
+                        Some(Argument::Var(v)) => v,
+                        Some(_) => {
+                            return Err(HLLErrors::from(
+                                HLLErrorItem::make_compile_or_internal_error(
+                                    //format!("Invalid argument type in the hook_push annotation for {}", funcdecl.name),
+                                    "Invalid argument type in the hook_push annotation",
+                                    None,
+                                    None,
+                                    "TODO",
+                                ),
+                            ));
+                        }
+                    };
+                    if name != "associate" {
+                        return Err(HLLErrors::from(
+                            HLLErrorItem::make_compile_or_internal_error(
+                                //format!("Unknown name in the hook_push annotation for {}", funcdecl.name),
+                                "Unknown name in the hook_push annotation",
+                                None,
+                                None,
+                                "TODO",
+                            ),
+                        ));
+                    }
+                    if args.next().is_some() {
+                        return Err(HLLErrorItem::make_compile_or_internal_error(
+                            //format!("Superfluous argument in the hook_push annotation for {}", funcdecl.name),
+                            "Superfluous argument in the hook_push annotation",
+                            None,
+                            None,
+                            "TODO",
+                        )
+                        .into());
+                    }
+                    hook_type = Some(HookType::Associate);
+                }
+                _ => {
+                    return Err(HLLErrorItem::make_compile_or_internal_error(
+                        //format!("Unknown annotation {} for {}", oth, funcdecl.name),
+                        "Unknown annotation",
+                        None,
+                        None,
+                        "TODO",
+                    )
+                    .into());
+                }
+            }
+        }
+
         errors.into_result(FunctionInfo {
             name: funcdecl.name.to_string(),
             class: parent_type,
@@ -886,6 +961,7 @@ impl<'a> FunctionInfo<'a> {
             original_body: &funcdecl.body,
             body: None,
             declaration_file: declaration_file,
+            hook_type: hook_type,
         })
     }
 

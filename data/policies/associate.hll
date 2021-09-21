@@ -1,0 +1,24 @@
+resource tmp {
+	@hook_push(associate)
+	fn hook_associate_from_tmp(domain source) {
+		allow(source, tmp, file, [read]);
+	}
+}
+
+resource var {
+	@hook_push(associate)
+	fn hook_associate_from_var(domain source) {
+		allow(source, tmp, file, [read]);
+	}
+}
+
+resource bin {
+	@hook_push(associate)
+	fn hook_associate_from_bin(domain source) {
+		allow(source, tmp, file, [read]);
+	}
+}
+
+virtual domain foo {
+	tmp.hook_associate_from_tmp(this);
+}

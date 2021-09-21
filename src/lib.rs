@@ -388,4 +388,17 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn associate_test() {
+        valid_policy_test(
+            "associate.hll",
+            &[
+                "call tmp-hook_associate_from_tmp (tmp foo)",
+                "macro bin-hook_associate_from_bin ((type this) (type source)) (allow source tmp (file (read)))",
+                "macro tmp-hook_associate_from_tmp ((type this) (type source)) (allow source tmp (file (read)))",
+                "macro var-hook_associate_from_var ((type this) (type source)) (allow source tmp (file (read)))",
+            ],
+        );
+    }
 }
