@@ -1,4 +1,5 @@
 *.cil
+*_test_out_policy
 /target
 Cargo.lock
 file_contexts
