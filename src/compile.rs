@@ -123,6 +123,7 @@ pub fn get_built_in_types_map() -> TypeMap {
         is_virtual: false,
         list_coercion: false,
         declaration_file: None,
+        annotations: vec![],
     };
 
     let security_sid = TypeInfo {
@@ -131,6 +132,7 @@ pub fn get_built_in_types_map() -> TypeMap {
         is_virtual: false,
         list_coercion: false,
         declaration_file: None,
+        annotations: vec![],
     };
 
     let unlabeled_sid = TypeInfo {
@@ -139,6 +141,7 @@ pub fn get_built_in_types_map() -> TypeMap {
         is_virtual: false,
         list_coercion: false,
         declaration_file: None,
+        annotations: vec![],
     };
 
     for sid in [kernel_sid, security_sid, unlabeled_sid] {
