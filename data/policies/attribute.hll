@@ -1,3 +1,6 @@
 virtual domain user_type {}
 
-domain staff inherits user_type {}
+domain staff inherits user_type {
+	// Policies must contain at least one AV rule
+	allow(staff, resource, file, [read]);
+}

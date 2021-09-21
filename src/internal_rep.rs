@@ -59,16 +59,28 @@ impl TypeInfo {
     }
 
     // Get the type that cil is aware of that this ti falls into
-    pub fn get_cil_type(&self) -> &str {
+    pub fn get_cil_macro_arg_type(&self) -> &str {
         for name_type in &["path", "string"] {
             if self.name == *name_type {
                 return "name";
             }
         }
+        "type" // Includes attributes in macro args
+    }
+
+    fn get_cil_declaration_type(&self) -> Option<&str> {
+        for built_in_type in constants::BUILT_IN_TYPES {
+            if *built_in_type == "domain" || *built_in_type == "resource" {
+                continue;
+            }
+            if self.name == *built_in_type {
+                return None;
+            }
+        }
         if self.is_virtual {
-            "attribute"
+            Some("typeattribute")
         } else {
-            "type"
+            Some("type")
         }
     }
 
@@ -81,10 +93,14 @@ impl TypeInfo {
     }
 }
 
-impl From<&TypeInfo> for sexp::Sexp {
-    fn from(typeinfo: &TypeInfo) -> sexp::Sexp {
-        let flavor = typeinfo.get_cil_type();
-        list(&[atom_s(flavor), atom_s(&typeinfo.name)])
+// This is the sexp for *declaring* the type
+impl From<&TypeInfo> for Option<sexp::Sexp> {
+    fn from(typeinfo: &TypeInfo) -> Option<sexp::Sexp> {
+        let flavor = match typeinfo.get_cil_declaration_type() {
+            Some(f) => f,
+            None => return None,
+        };
+        Some(list(&[atom_s(flavor), atom_s(&typeinfo.name)]))
     }
 }
 
@@ -836,7 +852,10 @@ impl<'a> FunctionArgument<'a> {
 
 impl From<&FunctionArgument<'_>> for sexp::Sexp {
     fn from(f: &FunctionArgument) -> sexp::Sexp {
-        list(&[atom_s(f.param_type.get_cil_type()), atom_s(&f.name)])
+        list(&[
+            atom_s(f.param_type.get_cil_macro_arg_type()),
+            atom_s(&f.name),
+        ])
     }
 }
 
@@ -938,7 +957,10 @@ impl ValidatedCall {
         };
 
         // Each argument must match the type the function signature expects
-        let mut args = Vec::new();
+        let mut args = match &call.class_name {
+            Some(c) => vec![c.clone()], // "this"
+            None => Vec::new(),
+        };
 
         for arg in validate_arguments(call, &function_info.args, types, class_perms, parent_args)? {
             args.push(arg.get_name_or_string()?.to_string());
