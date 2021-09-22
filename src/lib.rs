@@ -171,6 +171,11 @@ mod tests {
     }
 
     #[test]
+    fn domtrans_test() {
+        valid_policy_test("domtrans.hll", &["typetransition bar foo_exec process foo"]);
+    }
+
+    #[test]
     fn makelist_test() {
         let policy_file = [POLICIES_DIR, "makelist.hll"].concat();
 

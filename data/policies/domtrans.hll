@@ -1,0 +1,10 @@
+resource foo_exec {}
+
+domain foo {}
+
+domain bar {
+	domain_transition(bar, foo_exec, foo);
+	allow(bar, foo_exec, file, [ read open execute]);
+	allow(foo, foo_exec, file, entrypoint);
+	// TODO: there is a bug in allow rules that doesn't allow domains in targets.  Add transition rule once that's fixed
+}

@@ -720,6 +720,85 @@ fn call_to_fc_rules<'a>(
     Ok(ret)
 }
 
+#[derive(Clone, Debug)]
+pub struct DomtransRule<'a> {
+    pub source: &'a TypeInfo,
+    pub target: &'a TypeInfo,
+    pub executable: &'a TypeInfo,
+}
+
+impl From<&DomtransRule<'_>> for sexp::Sexp {
+    fn from(d: &DomtransRule) -> Self {
+        list(&[
+            atom_s("typetransition"),
+            atom_s(&d.source.name),
+            atom_s(&d.executable.name),
+            atom_s("process"),
+            atom_s(&d.target.name),
+        ])
+    }
+}
+
+fn call_to_domain_transition<'a>(
+    c: &'a FuncCall,
+    types: &'a HashMap<String, TypeInfo>,
+    class_perms: &ClassList,
+    args: Option<&Vec<FunctionArgument<'a>>>,
+) -> Result<DomtransRule<'a>, HLLErrors> {
+    let target_args = vec![
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: "domain".to_string(),
+                is_list_param: false,
+                name: "source".to_string(),
+            },
+            types,
+        )?,
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: "resource".to_string(),
+                is_list_param: false,
+                name: "executable".to_string(),
+            },
+            types,
+        )?,
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: "domain".to_string(),
+                is_list_param: false,
+                name: "target".to_string(),
+            },
+            types,
+        )?,
+    ];
+
+    let validated_args = validate_arguments(c, &target_args, types, class_perms, args)?;
+    let mut args_iter = validated_args.iter();
+
+    let source = args_iter
+        .next()
+        .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
+        .type_info;
+    let executable = args_iter
+        .next()
+        .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
+        .type_info;
+    let target = args_iter
+        .next()
+        .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
+        .type_info;
+
+    if args_iter.next().is_some() {
+        return Err(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})));
+    }
+
+    Ok(DomtransRule {
+        source: source,
+        target: target,
+        executable: executable,
+    })
+}
+
 #[derive(Debug, Clone)]
 pub struct FunctionInfo<'a> {
     pub name: String,
@@ -804,6 +883,7 @@ impl TryFrom<&FunctionInfo<'_>> for sexp::Sexp {
                         ValidatedStatement::Call(c) => macro_cil.push(Sexp::from(&**c)),
                         ValidatedStatement::AvRule(a) => macro_cil.push(Sexp::from(&*a)),
                         ValidatedStatement::FcRule(f) => macro_cil.push(Sexp::from(&*f)),
+                        ValidatedStatement::DomtransRule(d) => macro_cil.push(Sexp::from(&*d)),
                     }
                 }
             }
@@ -873,6 +953,7 @@ pub enum ValidatedStatement<'a> {
     Call(Box<ValidatedCall>),
     AvRule(AvRule<'a>),
     FcRule(FileContextRule<'a>),
+    DomtransRule(DomtransRule<'a>),
 }
 
 impl<'a> ValidatedStatement<'a> {
@@ -884,6 +965,11 @@ impl<'a> ValidatedStatement<'a> {
         args: &Vec<FunctionArgument<'a>>,
         parent_type: Option<&TypeInfo>,
     ) -> Result<Vec<ValidatedStatement<'a>>, HLLErrors> {
+        let in_resource = match parent_type {
+            Some(t) => t.is_resource(types),
+            None => false,
+        };
+
         match statement {
             Statement::Call(c) => match c.check_builtin() {
                 Some(BuiltIns::AvRule) => {
@@ -895,10 +981,6 @@ impl<'a> ValidatedStatement<'a> {
                     )?)])
                 }
                 Some(BuiltIns::FileContext) => {
-                    let in_resource = match parent_type {
-                        Some(t) => t.is_resource(types),
-                        None => false,
-                    };
                     if in_resource {
                         return Ok(call_to_fc_rules(c, types, class_perms, Some(args))?
                             .into_iter()
@@ -909,6 +991,20 @@ impl<'a> ValidatedStatement<'a> {
                             filename: "TODO".to_string(),
                             lineno: 0,
                             msg: "File context statements are only allowed in resources"
+                                .to_string(),
+                        })))
+                    }
+                }
+                Some(BuiltIns::DomainTransition) => {
+                    if !in_resource {
+                        return Ok(vec![ValidatedStatement::DomtransRule(
+                            call_to_domain_transition(c, types, class_perms, Some(args))?,
+                        )]);
+                    } else {
+                        Err(HLLErrors::from(HLLErrorItem::Compile(HLLCompileError {
+                            filename: "TODO".to_string(),
+                            lineno: 0,
+                            msg: "Domain transition statements are not allowed in resources"
                                 .to_string(),
                         })))
                     }
@@ -929,6 +1025,7 @@ impl From<&ValidatedStatement<'_>> for sexp::Sexp {
             ValidatedStatement::Call(c) => Sexp::from(&**c),
             ValidatedStatement::AvRule(a) => Sexp::from(a),
             ValidatedStatement::FcRule(f) => Sexp::from(f),
+            ValidatedStatement::DomtransRule(d) => Sexp::from(d),
         }
     }
 }
