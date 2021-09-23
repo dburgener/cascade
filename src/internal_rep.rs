@@ -4,7 +4,7 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::str::FromStr;
 
-use crate::ast::{Argument, BuiltIns, DeclaredArgument, FuncCall, FuncDecl, Statement, TypeDecl};
+use crate::ast::{Argument, BuiltIns, DeclaredArgument, FuncCall, FuncDecl, HLLString, Statement, TypeDecl};
 use crate::constants;
 use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
 
@@ -26,8 +26,8 @@ pub struct TypeInfo {
 impl TypeInfo {
     pub fn new(td: &TypeDecl) -> TypeInfo {
         TypeInfo {
-            name: td.name.clone(),
-            inherits: td.inherits.clone(),
+            name: td.name.to_string(),
+            inherits: td.inherits.iter().map(|i| i.to_string()).collect(),
             is_virtual: td.is_virtual,
             list_coercion: td.annotations.has_annotation("makelist"),
         }
@@ -505,7 +505,7 @@ fn call_to_av_rule<'a>(
     class_perms: &ClassList,
     args: Option<&Vec<FunctionArgument<'a>>>,
 ) -> Result<AvRule<'a>, HLLErrors> {
-    let flavor = match c.name.as_str() {
+    let flavor = match c.name.get_str_ref() {
         constants::ALLOW_FUNCTION_NAME => AvRuleFlavor::Allow,
         constants::DONTAUDIT_FUNCTION_NAME => AvRuleFlavor::Dontaudit,
         constants::AUDITALLOW_FUNCTION_NAME => AvRuleFlavor::Auditallow,
@@ -516,33 +516,33 @@ fn call_to_av_rule<'a>(
     let target_args = vec![
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: "domain".to_string(),
+                param_type: HLLString::from("domain"),
                 is_list_param: false,
-                name: "source".to_string(),
+                name: HLLString::from("source"),
             },
             types,
         )?,
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: "resource".to_string(),
+                param_type: HLLString::from("resource"),
                 is_list_param: false,
-                name: "target".to_string(),
+                name: HLLString::from("target"),
             },
             types,
         )?,
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: "obj_class".to_string(),
+                param_type: HLLString::from("obj_class"),
                 is_list_param: false,
-                name: "class".to_string(),
+                name: HLLString::from("class"),
             },
             types,
         )?,
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: "perm".to_string(),
+                param_type: HLLString::from("perm"),
                 is_list_param: true,
-                name: "class".to_string(),
+                name: HLLString::from("class"),
             },
             types,
         )?,
@@ -664,25 +664,25 @@ fn call_to_fc_rules<'a>(
     let target_args = vec![
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: "path".to_string(),
+                param_type: HLLString::from("path"),
                 is_list_param: false,
-                name: "path_regex".to_string(),
+                name: HLLString::from("path_regex"),
             },
             types,
         )?,
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: "obj_class".to_string(), //TODO: not really
+                param_type: HLLString::from("obj_class"), //TODO: not really
                 is_list_param: true,
-                name: "file_type".to_string(),
+                name: HLLString::from("file_type"),
             },
             types,
         )?,
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: "resource".to_string(),
+                param_type: HLLString::from("resource"),
                 is_list_param: false,
-                name: "file_context".to_string(),
+                name: HLLString::from("file_context"),
             },
             types,
         )?,
@@ -746,25 +746,25 @@ fn call_to_domain_transition<'a>(
     let target_args = vec![
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: "domain".to_string(),
+                param_type: HLLString::from("domain"),
                 is_list_param: false,
-                name: "source".to_string(),
+                name: HLLString::from("source"),
             },
             types,
         )?,
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: "resource".to_string(),
+                param_type: HLLString::from("resource"),
                 is_list_param: false,
-                name: "executable".to_string(),
+                name: HLLString::from("executable"),
             },
             types,
         )?,
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: "domain".to_string(),
+                param_type: HLLString::from("domain"),
                 is_list_param: false,
-                name: "target".to_string(),
+                name: HLLString::from("target"),
             },
             types,
         )?,
@@ -898,8 +898,11 @@ pub struct FunctionArgument<'a> {
 }
 
 impl<'a> FunctionArgument<'a> {
-    pub fn new(declared_arg: &DeclaredArgument, types: &'a TypeMap) -> Result<Self, HLLErrorItem> {
-        let param_type = match types.get(&declared_arg.param_type) {
+    pub fn new(
+        declared_arg: &DeclaredArgument,
+        types: &'a TypeMap,
+    ) -> Result<Self, HLLErrorItem> {
+        let param_type = match types.get(&declared_arg.param_type.to_string()) {
             Some(ti) => ti,
             None => {
                 return Err(HLLErrorItem::Compile(HLLCompileError {
@@ -914,7 +917,7 @@ impl<'a> FunctionArgument<'a> {
 
         Ok(FunctionArgument {
             param_type: param_type,
-            name: declared_arg.name.clone(),
+            name: declared_arg.name.to_string(),
             is_list_param: declared_arg.is_list_param,
         })
     }
@@ -1053,7 +1056,7 @@ impl ValidatedCall {
 
         // Each argument must match the type the function signature expects
         let mut args = match &call.class_name {
-            Some(c) => vec![c.clone()], // "this"
+            Some(c) => vec![c.to_string()], // "this"
             None => Vec::new(),
         };
 
@@ -1179,9 +1182,9 @@ enum ArgForValidation<'a> {
 impl<'a> From<&'a Argument> for ArgForValidation<'a> {
     fn from(a: &'a Argument) -> Self {
         match a {
-            Argument::Var(s) => ArgForValidation::Var(&s),
-            Argument::List(v) => ArgForValidation::List(v.iter().map(|s| s as &str).collect()),
-            Argument::Quote(s) => ArgForValidation::Quote(&s),
+            Argument::Var(s) => ArgForValidation::Var(s.get_str_ref()),
+            Argument::List(v) => ArgForValidation::List(v.iter().map(|s| s.get_str_ref()).collect()),
+            Argument::Quote(s) => ArgForValidation::Quote(s.get_str_ref()),
         }
     }
 }

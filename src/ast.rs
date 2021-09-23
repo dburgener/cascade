@@ -1,6 +1,86 @@
 use std::fmt;
+use std::ops::Range;
 
 use crate::constants;
+
+#[derive(Clone, Debug)]
+pub struct HLLString {
+    string: String,
+    range: Option<Range<usize>>
+}
+
+impl fmt::Display for HLLString {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.string)
+    }
+}
+
+impl HLLString {
+    pub fn new(string: String, range: Range<usize>) -> Self {
+        HLLString {
+            string: string,
+            range: Some(range),
+        }
+    }
+
+    pub fn get_str_ref(&self) -> &str {
+        self.string.as_str()
+    }
+}
+
+impl From<String> for HLLString {
+    fn from(s: String) -> HLLString {
+        HLLString {
+            string: s,
+            range: None
+        }
+    }
+}
+
+impl From<&str> for HLLString {
+    fn from(s: &str) -> HLLString {
+        HLLString {
+            string: s.to_string(),
+            range: None
+        }
+    }
+}
+
+impl PartialEq for HLLString {
+    fn eq(&self, other: &Self) -> bool {
+        self.string == other.string
+    }
+}
+
+impl PartialEq<String> for HLLString {
+    fn eq(&self, other: &String) -> bool {
+        self.string == *other
+    }
+}
+
+impl PartialEq<str> for HLLString {
+    fn eq(&self, other: &str) -> bool {
+        self.string == other
+    }
+}
+
+impl PartialEq<HLLString> for str {
+    fn eq(&self, other: &HLLString) -> bool {
+        self == other.string
+    }
+}
+
+impl PartialEq<&str> for HLLString {
+    fn eq(&self, other: &&str) -> bool {
+        self.string == *other
+    }
+}
+
+impl PartialEq<HLLString> for &str {
+    fn eq(&self, other: &HLLString) -> bool {
+        *self == other.string
+    }
+}
 
 #[derive(Debug)]
 pub struct Policy {
@@ -20,7 +100,7 @@ pub enum Expression {
 }
 
 impl Expression {
-    pub fn set_class_name_if_decl(&mut self, name: String) {
+    pub fn set_class_name_if_decl(&mut self, name: HLLString) {
         match self {
             Expression::Decl(Declaration::Func(d)) => d.class_name = Some(name),
             _ => (),
@@ -65,15 +145,15 @@ impl Declaration {
 
 #[derive(Debug)]
 pub struct TypeDecl {
-    pub name: String,
-    pub inherits: Vec<String>,
+    pub name: HLLString,
+    pub inherits: Vec<HLLString>,
     pub is_virtual: bool,
     pub expressions: Vec<Expression>,
     pub annotations: Annotations,
 }
 
 impl TypeDecl {
-    pub fn new(name: String, inherits: Vec<String>, exprs: Vec<Expression>) -> TypeDecl {
+    pub fn new(name: HLLString, inherits: Vec<HLLString>, exprs: Vec<Expression>) -> TypeDecl {
         TypeDecl {
             name: name,
             inherits: inherits,
@@ -99,8 +179,8 @@ impl Virtualable for TypeDecl {
 
 #[derive(Debug)]
 pub struct FuncDecl {
-    pub class_name: Option<String>,
-    pub name: String,
+    pub class_name: Option<HLLString>,
+    pub name: HLLString,
     pub args: Vec<DeclaredArgument>,
     pub body: Vec<Statement>,
     pub annotations: Annotations,
@@ -110,7 +190,7 @@ impl FuncDecl {
     pub fn get_cil_name(&self) -> String {
         match &self.class_name {
             Some(class) => format!("{}-{}", class, self.name),
-            None => self.name.clone(),
+            None => self.name.to_string(),
         }
     }
 
@@ -140,14 +220,14 @@ pub enum BuiltIns {
 
 #[derive(Debug)]
 pub struct FuncCall {
-    pub class_name: Option<String>,
-    pub name: String,
+    pub class_name: Option<HLLString>,
+    pub name: HLLString,
     pub args: Vec<Argument>,
     pub annotations: Annotations,
 }
 
 impl FuncCall {
-    pub fn new(cn: Option<String>, n: String, a: Vec<Argument>) -> FuncCall {
+    pub fn new(cn: Option<HLLString>, n: HLLString, a: Vec<Argument>) -> FuncCall {
         FuncCall {
             class_name: cn,
             name: n,
@@ -161,7 +241,7 @@ impl FuncCall {
             Some(_) => return None,
             None => (),
         }
-        if constants::AV_RULES.iter().any(|&i| i == &self.name) {
+        if constants::AV_RULES.iter().any(|i| *i == &self.name) {
             return Some(BuiltIns::AvRule);
         }
         if &self.name == constants::FILE_CONTEXT_FUNCTION_NAME {
@@ -176,14 +256,14 @@ impl FuncCall {
     pub fn get_display_name(&self) -> String {
         match &self.class_name {
             Some(class) => format!("{}.{}", class, self.name),
-            None => self.name.clone(),
+            None => self.name.to_string(),
         }
     }
 
     pub fn get_cil_name(&self) -> String {
         match &self.class_name {
             Some(class) => format!("{}-{}", class, self.name),
-            None => self.name.clone(),
+            None => self.name.to_string(),
         }
     }
 
@@ -194,7 +274,7 @@ impl FuncCall {
 
 #[derive(Debug)]
 pub struct Annotation {
-    pub name: String,
+    pub name: HLLString,
 }
 
 #[derive(Debug)]
@@ -225,9 +305,9 @@ impl Annotations {
 
 #[derive(Debug)]
 pub enum Argument {
-    Var(String),
-    List(Vec<String>),
-    Quote(String),
+    Var(HLLString),
+    List(Vec<HLLString>),
+    Quote(HLLString),
 }
 
 impl fmt::Display for Argument {
@@ -242,7 +322,7 @@ impl fmt::Display for Argument {
 
 #[derive(Debug)]
 pub struct DeclaredArgument {
-    pub param_type: String,
+    pub param_type: HLLString,
     pub is_list_param: bool,
-    pub name: String,
+    pub name: HLLString,
 }

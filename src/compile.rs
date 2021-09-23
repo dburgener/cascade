@@ -81,7 +81,7 @@ fn build_type_map(p: &Policy) -> TypeMap {
             _ => continue,
         };
         match d {
-            Declaration::Type(t) => decl_map.insert(t.name.clone(), TypeInfo::new(&**t)),
+            Declaration::Type(t) => decl_map.insert(t.name.to_string(), TypeInfo::new(&**t)),
             Declaration::Func(_) => continue,
         };
     }
@@ -144,7 +144,7 @@ fn build_func_map<'a>(
         };
         match d {
             Declaration::Type(t) => {
-                let type_being_parsed = match types.get(&t.name) {
+                let type_being_parsed = match types.get(&t.name.to_string()) {
                     Some(t) => t,
                     None => {
                         return Err(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))
@@ -314,7 +314,7 @@ fn do_rules_pass<'a>(
                 }
             }
             Expression::Decl(Declaration::Type(t)) => {
-                let type_being_parsed = match types.get(&t.name) {
+                let type_being_parsed = match types.get(&t.name.to_string()) {
                     Some(t) => t,
                     None => {
                         return Err(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))
@@ -406,14 +406,14 @@ fn func_map_to_sexp(funcs: HashMap<String, FunctionInfo>) -> Result<Vec<sexp::Se
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{Declaration, Expression, Policy, TypeDecl};
+    use crate::ast::{Declaration, Expression, HLLString, Policy, TypeDecl};
     use crate::internal_rep::TypeInfo;
 
     #[test]
     fn build_type_map_test() {
         let mut exprs = Vec::new();
         exprs.push(Expression::Decl(Declaration::Type(Box::new(
-            TypeDecl::new("foo".to_string(), vec!["domain".to_string()], Vec::new()),
+            TypeDecl::new(HLLString::from("foo"), vec![HLLString::from("domain")], Vec::new()),
         ))));
         let p = Policy::new(exprs);
         let types = build_type_map(&p);
@@ -431,18 +431,18 @@ mod tests {
     fn organize_type_map_test() {
         let mut types = get_built_in_types_map();
         let foo_type = TypeInfo::new(&TypeDecl::new(
-            "foo".to_string(),
-            vec!["domain".to_string()],
+            HLLString::from("foo"),
+            vec![HLLString::from("domain")],
             Vec::new(),
         ));
         let bar_type = TypeInfo::new(&TypeDecl::new(
-            "bar".to_string(),
-            vec!["domain".to_string(), "foo".to_string()],
+            HLLString::from("bar"),
+            vec![HLLString::from("domain"), HLLString::from("foo")],
             Vec::new(),
         ));
         let baz_type = TypeInfo::new(&TypeDecl::new(
-            "baz".to_string(),
-            vec!["domain".to_string(), "foo".to_string(), "bar".to_string()],
+            HLLString::from("baz"),
+            vec![HLLString::from("domain"), HLLString::from("foo"), HLLString::from("bar")],
             Vec::new(),
         ));
         types.insert("foo".to_string(), foo_type);
