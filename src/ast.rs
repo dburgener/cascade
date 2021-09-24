@@ -1,12 +1,14 @@
 use std::fmt;
 use std::ops::Range;
 
+use codespan_reporting::files::SimpleFile;
+
 use crate::constants;
 
 #[derive(Clone, Debug)]
 pub struct HLLString {
     string: String,
-    range: Option<Range<usize>>
+    range: Option<Range<usize>>,
 }
 
 impl fmt::Display for HLLString {
@@ -23,7 +25,28 @@ impl HLLString {
         }
     }
 
-    pub fn get_str_ref(&self) -> &str {
+    pub fn get_range(&self) -> Option<Range<usize>> {
+        self.range.clone()
+    }
+
+    // TODO: This doesn't include the brackets at the end, but we haven't saved enough info from
+    // the AST for that
+    pub fn vec_to_range(v: &Vec<&HLLString>) -> Option<Range<usize>> {
+        let start = v.first();
+        let end = v.last();
+
+        match (start, end) {
+            (Some(s), Some(e)) => match (s.get_range(), e.get_range()) {
+                (Some(s), Some(e)) => Some(s.start..e.end),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+}
+
+impl AsRef<str> for HLLString {
+    fn as_ref(&self) -> &str {
         self.string.as_str()
     }
 }
@@ -32,7 +55,7 @@ impl From<String> for HLLString {
     fn from(s: String) -> HLLString {
         HLLString {
             string: s,
-            range: None
+            range: None,
         }
     }
 }
@@ -41,7 +64,7 @@ impl From<&str> for HLLString {
     fn from(s: &str) -> HLLString {
         HLLString {
             string: s.to_string(),
-            range: None
+            range: None,
         }
     }
 }
@@ -79,6 +102,21 @@ impl PartialEq<&str> for HLLString {
 impl PartialEq<HLLString> for &str {
     fn eq(&self, other: &HLLString) -> bool {
         *self == other.string
+    }
+}
+
+#[derive(Debug)]
+pub struct PolicyFile {
+    pub policy: Policy,
+    pub file: SimpleFile<String, String>,
+}
+
+impl PolicyFile {
+    pub fn new(policy: Policy, file: SimpleFile<String, String>) -> Self {
+        PolicyFile {
+            policy: policy,
+            file: file,
+        }
     }
 }
 
@@ -269,6 +307,16 @@ impl FuncCall {
 
     pub fn add_annotation(&mut self, annotation: Annotation) {
         self.annotations.push(annotation);
+    }
+
+    pub fn get_name_range(&self) -> Option<Range<usize>> {
+        match &self.class_name {
+            Some(c) => match (c.get_range(), self.name.get_range()) {
+                (Some(s), Some(e)) => Some(s.start..e.end),
+                _ => None,
+            },
+            None => self.name.get_range(),
+        }
     }
 }
 

@@ -25,6 +25,8 @@ fn main() -> std::io::Result<()> {
             for e in error_list {
                 if let HLLErrorItem::Parse(p) = e {
                     p.print_diagnostic();
+                } else if let HLLErrorItem::Compile(c) = e {
+                    c.print_diagnostic();
                 } else {
                     eprintln!("{}", e);
                 }

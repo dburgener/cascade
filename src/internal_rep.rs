@@ -2,9 +2,14 @@ use sexp::{atom_s, list, Atom, Sexp};
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt;
+use std::ops::Range;
 use std::str::FromStr;
 
-use crate::ast::{Argument, BuiltIns, DeclaredArgument, FuncCall, FuncDecl, HLLString, Statement, TypeDecl};
+use codespan_reporting::files::SimpleFile;
+
+use crate::ast::{
+    Argument, BuiltIns, DeclaredArgument, FuncCall, FuncDecl, HLLString, Statement, TypeDecl,
+};
 use crate::constants;
 use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
 
@@ -17,28 +22,31 @@ pub type TypeMap = HashMap<String, TypeInfo>;
 
 #[derive(Clone, Debug)]
 pub struct TypeInfo {
-    pub name: String,
-    pub inherits: Vec<String>,
+    pub name: HLLString,
+    pub inherits: Vec<HLLString>,
     pub is_virtual: bool,
     pub list_coercion: bool, // Automatically transform single instances of this type to a single element list
+    pub declaration_file: Option<SimpleFile<String, String>>, // Built in types have no file
 }
 
 impl TypeInfo {
-    pub fn new(td: &TypeDecl) -> TypeInfo {
+    pub fn new(td: &TypeDecl, file: &SimpleFile<String, String>) -> TypeInfo {
         TypeInfo {
-            name: td.name.to_string(),
-            inherits: td.inherits.iter().map(|i| i.to_string()).collect(),
+            name: td.name.clone(),
+            inherits: td.inherits.clone(),
             is_virtual: td.is_virtual,
             list_coercion: td.annotations.has_annotation("makelist"),
+            declaration_file: Some(file.clone()), // TODO: Turn into reference
         }
     }
 
     pub fn make_built_in(name: String, makelist: bool) -> TypeInfo {
         TypeInfo {
-            name: name,
+            name: HLLString::from(name),
             inherits: Vec::new(),
             is_virtual: true,
             list_coercion: makelist,
+            declaration_file: None,
         }
     }
 
@@ -48,7 +56,7 @@ impl TypeInfo {
         }
 
         for parent in &self.inherits {
-            let parent_typeinfo = match types.get(parent) {
+            let parent_typeinfo = match types.get(&parent.to_string()) {
                 Some(t) => t,
                 None => continue,
             };
@@ -101,7 +109,7 @@ impl From<&TypeInfo> for Option<sexp::Sexp> {
             Some(f) => f,
             None => return None,
         };
-        Some(list(&[atom_s(flavor), atom_s(&typeinfo.name)]))
+        Some(list(&[atom_s(flavor), atom_s(&typeinfo.name.as_ref())]))
     }
 }
 
@@ -150,28 +158,31 @@ fn argument_to_typeinfo<'a>(
     types: &'a TypeMap,
     class_perms: &ClassList,
     context: Option<&Vec<FunctionArgument<'a>>>,
+    file: &SimpleFile<String, String>,
 ) -> Result<&'a TypeInfo, HLLErrorItem> {
     let t: Option<&TypeInfo> = match a {
-        ArgForValidation::Var(s) => match arg_in_context(s, context) {
+        ArgForValidation::Var(s) => match arg_in_context(s.as_ref(), context) {
             Some(res) => Some(res),
-            None => typeinfo_from_string(s, types, class_perms),
+            None => typeinfo_from_string(s.as_ref(), types, class_perms),
         },
-        ArgForValidation::Quote(s) => types.get(&type_name_from_string(s)),
+        ArgForValidation::Quote(s) => types.get(&type_name_from_string(s.as_ref())),
         ArgForValidation::List(_) => None,
     };
 
-    t.ok_or(HLLErrorItem::Compile(HLLCompileError {
-        filename: "TODO".to_string(),
-        lineno: 0,
-        msg: format!("{} is not a valid type", a),
-    }))
+    t.ok_or(HLLErrorItem::Compile(HLLCompileError::new(
+        "Not a valid type",
+        file,
+        a.get_range(),
+        "",
+    )))
 }
 
 fn argument_to_typeinfo_vec<'a>(
-    arg: &Vec<&str>,
+    arg: &Vec<&HLLString>,
     types: &'a TypeMap,
     class_perms: &ClassList,
     context: Option<&Vec<FunctionArgument<'a>>>,
+    file: &SimpleFile<String, String>,
 ) -> Result<Vec<&'a TypeInfo>, HLLErrorItem> {
     let mut ret = Vec::new();
     for s in arg {
@@ -180,6 +191,7 @@ fn argument_to_typeinfo_vec<'a>(
             types,
             class_perms,
             context,
+            file,
         )?);
     }
     Ok(ret)
@@ -196,10 +208,10 @@ pub enum AvRuleFlavor {
 #[derive(Clone, Debug)]
 pub struct AvRule<'a> {
     pub av_rule_flavor: AvRuleFlavor,
-    pub source: &'a str,
-    pub target: &'a str,
-    pub class: &'a str,
-    pub perms: Vec<&'a str>,
+    pub source: &'a HLLString,
+    pub target: &'a HLLString,
+    pub class: &'a HLLString,
+    pub perms: Vec<&'a HLLString>,
 }
 
 impl From<&AvRule<'_>> for sexp::Sexp {
@@ -219,8 +231,8 @@ impl From<&AvRule<'_>> for sexp::Sexp {
             }
         });
 
-        ret.push(atom_s(rule.source));
-        ret.push(atom_s(rule.target));
+        ret.push(atom_s(rule.source.as_ref()));
+        ret.push(atom_s(rule.target.as_ref()));
 
         let mut classpermset = vec![Sexp::Atom(Atom::S(rule.class.to_string()))];
 
@@ -294,18 +306,12 @@ impl From<Context<'_>> for sexp::Sexp {
 // That means that splitting on : yields 1, 3, 4 or 5 fields.  Any other number of fields is an
 // error
 // These contexts are always resources
+// Errors will be handled by level above
 impl<'a> TryFrom<&'a str> for Context<'a> {
-    type Error = HLLErrorItem;
-    fn try_from(s: &'a str) -> Result<Context<'a>, HLLErrorItem> {
-        let error_ret = HLLCompileError {
-            filename: "TODO".to_string(),
-            lineno: 0,
-            msg: format!("{} is not a valid context", s),
-        };
+    type Error = ();
+    fn try_from(s: &'a str) -> Result<Context<'a>, ()> {
         let mut split_string = s.split(":");
-        let first_field = split_string
-            .next()
-            .ok_or(HLLErrorItem::Compile(error_ret.clone()))?;
+        let first_field = split_string.next().ok_or(())?;
         let second_field = split_string.next();
 
         let role = match second_field {
@@ -315,9 +321,7 @@ impl<'a> TryFrom<&'a str> for Context<'a> {
 
         let user = first_field; // The one field case was already handled.  In all other cases, the first field is user
 
-        let context_type = split_string
-            .next()
-            .ok_or(HLLErrorItem::Compile(error_ret))?;
+        let context_type = split_string.next().ok_or(())?;
 
         let sensitivity = split_string.next(); // Sensitivity and category are optional
 
@@ -445,42 +449,55 @@ impl<'a> ClassList<'a> {
     // for overflow permissions.  In HLL, we treat all of those the same.  This function needs to
     // handle that conversion in lookups.  If a permission wasn't found for capability, we check
     // capability2
-    pub fn verify_permission(&self, class: &str, permission: &str) -> Result<(), HLLCompileError> {
-        let class_struct = match self.classes.get(class) {
+    pub fn verify_permission(
+        &self,
+        class: &HLLString,
+        permission: &HLLString,
+        file: &SimpleFile<String, String>,
+    ) -> Result<(), HLLCompileError> {
+        let class_struct = match self.classes.get(class.as_ref()) {
             Some(c) => c,
             None => {
-                return Err(HLLCompileError {
-                    msg: format!("No such object class: {}", class),
-                    lineno: 0,
-                    filename: "TODO".to_string(),
-                })
+                return Err(HLLCompileError::new(
+                    "No such object class",
+                    file,
+                    class.get_range(),
+                    "Invalid class",
+                ));
             }
         };
 
-        if class_struct.perms.contains(&permission) {
+        if class_struct.perms.contains(&permission.as_ref()) {
             return Ok(());
         } else {
-            match class {
-                "capability" => {
-                    return self.verify_permission("capability2", permission);
+            let other_str = match class.as_ref() {
+                "capability" => Some("capability2"),
+                "process" => Some("process2"),
+                "cap_userns" => Some("cap_userns2"),
+                _ => None,
+            };
+
+            match other_str {
+                Some(s) => {
+                    let hll_string = match class.get_range() {
+                        Some(range) => HLLString::new(s.to_string(), range),
+                        None => HLLString::from(s.to_string()),
+                    };
+                    return self.verify_permission(&hll_string, permission, file);
                 }
-                "process" => {
-                    return self.verify_permission("process2", permission);
-                }
-                "cap_userns" => {
-                    return self.verify_permission("cap2_userns", permission);
-                }
-                _ => (),
+                None => (),
             }
 
-            return Err(HLLCompileError {
-                msg: format!(
+            return Err(HLLCompileError::new(
+                &format!(
                     "Permission {} is not defined for object class {}",
-                    permission, class
+                    permission.as_ref(),
+                    class.as_ref()
                 ),
-                lineno: 0,
-                filename: "TODO".to_string(),
-            });
+                file,
+                permission.get_range(),
+                "Invalid permission",
+            ));
         }
     }
 
@@ -504,8 +521,9 @@ fn call_to_av_rule<'a>(
     types: &'a TypeMap,
     class_perms: &ClassList,
     args: Option<&Vec<FunctionArgument<'a>>>,
+    file: &'a SimpleFile<String, String>,
 ) -> Result<AvRule<'a>, HLLErrors> {
-    let flavor = match c.name.get_str_ref() {
+    let flavor = match c.name.as_ref() {
         constants::ALLOW_FUNCTION_NAME => AvRuleFlavor::Allow,
         constants::DONTAUDIT_FUNCTION_NAME => AvRuleFlavor::Dontaudit,
         constants::AUDITALLOW_FUNCTION_NAME => AvRuleFlavor::Auditallow,
@@ -521,6 +539,7 @@ fn call_to_av_rule<'a>(
                 name: HLLString::from("source"),
             },
             types,
+            None,
         )?,
         FunctionArgument::new(
             &DeclaredArgument {
@@ -529,6 +548,7 @@ fn call_to_av_rule<'a>(
                 name: HLLString::from("target"),
             },
             types,
+            None,
         )?,
         FunctionArgument::new(
             &DeclaredArgument {
@@ -537,6 +557,7 @@ fn call_to_av_rule<'a>(
                 name: HLLString::from("class"),
             },
             types,
+            None,
         )?,
         FunctionArgument::new(
             &DeclaredArgument {
@@ -545,10 +566,11 @@ fn call_to_av_rule<'a>(
                 name: HLLString::from("class"),
             },
             types,
+            None,
         )?,
     ];
 
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, args)?;
+    let validated_args = validate_arguments(c, &target_args, types, class_perms, args, file)?;
     let mut args_iter = validated_args.iter();
 
     let source = args_iter
@@ -573,7 +595,7 @@ fn call_to_av_rule<'a>(
     }
 
     for p in &perms {
-        class_perms.verify_permission(&class, &p)?;
+        class_perms.verify_permission(&class, &p, file)?;
     }
 
     Ok(AvRule {
@@ -581,7 +603,7 @@ fn call_to_av_rule<'a>(
         source: source,
         target: target,
         class: class,
-        perms: perms,
+        perms: perms.clone(),
     })
 }
 
@@ -617,8 +639,8 @@ impl fmt::Display for FileType {
 }
 
 impl FromStr for FileType {
-    type Err = HLLErrorItem;
-    fn from_str(s: &str) -> Result<FileType, HLLErrorItem> {
+    type Err = ();
+    fn from_str(s: &str) -> Result<FileType, ()> {
         match s {
             "file" => Ok(FileType::File),
             "dir" => Ok(FileType::Directory),
@@ -628,11 +650,7 @@ impl FromStr for FileType {
             "socket" => Ok(FileType::Socket),
             "pipe" => Ok(FileType::Pipe),
             "" => Ok(FileType::Any),
-            s => Err(HLLErrorItem::Compile(HLLCompileError {
-                filename: "TODO".to_string(),
-                lineno: 0,
-                msg: format!("Not a valid file type: {}", s),
-            })),
+            _ => Err(()),
         }
     }
 }
@@ -660,6 +678,7 @@ fn call_to_fc_rules<'a>(
     types: &'a TypeMap,
     class_perms: &ClassList,
     args: Option<&Vec<FunctionArgument<'a>>>,
+    file: &'a SimpleFile<String, String>,
 ) -> Result<Vec<FileContextRule<'a>>, HLLErrors> {
     let target_args = vec![
         FunctionArgument::new(
@@ -669,6 +688,7 @@ fn call_to_fc_rules<'a>(
                 name: HLLString::from("path_regex"),
             },
             types,
+            None,
         )?,
         FunctionArgument::new(
             &DeclaredArgument {
@@ -677,6 +697,7 @@ fn call_to_fc_rules<'a>(
                 name: HLLString::from("file_type"),
             },
             types,
+            None,
         )?,
         FunctionArgument::new(
             &DeclaredArgument {
@@ -685,10 +706,11 @@ fn call_to_fc_rules<'a>(
                 name: HLLString::from("file_context"),
             },
             types,
+            None,
         )?,
     ];
 
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, args)?;
+    let validated_args = validate_arguments(c, &target_args, types, class_perms, args, file)?;
     let mut args_iter = validated_args.iter();
     let mut ret = Vec::new();
 
@@ -705,12 +727,33 @@ fn call_to_fc_rules<'a>(
         .next()
         .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
         .get_name_or_string()?;
-    let context = Context::try_from(context)?;
+    let context = match Context::try_from(context.as_ref()) {
+        Ok(c) => c,
+        Err(_) => {
+            return Err(HLLErrors::from(HLLErrorItem::Compile(
+                HLLCompileError::new(
+                    "Invalid context",
+                    file,
+                    context.get_range(),
+                    "Cannot parse this into a context",
+                ),
+            )))
+        }
+    };
 
     for file_type in file_types {
+        let file_type = match file_type.to_string().parse::<FileType>() {
+            Ok(f) => f,
+            Err(_) => {
+                return Err(HLLErrors::from(HLLErrorItem::Compile(
+                    HLLCompileError::new("Not a valid file type", file, file_type.get_range(), ""),
+                )))
+            }
+        };
+
         ret.push(FileContextRule {
             regex_string: regex_string.clone(),
-            file_type: file_type.parse::<FileType>()?,
+            file_type: file_type,
             context: context.clone(),
         });
     }
@@ -729,10 +772,10 @@ impl From<&DomtransRule<'_>> for sexp::Sexp {
     fn from(d: &DomtransRule) -> Self {
         list(&[
             atom_s("typetransition"),
-            atom_s(&d.source.name),
-            atom_s(&d.executable.name),
+            atom_s(&d.source.name.to_string()),
+            atom_s(&d.executable.name.to_string()),
             atom_s("process"),
-            atom_s(&d.target.name),
+            atom_s(&d.target.name.to_string()),
         ])
     }
 }
@@ -742,6 +785,7 @@ fn call_to_domain_transition<'a>(
     types: &'a TypeMap,
     class_perms: &ClassList,
     args: Option<&Vec<FunctionArgument<'a>>>,
+    file: &'a SimpleFile<String, String>,
 ) -> Result<DomtransRule<'a>, HLLErrors> {
     let target_args = vec![
         FunctionArgument::new(
@@ -751,6 +795,7 @@ fn call_to_domain_transition<'a>(
                 name: HLLString::from("source"),
             },
             types,
+            None,
         )?,
         FunctionArgument::new(
             &DeclaredArgument {
@@ -759,6 +804,7 @@ fn call_to_domain_transition<'a>(
                 name: HLLString::from("executable"),
             },
             types,
+            None,
         )?,
         FunctionArgument::new(
             &DeclaredArgument {
@@ -767,10 +813,11 @@ fn call_to_domain_transition<'a>(
                 name: HLLString::from("target"),
             },
             types,
+            None,
         )?,
     ];
 
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, args)?;
+    let validated_args = validate_arguments(c, &target_args, types, class_perms, args, file)?;
     let mut args_iter = validated_args.iter();
 
     let source = args_iter
@@ -804,6 +851,7 @@ pub struct FunctionInfo<'a> {
     pub args: Vec<FunctionArgument<'a>>,
     pub original_body: &'a Vec<Statement>,
     pub body: Option<Vec<ValidatedStatement<'a>>>,
+    pub declaration_file: &'a SimpleFile<String, String>,
 }
 
 impl<'a> FunctionInfo<'a> {
@@ -811,6 +859,7 @@ impl<'a> FunctionInfo<'a> {
         funcdecl: &'a FuncDecl,
         types: &'a TypeMap,
         parent_type: Option<&'a TypeInfo>,
+        declaration_file: &'a SimpleFile<String, String>,
     ) -> Result<FunctionInfo<'a>, HLLErrors> {
         let mut args = Vec::new();
         let mut errors = HLLErrors::new();
@@ -822,7 +871,7 @@ impl<'a> FunctionInfo<'a> {
         }
 
         for a in &funcdecl.args {
-            match FunctionArgument::new(&a, types) {
+            match FunctionArgument::new(&a, types, Some(declaration_file)) {
                 Ok(a) => args.push(a),
                 Err(e) => errors.add_error(e),
             }
@@ -834,6 +883,7 @@ impl<'a> FunctionInfo<'a> {
             args: args,
             original_body: &funcdecl.body,
             body: None,
+            declaration_file: declaration_file,
         })
     }
 
@@ -842,6 +892,7 @@ impl<'a> FunctionInfo<'a> {
         functions: &'a HashMap<String, FunctionInfo>,
         types: &'a TypeMap,
         class_perms: &'a ClassList,
+        file: &'a SimpleFile<String, String>,
     ) -> Result<(), HLLErrors> {
         let mut new_body = Vec::new();
         let mut errors = HLLErrors::new();
@@ -854,6 +905,7 @@ impl<'a> FunctionInfo<'a> {
                 class_perms,
                 &self.args,
                 self.class,
+                file,
             ) {
                 Ok(mut s) => new_body.append(&mut s),
                 Err(mut e) => errors.append(&mut e),
@@ -901,15 +953,17 @@ impl<'a> FunctionArgument<'a> {
     pub fn new(
         declared_arg: &DeclaredArgument,
         types: &'a TypeMap,
+        file: Option<&SimpleFile<String, String>>,
     ) -> Result<Self, HLLErrorItem> {
         let param_type = match types.get(&declared_arg.param_type.to_string()) {
             Some(ti) => ti,
             None => {
-                return Err(HLLErrorItem::Compile(HLLCompileError {
-                    filename: "TODO".to_string(),
-                    lineno: 0,
-                    msg: format!("No such type or attribute: {}", &declared_arg.param_type),
-                }));
+                return Err(HLLErrorItem::make_compile_or_internal_error(
+                    "No such type",
+                    file,
+                    declared_arg.param_type.get_range(),
+                    "Type does not exist",
+                ));
             }
         };
 
@@ -962,6 +1016,7 @@ impl<'a> ValidatedStatement<'a> {
         class_perms: &ClassList<'a>,
         args: &Vec<FunctionArgument<'a>>,
         parent_type: Option<&TypeInfo>,
+        file: &'a SimpleFile<String, String>,
     ) -> Result<Vec<ValidatedStatement<'a>>, HLLErrors> {
         let in_resource = match parent_type {
             Some(t) => t.is_resource(types),
@@ -976,40 +1031,45 @@ impl<'a> ValidatedStatement<'a> {
                         types,
                         class_perms,
                         Some(args),
+                        file,
                     )?)])
                 }
                 Some(BuiltIns::FileContext) => {
                     if in_resource {
-                        return Ok(call_to_fc_rules(c, types, class_perms, Some(args))?
+                        return Ok(call_to_fc_rules(c, types, class_perms, Some(args), file)?
                             .into_iter()
                             .map(|f| ValidatedStatement::FcRule(f))
                             .collect());
                     } else {
-                        Err(HLLErrors::from(HLLErrorItem::Compile(HLLCompileError {
-                            filename: "TODO".to_string(),
-                            lineno: 0,
-                            msg: "File context statements are only allowed in resources"
-                                .to_string(),
-                        })))
+                        Err(HLLErrors::from(HLLErrorItem::Compile(
+                            HLLCompileError::new(
+                                "file_context() calls are only allowed in resources",
+                                file,
+                                c.name.get_range(),
+                                "Not allowed here",
+                            ),
+                        )))
                     }
                 }
                 Some(BuiltIns::DomainTransition) => {
                     if !in_resource {
                         return Ok(vec![ValidatedStatement::DomtransRule(
-                            call_to_domain_transition(c, types, class_perms, Some(args))?,
+                            call_to_domain_transition(c, types, class_perms, Some(args), file)?,
                         )]);
                     } else {
-                        Err(HLLErrors::from(HLLErrorItem::Compile(HLLCompileError {
-                            filename: "TODO".to_string(),
-                            lineno: 0,
-                            msg: "Domain transition statements are not allowed in resources"
-                                .to_string(),
-                        })))
+                        Err(HLLErrors::from(HLLErrorItem::Compile(
+                            HLLCompileError::new(
+                                "domain_transition() calls are not allowed in resources",
+                                file,
+                                c.name.get_range(),
+                                "Not allowed here",
+                            ),
+                        )))
                     }
                 }
                 None => {
                     return Ok(vec![ValidatedStatement::Call(Box::new(
-                        ValidatedCall::new(c, functions, types, class_perms, Some(args))?,
+                        ValidatedCall::new(c, functions, types, class_perms, Some(args), file)?,
                     ))])
                 }
             },
@@ -1041,16 +1101,15 @@ impl ValidatedCall {
         types: &TypeMap,
         class_perms: &ClassList,
         parent_args: Option<&Vec<FunctionArgument>>,
+        file: &SimpleFile<String, String>,
     ) -> Result<ValidatedCall, HLLErrors> {
         let cil_name = call.get_cil_name();
         let function_info = match functions.get(&cil_name) {
             Some(function_info) => function_info,
             None => {
-                return Err(HLLErrors::from(HLLErrorItem::Compile(HLLCompileError {
-                    filename: "TODO".to_string(),
-                    lineno: 0,
-                    msg: format!("No such function: {}", cil_name),
-                })));
+                return Err(HLLErrors::from(HLLErrorItem::Compile(
+                    HLLCompileError::new("No such function", file, call.get_name_range(), ""),
+                )));
             }
         };
 
@@ -1060,7 +1119,14 @@ impl ValidatedCall {
             None => Vec::new(),
         };
 
-        for arg in validate_arguments(call, &function_info.args, types, class_perms, parent_args)? {
+        for arg in validate_arguments(
+            call,
+            &function_info.args,
+            types,
+            class_perms,
+            parent_args,
+            file,
+        )? {
             args.push(arg.get_name_or_string()?.to_string()); // TODO: Handle lists
         }
 
@@ -1074,52 +1140,70 @@ impl ValidatedCall {
 // Some TypeInfos have a string associated with a particular instance.  Most are just the TypeInfo
 #[derive(Clone, Debug)]
 enum TypeValue<'a> {
-    Str(&'a str),
-    Vector(Vec<&'a str>),
-    SEType,
+    Str(&'a HLLString),
+    Vector(Vec<&'a HLLString>),
+    SEType(Option<Range<usize>>),
 }
 
 #[derive(Clone, Debug)]
 struct TypeInstance<'a> {
     instance_value: TypeValue<'a>,
     pub type_info: &'a TypeInfo,
+    file: &'a SimpleFile<String, String>,
 }
 
 impl<'a> TypeInstance<'a> {
-    fn get_name_or_string(&self) -> Result<&'a str, HLLErrorItem> {
-        match &self.instance_value {
-            TypeValue::Str("this") => {
-                // Always convert "this" into its typeinfo.  This is to support the usage of
-                // "this" in domains and resources.  Other instances of TypeValue::Str are in
-                // function calls and should be left as the bound names for cil to handle
-                Ok(&self.type_info.name)
+    fn get_name_or_string(&self) -> Result<&'a HLLString, HLLErrorItem> {
+        match self.instance_value {
+            TypeValue::Str(s) => {
+                if s == "this" {
+                    // Always convert "this" into its typeinfo.  This is to support the usage of
+                    // "this" in domains and resources.  Other instances of TypeValue::Str are in
+                    // function calls and should be left as the bound names for cil to handle
+                    Ok(&self.type_info.name)
+                } else {
+                    Ok(s)
+                }
             }
-            TypeValue::Str(s) => Ok(&s),
-            TypeValue::Vector(v) => Err(HLLErrorItem::Compile(HLLCompileError {
-                filename: "TODO".to_string(),
-                lineno: 0,
-                msg: format!("Unexpected list: {:?}", v),
-            })),
-            TypeValue::SEType => Ok(&self.type_info.name),
+            TypeValue::Vector(_) => Err(HLLErrorItem::Compile(HLLCompileError::new(
+                "Unexpected list",
+                self.file,
+                self.get_range(),
+                "Expected scalar value here",
+            ))),
+            TypeValue::SEType(_) => Ok(&self.type_info.name),
         }
     }
 
-    fn get_list(&self) -> Result<Vec<&'a str>, HLLErrorItem> {
+    fn get_list(&self) -> Result<Vec<&'a HLLString>, HLLErrorItem> {
         match &self.instance_value {
             TypeValue::Vector(v) => Ok(v.clone()),
-            _ => Err(HLLErrorItem::Compile(HLLCompileError {
-                filename: "TODO".to_string(),
-                lineno: 0,
-                msg: format!("Expected list"),
-            })),
+            _ => Err(HLLErrorItem::Compile(HLLCompileError::new(
+                "Expected list",
+                self.file,
+                self.get_range(),
+                "Expected list here",
+            ))),
         }
     }
 
-    fn new(arg: &ArgForValidation<'a>, ti: &'a TypeInfo) -> Self {
+    fn get_range(&self) -> Option<Range<usize>> {
+        match &self.instance_value {
+            TypeValue::Str(s) => s.get_range(),
+            TypeValue::Vector(v) => HLLString::vec_to_range(&v),
+            TypeValue::SEType(r) => r.clone(),
+        }
+    }
+
+    fn new(
+        arg: &ArgForValidation<'a>,
+        ti: &'a TypeInfo,
+        file: &'a SimpleFile<String, String>,
+    ) -> Self {
         let instance_value = match arg {
             ArgForValidation::Var(s) => {
-                if s == &ti.name {
-                    TypeValue::SEType
+                if s == &&ti.name {
+                    TypeValue::SEType(s.get_range())
                 } else {
                     TypeValue::Str(s)
                 }
@@ -1131,6 +1215,7 @@ impl<'a> TypeInstance<'a> {
         TypeInstance {
             instance_value: instance_value,
             type_info: &ti,
+            file: file,
         }
     }
 }
@@ -1141,21 +1226,25 @@ fn validate_arguments<'a>(
     types: &'a TypeMap,
     class_perms: &ClassList,
     parent_args: Option<&Vec<FunctionArgument<'a>>>,
+    file: &'a SimpleFile<String, String>,
 ) -> Result<Vec<TypeInstance<'a>>, HLLErrors> {
     // Some functions start with an implicit "this" argument.  If it does, skip it
     let function_args_iter = function_args.iter().skip_while(|a| a.name == "this");
 
     if function_args_iter.clone().count() != call.args.len() {
-        return Err(HLLErrors::from(HLLErrorItem::Compile(HLLCompileError {
-            filename: "TODO".to_string(),
-            lineno: 0,
-            msg: format!(
-                "Function {} expected {} arguments, got {}",
-                call.get_display_name(),
-                function_args.len(),
-                call.args.len()
+        return Err(HLLErrors::from(HLLErrorItem::Compile(
+            HLLCompileError::new(
+                &format!(
+                    "Function {} expected {} arguments, got {}",
+                    call.get_display_name(),
+                    function_args.len(),
+                    call.args.len()
+                ),
+                file,
+                call.get_name_range(), // TODO: this may not be the cleanest way to report this error
+                "",
             ),
-        })));
+        )));
     }
 
     let mut args = Vec::new();
@@ -1166,6 +1255,7 @@ fn validate_arguments<'a>(
             types,
             class_perms,
             parent_args,
+            file,
         )?);
     }
     Ok(args)
@@ -1174,17 +1264,17 @@ fn validate_arguments<'a>(
 // The ast Argument owns the data, this struct is similar, but has references to the owned data in
 // the ast, so we can make copies and manipulate
 enum ArgForValidation<'a> {
-    Var(&'a str),
-    List(Vec<&'a str>),
-    Quote(&'a str),
+    Var(&'a HLLString),
+    List(Vec<&'a HLLString>),
+    Quote(&'a HLLString),
 }
 
 impl<'a> From<&'a Argument> for ArgForValidation<'a> {
     fn from(a: &'a Argument) -> Self {
         match a {
-            Argument::Var(s) => ArgForValidation::Var(s.get_str_ref()),
-            Argument::List(v) => ArgForValidation::List(v.iter().map(|s| s.get_str_ref()).collect()),
-            Argument::Quote(s) => ArgForValidation::Quote(s.get_str_ref()),
+            Argument::Var(s) => ArgForValidation::Var(s),
+            Argument::List(v) => ArgForValidation::List(v.iter().collect()),
+            Argument::Quote(s) => ArgForValidation::Quote(s),
         }
     }
 }
@@ -1208,6 +1298,14 @@ impl<'a> ArgForValidation<'a> {
         };
         ArgForValidation::List(vec)
     }
+
+    fn get_range(&self) -> Option<Range<usize>> {
+        match self {
+            ArgForValidation::Var(s) => s.get_range(),
+            ArgForValidation::List(v) => HLLString::vec_to_range(&v),
+            ArgForValidation::Quote(s) => s.get_range(),
+        }
+    }
 }
 
 fn validate_argument<'a>(
@@ -1216,38 +1314,38 @@ fn validate_argument<'a>(
     types: &'a TypeMap,
     class_perms: &ClassList,
     args: Option<&Vec<FunctionArgument<'a>>>,
+    file: &'a SimpleFile<String, String>,
 ) -> Result<TypeInstance<'a>, HLLErrorItem> {
     match &arg {
         ArgForValidation::List(v) => {
             if !target_argument.is_list_param {
-                return Err(HLLErrorItem::Compile(HLLCompileError {
-                    filename: "TODO".to_string(),
-                    lineno: 0,
-                    msg: format!("Unexpected list: {}", arg),
-                }));
+                return Err(HLLErrorItem::Compile(HLLCompileError::new(
+                    "Unexpected list",
+                    file,
+                    HLLString::vec_to_range(v),
+                    "This function requires a non-list value here",
+                )));
             }
-            let target_ti = match types.get(&target_argument.param_type.name) {
+            let target_ti = match types.get(&target_argument.param_type.name.to_string()) {
                 Some(t) => t,
                 None => return Err(HLLErrorItem::Internal(HLLInternalError {})),
             };
-            let arg_typeinfo_vec = argument_to_typeinfo_vec(&v, types, class_perms, args)?;
+            let arg_typeinfo_vec = argument_to_typeinfo_vec(&v, types, class_perms, args, file)?;
 
             for arg in arg_typeinfo_vec {
                 if !arg.is_child_or_actual_type(target_argument.param_type, types) {
-                    return Err(HLLErrorItem::Compile(HLLCompileError {
-                        filename: "TODO".to_string(),
-                        lineno: 0,
-                        msg: format!(
-                            "Expected type inheriting {}, got {}",
-                            target_ti.name, arg.name
-                        ),
-                    }));
+                    return Err(HLLErrorItem::Compile(HLLCompileError::new(
+                        &format!("Expected type inheriting {}", target_ti.name),
+                        file,
+                        arg.name.get_range(),
+                        &format!("This type should inherit {}", target_ti.name),
+                    )));
                 }
             }
-            Ok(TypeInstance::new(&arg, &target_ti))
+            Ok(TypeInstance::new(&arg, &target_ti, file))
         }
         _ => {
-            let arg_typeinfo = argument_to_typeinfo(&arg, types, class_perms, args)?;
+            let arg_typeinfo = argument_to_typeinfo(&arg, types, class_perms, args, file)?;
             if target_argument.is_list_param {
                 if arg_typeinfo.list_coercion {
                     return validate_argument(
@@ -1256,26 +1354,26 @@ fn validate_argument<'a>(
                         types,
                         class_perms,
                         args,
+                        file,
                     );
                 }
-                return Err(HLLErrorItem::Compile(HLLCompileError {
-                    filename: "TODO".to_string(),
-                    lineno: 0,
-                    msg: format!("Expected list, got {}", arg),
-                }));
+                return Err(HLLErrorItem::Compile(HLLCompileError::new(
+                    "Expected list",
+                    file,
+                    arg.get_range(),
+                    "This function requires a list value here",
+                )));
             }
 
             if arg_typeinfo.is_child_or_actual_type(target_argument.param_type, types) {
-                Ok(TypeInstance::new(&arg, &arg_typeinfo))
+                Ok(TypeInstance::new(&arg, &arg_typeinfo, file))
             } else {
-                Err(HLLErrorItem::Compile(HLLCompileError {
-                    filename: "TODO".to_string(),
-                    lineno: 0,
-                    msg: format!(
-                        "Expected type inheriting {}, got {}",
-                        target_argument.param_type.name, arg_typeinfo.name
-                    ),
-                }))
+                Err(HLLErrorItem::Compile(HLLCompileError::new(
+                    &format!("Expected type inheriting {}", arg_typeinfo.name.to_string()),
+                    file,
+                    arg.get_range(),
+                    &format!("This type should inherit {}", arg_typeinfo.name.to_string()),
+                )))
             }
         }
     }
@@ -1302,10 +1400,10 @@ mod tests {
     fn generate_cil_for_av_rule_test() {
         let cil_sexp = Sexp::from(&AvRule {
             av_rule_flavor: AvRuleFlavor::Allow,
-            source: "foo",
-            target: "bar",
-            class: "file",
-            perms: vec!["read", "getattr"],
+            source: &"foo".into(),
+            target: &"bar".into(),
+            class: &"file".into(),
+            perms: vec![&"read".into(), &"getattr".into()],
         });
 
         let cil_expected = "(allow foo bar (file (read getattr)))";
@@ -1381,6 +1479,7 @@ mod tests {
 
     #[test]
     fn verify_permissions_test() {
+        let fake_file = SimpleFile::new(String::new(), String::new());
         let mut classlist = ClassList::new();
         classlist.add_class("foo", vec!["bar", "baz"]);
         classlist.add_class("capability", vec!["cap_foo"]);
@@ -1388,19 +1487,27 @@ mod tests {
         classlist.add_class("process", vec!["not_foo"]);
         classlist.add_class("process2", vec!["foo"]);
 
-        assert!(classlist.verify_permission("foo", "bar").is_ok());
-        assert!(classlist.verify_permission("foo", "baz").is_ok());
-        assert!(classlist.verify_permission("capability", "cap_bar").is_ok());
-        assert!(classlist.verify_permission("process", "foo").is_ok());
+        assert!(classlist
+            .verify_permission(&"foo".into(), &"bar".into(), &fake_file)
+            .is_ok());
+        assert!(classlist
+            .verify_permission(&"foo".into(), &"baz".into(), &fake_file)
+            .is_ok());
+        assert!(classlist
+            .verify_permission(&"capability".into(), &"cap_bar".into(), &fake_file)
+            .is_ok());
+        assert!(classlist
+            .verify_permission(&"process".into(), &"foo".into(), &fake_file)
+            .is_ok());
 
-        match classlist.verify_permission("bar", "baz") {
+        match classlist.verify_permission(&"bar".into(), &"baz".into(), &fake_file) {
             Ok(_) => panic!("Nonexistent class verified"),
-            Err(e) => assert!(e.msg.contains("No such object class")),
+            Err(e) => assert!(e.diagnostic.message.contains("No such object class")),
         }
 
-        match classlist.verify_permission("foo", "cap_bar") {
+        match classlist.verify_permission(&"foo".into(), &"cap_bar".into(), &fake_file) {
             Ok(_) => panic!("Nonexistent permission verified"),
-            Err(e) => assert!(e.msg.contains("cap_bar is not defined for")),
+            Err(e) => assert!(e.diagnostic.message.contains("cap_bar is not defined for")),
         }
     }
 
@@ -1434,7 +1541,7 @@ mod tests {
         let context = Context::try_from("foo:bar");
         match context {
             Ok(_) => panic!("Bad context compiled successfully"),
-            Err(e) => assert!(matches!(e, HLLErrorItem::Compile(_))),
+            Err(_) => (),
         }
     }
 
