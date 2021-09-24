@@ -325,6 +325,21 @@ impl FuncCall {
 #[derive(Debug)]
 pub struct Annotation {
     pub name: HLLString,
+    pub arguments: Vec<Argument>,
+}
+
+impl Annotation {
+    pub fn new(name: HLLString) -> Self {
+        Annotation {
+            name: name,
+            arguments: Vec::new(),
+        }
+    }
+
+    pub fn set_arguments(mut self, args: Vec<Argument>) -> Self {
+        self.arguments = args;
+        self
+    }
 }
 
 #[derive(Debug)]
