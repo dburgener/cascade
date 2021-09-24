@@ -880,13 +880,20 @@ impl<'a> FunctionInfo<'a> {
         }
 
         errors.into_result(FunctionInfo {
-            name: funcdecl.get_cil_name(),
+            name: funcdecl.name.to_string(),
             class: parent_type,
             args: args,
             original_body: &funcdecl.body,
             body: None,
             declaration_file: declaration_file,
         })
+    }
+
+    pub fn get_cil_name(&self) -> String {
+        match &self.class {
+            Some(class) => format!("{}-{}", class.name, self.name),
+            None => self.name.clone(),
+        }
     }
 
     pub fn validate_body(
@@ -924,7 +931,7 @@ impl TryFrom<&FunctionInfo<'_>> for sexp::Sexp {
     fn try_from(f: &FunctionInfo) -> Result<sexp::Sexp, HLLErrorItem> {
         let mut macro_cil = vec![
             atom_s("macro"),
-            atom_s(&f.name),
+            atom_s(&f.get_cil_name()),
             Sexp::List(f.args.iter().map(|a| Sexp::from(a)).collect()),
         ];
         match &f.body {
