@@ -141,7 +141,10 @@ mod tests {
 
     #[test]
     fn function_build_test() {
-        valid_policy_test("function.hll", &["macro my_file-read", "call my_file-read"]);
+        valid_policy_test(
+            "function.hll",
+            &["macro my_file-read", "call my_file-read", "allow source"],
+        );
     }
 
     #[test]

@@ -198,8 +198,8 @@ pub enum AvRuleFlavor {
 #[derive(Clone, Debug)]
 pub struct AvRule<'a> {
     pub av_rule_flavor: AvRuleFlavor,
-    pub source: &'a TypeInfo,
-    pub target: &'a TypeInfo,
+    pub source: &'a str,
+    pub target: &'a str,
     pub class: &'a str,
     pub perms: Vec<&'a str>,
 }
@@ -221,8 +221,8 @@ impl From<&AvRule<'_>> for sexp::Sexp {
             }
         });
 
-        ret.push(Sexp::Atom(Atom::S(rule.source.name.clone())));
-        ret.push(Sexp::Atom(Atom::S(rule.target.name.clone())));
+        ret.push(atom_s(rule.source));
+        ret.push(atom_s(rule.target));
 
         let mut classpermset = vec![Sexp::Atom(Atom::S(rule.class.to_string()))];
 
@@ -556,11 +556,11 @@ fn call_to_av_rule<'a>(
     let source = args_iter
         .next()
         .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
-        .type_info;
+        .get_name_or_string()?;
     let target = args_iter
         .next()
         .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
-        .type_info;
+        .get_name_or_string()?;
     let class = args_iter
         .next()
         .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
@@ -1090,6 +1090,12 @@ struct TypeInstance<'a> {
 impl<'a> TypeInstance<'a> {
     fn get_name_or_string(&self) -> Result<&'a str, HLLErrorItem> {
         match &self.instance_value {
+            TypeValue::Str("this") => {
+                // Always convert "this" into its typeinfo.  This is to support the usage of
+                // "this" in domains and resources.  Other instances of TypeValue::Str are in
+                // function calls and should be left as the bound names for cil to handle
+                Ok(&self.type_info.name)
+            }
             TypeValue::Str(s) => Ok(&s),
             TypeValue::Vector(v) => Err(HLLErrorItem::Compile(HLLCompileError {
                 filename: "TODO".to_string(),
@@ -1292,16 +1298,14 @@ impl From<&ValidatedCall> for sexp::Sexp {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::TypeDecl;
-    use crate::internal_rep::TypeInfo;
     use crate::sexp_internal;
 
     #[test]
     fn generate_cil_for_av_rule_test() {
         let cil_sexp = Sexp::from(&AvRule {
             av_rule_flavor: AvRuleFlavor::Allow,
-            source: &TypeInfo::new(&TypeDecl::new("foo".to_string(), Vec::new(), Vec::new())),
-            target: &TypeInfo::new(&TypeDecl::new("bar".to_string(), Vec::new(), Vec::new())),
+            source: "foo",
+            target: "bar",
             class: "file",
             perms: vec!["read", "getattr"],
         });

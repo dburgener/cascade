@@ -5,5 +5,5 @@ resource my_file {
 }
 
 domain my_domain {
-	my_file.read(my_domain); // TODO: support 'this' as default argument
+	my_file.read(this); // TODO: support 'this' as default argument
 }
