@@ -37,8 +37,26 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
         ));
     }
 
-    // TODO: Combine multiple files
-    let cil_tree = compile::compile(&policies[0])?;
+    // Do once
+    let classlist = obj_class::make_classlist();
+    let mut type_map = compile::get_built_in_types_map();
+
+    // Do per file
+    compile::extend_type_map(&policies[0], &mut type_map);
+    // Do per file
+    let mut func_map = compile::build_func_map(&policies[0].policy.exprs, &type_map, None, &policies[0].file)?;
+
+    // Do once
+    let func_map_copy = func_map.clone(); // In order to read function info while mutating
+    compile::validate_functions(
+        &mut func_map,
+        &type_map,
+        &classlist,
+        &func_map_copy,
+    )?;
+
+    // This needs more splitting
+    let cil_tree = compile::compile_rules_one_file(&policies[0], &classlist, &type_map, func_map)?;
 
     Ok(generate_cil(cil_tree))
 }
