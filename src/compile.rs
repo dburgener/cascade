@@ -12,20 +12,31 @@ use crate::internal_rep::{
 
 use codespan_reporting::files::SimpleFile;
 
-pub fn compile_rules_one_file<'a>(p: &'a PolicyFile, classlist: &'a ClassList<'a>, type_map: &HashMap<String, TypeInfo>, func_map: HashMap<String, FunctionInfo<'a>>) -> Result<Vec<sexp::Sexp>, HLLErrors> {
-    let type_decl_list = organize_type_map(&type_map)?;
-
-    let policy_rules = do_rules_pass(
+pub fn compile_rules_one_file<'a>(
+    p: &'a PolicyFile,
+    classlist: &'a ClassList<'a>,
+    type_map: &'a HashMap<String, TypeInfo>,
+    func_map: &'a HashMap<String, FunctionInfo<'a>>,
+) -> Result<Vec<ValidatedStatement<'a>>, HLLErrors> {
+    Ok(do_rules_pass(
         &p.policy.exprs,
         &type_map,
         &func_map,
         &classlist,
         None,
         &p.file,
-    )?;
+    )?)
+}
 
+pub fn generate_sexp(
+    type_map: &TypeMap,
+    classlist: &ClassList,
+    policy_rules: Vec<ValidatedStatement>,
+    func_map: &HashMap<String, FunctionInfo>,
+) -> Result<Vec<sexp::Sexp>, HLLErrors> {
+    let type_decl_list = organize_type_map(type_map)?;
     // TODO: The rest of compilation
-    let cil_types = type_list_to_sexp(type_decl_list, &type_map);
+    let cil_types = type_list_to_sexp(type_decl_list, type_map);
     let headers = generate_cil_headers(&classlist);
     let cil_rules = rules_list_to_sexp(policy_rules);
     let cil_macros = func_map_to_sexp(func_map)?;
@@ -430,7 +441,7 @@ fn generate_sids<'a>(
     ]
 }
 
-fn func_map_to_sexp(funcs: HashMap<String, FunctionInfo>) -> Result<Vec<sexp::Sexp>, HLLErrors> {
+fn func_map_to_sexp(funcs: &HashMap<String, FunctionInfo>) -> Result<Vec<sexp::Sexp>, HLLErrors> {
     let mut ret = Vec::new();
     let mut errors = HLLErrors::new();
     for f in funcs.values() {
