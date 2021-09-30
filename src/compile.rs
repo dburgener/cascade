@@ -6,7 +6,7 @@ use crate::ast::{Declaration, Expression, Policy};
 use crate::constants;
 use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
 use crate::internal_rep::{
-    generate_sid_rules, ClassList, Context, FunctionArgument, FunctionInfo, Sid, TypeInfo,
+    generate_sid_rules, ClassList, Context, FunctionArgument, FunctionInfo, Sid, TypeInfo, TypeMap,
     ValidatedStatement,
 };
 use crate::obj_class::make_classlist;
@@ -70,7 +70,7 @@ fn generate_cil_headers(classlist: &ClassList) -> Vec<sexp::Sexp> {
 }
 
 // TODO: Refactor below nearly identical functions to eliminate redundant code
-fn build_type_map(p: &Policy) -> HashMap<String, TypeInfo> {
+fn build_type_map(p: &Policy) -> TypeMap {
     let mut decl_map = get_built_in_types_map();
     // TODO: This only allows declarations at the top level.
     // Nested declarations are legal, but auto-associate with the parent, so they'll need special
@@ -89,7 +89,7 @@ fn build_type_map(p: &Policy) -> HashMap<String, TypeInfo> {
     decl_map
 }
 
-fn get_built_in_types_map() -> HashMap<String, TypeInfo> {
+fn get_built_in_types_map() -> TypeMap {
     let mut built_in_types = HashMap::new();
     let list_coercions = constants::BUILT_IN_TYPES.iter().map(|t| *t == "perm");
 
@@ -132,7 +132,7 @@ fn get_built_in_types_map() -> HashMap<String, TypeInfo> {
 
 fn build_func_map<'a>(
     exprs: &'a Vec<Expression>,
-    types: &'a HashMap<String, TypeInfo>,
+    types: &'a TypeMap,
     parent_type: Option<&'a TypeInfo>,
 ) -> Result<HashMap<String, FunctionInfo<'a>>, HLLErrors> {
     let mut decl_map = HashMap::new();
@@ -171,7 +171,7 @@ fn build_func_map<'a>(
 // Mutate hash map to set the validated body
 fn validate_functions<'a, 'b>(
     functions: &'a mut HashMap<String, FunctionInfo<'b>>,
-    types: &'b HashMap<String, TypeInfo>,
+    types: &'b TypeMap,
     class_perms: &'b ClassList,
     functions_copy: &'b HashMap<String, FunctionInfo<'b>>,
 ) -> Result<(), HLLErrors> {
@@ -192,7 +192,7 @@ fn validate_functions<'a, 'b>(
 // when called from another function.
 fn find_cycles_or_bad_types(
     type_to_check: &str,
-    types: &HashMap<String, TypeInfo>,
+    types: &TypeMap,
     visited_types: HashSet<&str>,
 ) -> Result<(), HLLErrors> {
     let mut ret = HLLErrors::new();
@@ -229,10 +229,7 @@ fn find_cycles_or_bad_types(
     ret.into_result(())
 }
 
-fn generate_type_no_parent_errors(
-    missed_types: HashSet<&String>,
-    types: &HashMap<String, TypeInfo>,
-) -> HLLErrors {
+fn generate_type_no_parent_errors(missed_types: HashSet<&String>, types: &TypeMap) -> HLLErrors {
     let mut ret = HLLErrors::new();
     for t in &missed_types {
         match find_cycles_or_bad_types(&t, types, HashSet::new()) {
@@ -253,9 +250,7 @@ fn generate_type_no_parent_errors(
 // 1. All types have at least one parent
 // 2. All listed parents are themselves types (or "domain" or "resource")
 // 3. No cycles exist
-fn organize_type_map<'a>(
-    types: &'a HashMap<String, TypeInfo>,
-) -> Result<Vec<&'a TypeInfo>, HLLErrors> {
+fn organize_type_map<'a>(types: &'a TypeMap) -> Result<Vec<&'a TypeInfo>, HLLErrors> {
     let mut tmp_types: HashMap<&String, &TypeInfo> = types.iter().collect();
 
     let mut out: Vec<&TypeInfo> = Vec::new();
@@ -298,7 +293,7 @@ fn organize_type_map<'a>(
 
 fn do_rules_pass<'a>(
     exprs: &'a Vec<Expression>,
-    types: &'a HashMap<String, TypeInfo>,
+    types: &'a TypeMap,
     funcs: &'a HashMap<String, FunctionInfo>,
     class_perms: &ClassList<'a>,
     parent_type: Option<&'a TypeInfo>,
@@ -342,10 +337,7 @@ fn do_rules_pass<'a>(
     errors.into_result(ret)
 }
 
-fn type_list_to_sexp(
-    type_list: Vec<&TypeInfo>,
-    type_map: &HashMap<String, TypeInfo>,
-) -> Vec<sexp::Sexp> {
+fn type_list_to_sexp(type_list: Vec<&TypeInfo>, type_map: &TypeMap) -> Vec<sexp::Sexp> {
     let mut ret = Vec::new();
     for t in type_list {
         match Option::<sexp::Sexp>::from(t) {

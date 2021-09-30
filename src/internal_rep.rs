@@ -13,6 +13,8 @@ const DEFAULT_OBJECT_ROLE: &str = "object_r";
 const DEFAULT_DOMAIN_ROLE: &str = "system_r";
 const DEFAULT_MLS: &str = "s0";
 
+pub type TypeMap = HashMap<String, TypeInfo>;
+
 #[derive(Clone, Debug)]
 pub struct TypeInfo {
     pub name: String,
@@ -40,11 +42,7 @@ impl TypeInfo {
         }
     }
 
-    pub fn is_child_or_actual_type(
-        &self,
-        target: &TypeInfo,
-        types: &HashMap<String, TypeInfo>,
-    ) -> bool {
+    pub fn is_child_or_actual_type(&self, target: &TypeInfo, types: &TypeMap) -> bool {
         if self.name == target.name {
             return true;
         }
@@ -87,7 +85,7 @@ impl TypeInfo {
         }
     }
 
-    pub fn is_resource(&self, types: &HashMap<String, TypeInfo>) -> bool {
+    pub fn is_resource(&self, types: &TypeMap) -> bool {
         let resource_ti = match types.get(&"resource".to_string()) {
             Some(ti) => ti,
             None => return false,
@@ -135,7 +133,7 @@ fn arg_in_context<'a>(
 
 fn typeinfo_from_string<'a>(
     s: &str,
-    types: &'a HashMap<String, TypeInfo>,
+    types: &'a TypeMap,
     class_perms: &ClassList,
 ) -> Option<&'a TypeInfo> {
     if class_perms.is_class(s) {
@@ -149,7 +147,7 @@ fn typeinfo_from_string<'a>(
 
 fn argument_to_typeinfo<'a>(
     a: &ArgForValidation<'_>,
-    types: &'a HashMap<String, TypeInfo>,
+    types: &'a TypeMap,
     class_perms: &ClassList,
     context: Option<&Vec<FunctionArgument<'a>>>,
 ) -> Result<&'a TypeInfo, HLLErrorItem> {
@@ -171,7 +169,7 @@ fn argument_to_typeinfo<'a>(
 
 fn argument_to_typeinfo_vec<'a>(
     arg: &Vec<&str>,
-    types: &'a HashMap<String, TypeInfo>,
+    types: &'a TypeMap,
     class_perms: &ClassList,
     context: Option<&Vec<FunctionArgument<'a>>>,
 ) -> Result<Vec<&'a TypeInfo>, HLLErrorItem> {
@@ -503,7 +501,7 @@ impl<'a> ClassList<'a> {
 // TODO: This can be converted into a TryFrom for more compile time gaurantees
 fn call_to_av_rule<'a>(
     c: &'a FuncCall,
-    types: &'a HashMap<String, TypeInfo>,
+    types: &'a TypeMap,
     class_perms: &ClassList,
     args: Option<&Vec<FunctionArgument<'a>>>,
 ) -> Result<AvRule<'a>, HLLErrors> {
@@ -659,7 +657,7 @@ impl From<&FileContextRule<'_>> for sexp::Sexp {
 
 fn call_to_fc_rules<'a>(
     c: &'a FuncCall,
-    types: &'a HashMap<String, TypeInfo>,
+    types: &'a TypeMap,
     class_perms: &ClassList,
     args: Option<&Vec<FunctionArgument<'a>>>,
 ) -> Result<Vec<FileContextRule<'a>>, HLLErrors> {
@@ -741,7 +739,7 @@ impl From<&DomtransRule<'_>> for sexp::Sexp {
 
 fn call_to_domain_transition<'a>(
     c: &'a FuncCall,
-    types: &'a HashMap<String, TypeInfo>,
+    types: &'a TypeMap,
     class_perms: &ClassList,
     args: Option<&Vec<FunctionArgument<'a>>>,
 ) -> Result<DomtransRule<'a>, HLLErrors> {
@@ -811,7 +809,7 @@ pub struct FunctionInfo<'a> {
 impl<'a> FunctionInfo<'a> {
     pub fn new(
         funcdecl: &'a FuncDecl,
-        types: &'a HashMap<String, TypeInfo>,
+        types: &'a TypeMap,
         parent_type: Option<&'a TypeInfo>,
     ) -> Result<FunctionInfo<'a>, HLLErrors> {
         let mut args = Vec::new();
@@ -842,7 +840,7 @@ impl<'a> FunctionInfo<'a> {
     pub fn validate_body(
         &mut self,
         functions: &'a HashMap<String, FunctionInfo>,
-        types: &'a HashMap<String, TypeInfo>,
+        types: &'a TypeMap,
         class_perms: &'a ClassList,
     ) -> Result<(), HLLErrors> {
         let mut new_body = Vec::new();
@@ -900,10 +898,7 @@ pub struct FunctionArgument<'a> {
 }
 
 impl<'a> FunctionArgument<'a> {
-    pub fn new(
-        declared_arg: &DeclaredArgument,
-        types: &'a HashMap<String, TypeInfo>,
-    ) -> Result<Self, HLLErrorItem> {
+    pub fn new(declared_arg: &DeclaredArgument, types: &'a TypeMap) -> Result<Self, HLLErrorItem> {
         let param_type = match types.get(&declared_arg.param_type) {
             Some(ti) => ti,
             None => {
@@ -960,7 +955,7 @@ impl<'a> ValidatedStatement<'a> {
     pub fn new(
         statement: &'a Statement,
         functions: &HashMap<String, FunctionInfo>,
-        types: &'a HashMap<String, TypeInfo>,
+        types: &'a TypeMap,
         class_perms: &ClassList<'a>,
         args: &Vec<FunctionArgument<'a>>,
         parent_type: Option<&TypeInfo>,
@@ -1040,7 +1035,7 @@ impl ValidatedCall {
     fn new(
         call: &FuncCall,
         functions: &HashMap<String, FunctionInfo>,
-        types: &HashMap<String, TypeInfo>,
+        types: &TypeMap,
         class_perms: &ClassList,
         parent_args: Option<&Vec<FunctionArgument>>,
     ) -> Result<ValidatedCall, HLLErrors> {
@@ -1140,7 +1135,7 @@ impl<'a> TypeInstance<'a> {
 fn validate_arguments<'a>(
     call: &'a FuncCall,
     function_args: &Vec<FunctionArgument>,
-    types: &'a HashMap<String, TypeInfo>,
+    types: &'a TypeMap,
     class_perms: &ClassList,
     parent_args: Option<&Vec<FunctionArgument<'a>>>,
 ) -> Result<Vec<TypeInstance<'a>>, HLLErrors> {
@@ -1215,7 +1210,7 @@ impl<'a> ArgForValidation<'a> {
 fn validate_argument<'a>(
     arg: ArgForValidation<'a>,
     target_argument: &FunctionArgument,
-    types: &'a HashMap<String, TypeInfo>,
+    types: &'a TypeMap,
     class_perms: &ClassList,
     args: Option<&Vec<FunctionArgument<'a>>>,
 ) -> Result<TypeInstance<'a>, HLLErrorItem> {
