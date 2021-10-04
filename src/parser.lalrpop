@@ -1,4 +1,4 @@
-use crate::ast::{Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, Annotations, Virtualable, FuncCall, DeclaredArgument};
+use crate::ast::{HLLString, Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, Annotations, Virtualable, FuncCall, DeclaredArgument};
 
 grammar;
 
@@ -44,9 +44,9 @@ Decl: Declaration = {
 TypeDecl: Box<TypeDecl> = {
 	<dr:BuiltInType> <n:Symbol> <i:InheritList?> "{" <mut v:Expr*> "}" => {
 		let inherits = match i {
-			None => vec![dr.to_string()],
+			None => vec![dr],
 			Some(mut i) => {
-				i.push(dr.to_string());
+				i.push(dr);
 				i
 			}
 		};
@@ -55,13 +55,13 @@ TypeDecl: Box<TypeDecl> = {
 	},
 }
 
-InheritList: Vec<String> = {
+InheritList: Vec<HLLString> = {
 	"inherits" <Comma<Symbol>>,
 }
 
-BuiltInType: String = {
-	"domain" => <>.to_string(),
-	"resource" => <>.to_string(),
+BuiltInType: HLLString = {
+	<start: @L> <s: "domain"> <end: @R> => HLLString::new(s.to_string(), start..end),
+	<start: @L> <s: "resource"> <end: @R> => HLLString::new(s.to_string(), start..end),
 }
 
 FuncDecl: Box<FuncDecl> = {
@@ -83,12 +83,12 @@ Ann: Annotation = {
 	"@" <s:Symbol> => Annotation {name: s},
 }
 
-Symbol: String = {
-	r"[a-zA-Z_]+"  => <>.to_string(),
+Symbol: HLLString = {
+	<start: @L> <s: r"[a-zA-Z_]+"> <end: @R>  => HLLString::new(s.to_string(), start..end),
 	BuiltInType
 }
 
-List: Vec<String> = {
+List: Vec<HLLString> = {
 	"[" <Symbol+> "]"
 }
 
@@ -98,8 +98,8 @@ Arg: Argument = {
 	Quoted_String => Argument::Quote(<>),
 }
 
-Quoted_String: String = {
-	r#""[^"]*""# => <>.to_string(),
+Quoted_String: HLLString = {
+	<start: @L> <s: r#""[^"]*""#> <end: @R> => HLLString::new(s.to_string(), start..end),
 }
 
 // lexing precedence

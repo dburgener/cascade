@@ -11,14 +11,40 @@ use std::ops::Range;
 
 #[derive(Clone, Debug)]
 pub struct HLLCompileError {
-    pub filename: String,
-    pub lineno: u32,
-    pub msg: String,
+    pub diagnostic: Diagnostic<()>,
+    pub file: SimpleFile<String, String>,
 }
 
 impl fmt::Display for HLLCompileError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}:{} {}", self.filename, self.lineno, self.msg)
+        //write!(f, "{}:{} {}", self.filename, self.lineno, self.msg)
+        write!(f, "{}", self.diagnostic.message)
+    }
+}
+
+impl HLLCompileError {
+    pub fn new(
+        msg: &str,
+        file: &SimpleFile<String, String>,
+        range: Option<Range<usize>>,
+        help: &str,
+    ) -> Self {
+        let diagnostic = Diagnostic::error().with_message(msg);
+
+        let diagnostic = match range {
+            None => diagnostic,
+            Some(r) => diagnostic.with_labels(vec![Label::primary((), r).with_message(help)]),
+        };
+        HLLCompileError {
+            diagnostic: diagnostic,
+            file: file.clone(),
+        }
+    }
+    pub fn print_diagnostic(&self) {
+        let writer = StandardStream::stderr(ColorChoice::Auto);
+        let config = term::Config::default();
+        // Ignores print errors.
+        let _ = term::emit(&mut writer.lock(), &config, &self.file, &self.diagnostic);
     }
 }
 
@@ -139,6 +165,20 @@ impl fmt::Display for HLLErrorItem {
             HLLErrorItem::Parse(e) => write!(f, "Parsing Error: {}", e),
             HLLErrorItem::Internal(e) => write!(f, "Internal Error: {}", e),
             HLLErrorItem::IO(e) => write!(f, "IO Error: {}", e),
+        }
+    }
+}
+
+impl HLLErrorItem {
+    pub fn make_compile_or_internal_error(
+        msg: &str,
+        file: Option<&SimpleFile<String, String>>,
+        range: Option<Range<usize>>,
+        help: &str,
+    ) -> Self {
+        match file {
+            Some(f) => HLLErrorItem::Compile(HLLCompileError::new(msg, f, range, help)),
+            None => HLLErrorItem::Internal(HLLInternalError {}),
         }
     }
 }

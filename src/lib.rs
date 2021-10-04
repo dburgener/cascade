@@ -10,13 +10,14 @@ mod internal_rep;
 mod obj_class;
 mod sexp_internal;
 
+use codespan_reporting::files::SimpleFile;
 use error::{HLLErrorItem, HLLErrors};
 use lalrpop_util::ParseError;
 
 lalrpop_mod!(pub parser);
 
 pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HLLErrors> {
-    let mut policies: Vec<Box<ast::Policy>> = Vec::new();
+    let mut policies: Vec<ast::PolicyFile> = Vec::new();
     // TODO: collect errors and return an HLLErrors at the end of the loop
     for f in input_files {
         let policy_str =
@@ -30,11 +31,14 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
             }
         };
 
-        policies.push(p);
+        policies.push(ast::PolicyFile::new(
+            *p,
+            SimpleFile::new(f.into(), policy_str.clone()),
+        ));
     }
 
     // TODO: Combine multiple files
-    let cil_tree = compile::compile(&*policies[0])?;
+    let cil_tree = compile::compile(&policies[0])?;
 
     Ok(generate_cil(cil_tree))
 }
@@ -314,8 +318,10 @@ mod tests {
             Err(e) => {
                 for error in e {
                     assert!(
-                        matches!(error, HLLErrorItem::Compile(HLLCompileError { msg: message, .. })
-                                     if message.contains("File context statements are only allowed in resources"))
+                        matches!(error, HLLErrorItem::Compile(HLLCompileError { diagnostic: Diagnostic {
+                            message: msg, .. },
+                            .. })
+                                     if msg.contains("file_context() calls are only allowed in resources"))
                     );
                 }
             }
