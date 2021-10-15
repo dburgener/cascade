@@ -135,7 +135,15 @@ mod tests {
 
     #[test]
     fn attributes_test() {
-        valid_policy_test("attribute.hll", &["attribute user_type", "type staff"]);
+        valid_policy_test(
+            "attribute.hll",
+            &[
+                "attribute user_type",
+                "type staff",
+                "typeattributeset user_type (staff)",
+                "typeattributeset domain (user_type)",
+            ],
+        );
     }
 
     #[test]

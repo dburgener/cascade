@@ -401,10 +401,16 @@ fn get_rules_vec_for_type(ti: &TypeInfo, s: sexp::Sexp, type_map: &TypeMap) -> V
         ]));
     }
 
+    for i in &ti.inherits {
+        ret.push(list(&[
+            atom_s("typeattributeset"),
+            atom_s(i.as_ref()),
+            list(&[atom_s(&ti.name.as_ref())]),
+        ]));
+    }
+
     ret
 }
-
-
 
 fn rules_list_to_sexp<'a, T>(rules: T) -> Vec<sexp::Sexp>
 where
