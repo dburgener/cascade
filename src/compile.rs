@@ -9,30 +9,34 @@ use crate::internal_rep::{
     generate_sid_rules, ClassList, Context, FunctionArgument, FunctionInfo, Sid, TypeInfo, TypeMap,
     ValidatedStatement,
 };
-use crate::obj_class::make_classlist;
 
 use codespan_reporting::files::SimpleFile;
 
-pub fn compile(p: &PolicyFile) -> Result<Vec<sexp::Sexp>, HLLErrors> {
-    let classlist = make_classlist();
-    let type_map = build_type_map(p);
-    let mut func_map = build_func_map(&p.policy.exprs, &type_map, None, &p.file)?;
-    let func_map_copy = func_map.clone(); // In order to read function info while mutating
-    validate_functions(&mut func_map, &type_map, &classlist, &func_map_copy)?;
-
-    let type_decl_list = organize_type_map(&type_map)?;
-
-    let policy_rules = do_rules_pass(
+pub fn compile_rules_one_file<'a>(
+    p: &'a PolicyFile,
+    classlist: &'a ClassList<'a>,
+    type_map: &'a HashMap<String, TypeInfo>,
+    func_map: &'a HashMap<String, FunctionInfo<'a>>,
+) -> Result<Vec<ValidatedStatement<'a>>, HLLErrors> {
+    Ok(do_rules_pass(
         &p.policy.exprs,
         &type_map,
         &func_map,
         &classlist,
         None,
         &p.file,
-    )?;
+    )?)
+}
 
+pub fn generate_sexp(
+    type_map: &TypeMap,
+    classlist: &ClassList,
+    policy_rules: Vec<ValidatedStatement>,
+    func_map: &HashMap<String, FunctionInfo>,
+) -> Result<Vec<sexp::Sexp>, HLLErrors> {
+    let type_decl_list = organize_type_map(type_map)?;
     // TODO: The rest of compilation
-    let cil_types = type_list_to_sexp(type_decl_list, &type_map);
+    let cil_types = type_list_to_sexp(type_decl_list, type_map);
     let headers = generate_cil_headers(&classlist);
     let cil_rules = rules_list_to_sexp(policy_rules);
     let cil_macros = func_map_to_sexp(func_map)?;
@@ -79,8 +83,7 @@ fn generate_cil_headers(classlist: &ClassList) -> Vec<sexp::Sexp> {
 }
 
 // TODO: Refactor below nearly identical functions to eliminate redundant code
-fn build_type_map(p: &PolicyFile) -> TypeMap {
-    let mut decl_map = get_built_in_types_map();
+pub fn extend_type_map(p: &PolicyFile, type_map: &mut TypeMap) {
     // TODO: This only allows declarations at the top level.
     // Nested declarations are legal, but auto-associate with the parent, so they'll need special
     // handling when association is implemented
@@ -91,16 +94,14 @@ fn build_type_map(p: &PolicyFile) -> TypeMap {
         };
         match d {
             Declaration::Type(t) => {
-                decl_map.insert(t.name.to_string(), TypeInfo::new(&**t, &p.file))
+                type_map.insert(t.name.to_string(), TypeInfo::new(&**t, &p.file))
             }
             Declaration::Func(_) => continue,
         };
     }
-
-    decl_map
 }
 
-fn get_built_in_types_map() -> TypeMap {
+pub fn get_built_in_types_map() -> TypeMap {
     let mut built_in_types = HashMap::new();
     let list_coercions = constants::BUILT_IN_TYPES.iter().map(|t| *t == "perm");
 
@@ -144,7 +145,7 @@ fn get_built_in_types_map() -> TypeMap {
     built_in_types
 }
 
-fn build_func_map<'a>(
+pub fn build_func_map<'a>(
     exprs: &'a Vec<Expression>,
     types: &'a TypeMap,
     parent_type: Option<&'a TypeInfo>,
@@ -185,7 +186,7 @@ fn build_func_map<'a>(
 }
 
 // Mutate hash map to set the validated body
-fn validate_functions<'a, 'b>(
+pub fn validate_functions<'a, 'b>(
     functions: &'a mut HashMap<String, FunctionInfo<'b>>,
     types: &'b TypeMap,
     class_perms: &'b ClassList,
@@ -440,7 +441,7 @@ fn generate_sids<'a>(
     ]
 }
 
-fn func_map_to_sexp(funcs: HashMap<String, FunctionInfo>) -> Result<Vec<sexp::Sexp>, HLLErrors> {
+fn func_map_to_sexp(funcs: &HashMap<String, FunctionInfo>) -> Result<Vec<sexp::Sexp>, HLLErrors> {
     let mut ret = Vec::new();
     let mut errors = HLLErrors::new();
     for f in funcs.values() {
@@ -459,7 +460,7 @@ mod tests {
     use crate::internal_rep::TypeInfo;
 
     #[test]
-    fn build_type_map_test() {
+    fn extend_type_map_test() {
         let mut exprs = Vec::new();
         exprs.push(Expression::Decl(Declaration::Type(Box::new(
             TypeDecl::new(
@@ -470,7 +471,8 @@ mod tests {
         ))));
         let p = Policy::new(exprs);
         let pf = PolicyFile::new(p, SimpleFile::new(String::new(), String::new()));
-        let types = build_type_map(&pf);
+        let mut types = get_built_in_types_map();
+        extend_type_map(&pf, &mut types);
         match types.get("foo") {
             Some(foo) => assert_eq!(foo.name, "foo"),
             None => panic!("Foo is not in hash map"),

@@ -10,6 +10,8 @@ mod internal_rep;
 mod obj_class;
 mod sexp_internal;
 
+use std::collections::HashMap;
+
 use codespan_reporting::files::SimpleFile;
 use error::{HLLErrorItem, HLLErrors};
 use lalrpop_util::ParseError;
@@ -37,8 +39,35 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
         ));
     }
 
-    // TODO: Combine multiple files
-    let cil_tree = compile::compile(&policies[0])?;
+    // Generic initialization
+    let classlist = obj_class::make_classlist();
+    let mut type_map = compile::get_built_in_types_map();
+    let mut func_map = HashMap::new();
+    let mut policy_rules = Vec::new();
+
+    // Collect all type declarations
+    for p in &policies {
+        compile::extend_type_map(p, &mut type_map);
+    }
+
+    // Collect all function declarations
+    for p in &policies {
+        func_map.extend(
+            compile::build_func_map(&p.policy.exprs, &type_map, None, &p.file)?.into_iter(),
+        );
+    }
+
+    // Validate all functions
+    let func_map_copy = func_map.clone(); // In order to read function info while mutating
+    compile::validate_functions(&mut func_map, &type_map, &classlist, &func_map_copy)?;
+
+    for p in &policies {
+        policy_rules.extend(
+            compile::compile_rules_one_file(&p, &classlist, &type_map, &func_map)?.into_iter(),
+        );
+    }
+
+    let cil_tree = compile::generate_sexp(&type_map, &classlist, policy_rules, &func_map)?;
 
     Ok(generate_cil(cil_tree))
 }
@@ -203,6 +232,28 @@ mod tests {
                 ()
             }
             Err(e) => panic!("Makelist compilation failed with {:?}", e),
+        }
+    }
+
+    #[test]
+    fn multifiles_test() {
+        // valid_policy_test() is somewhat tightly wound to the one file case, so we'll code our
+        // own copy here
+        let policy_files = vec![
+            [POLICIES_DIR, "multifile1.hll"].concat(),
+            [POLICIES_DIR, "multifile2.hll"].concat(),
+        ];
+        let policy_files: Vec<&str> = policy_files.iter().map(|s| s as &str).collect();
+        let mut policy_files_reversed = policy_files.clone();
+        policy_files_reversed.reverse();
+
+        for files in [policy_files, policy_files_reversed] {
+            match compile_system_policy(files) {
+                Ok(p) => {
+                    assert!(p.contains("(call foo-read"));
+                }
+                Err(e) => panic!("Multi file compilation failed with {:?}", e),
+            }
         }
     }
 
