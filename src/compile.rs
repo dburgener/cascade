@@ -377,26 +377,34 @@ fn type_list_to_sexp(type_list: Vec<&TypeInfo>, type_map: &TypeMap) -> Vec<sexp:
     for t in type_list {
         match Option::<sexp::Sexp>::from(t) {
             Some(s) => {
-                ret.push(s);
-                if !t.is_virtual {
-                    let role_assoc = if t.is_resource(type_map) {
-                        "object_r"
-                    } else {
-                        "system_r"
-                    };
-
-                    ret.push(list(&[
-                        atom_s("roletype"),
-                        atom_s(role_assoc),
-                        atom_s(&t.name.as_ref()),
-                    ]));
-                }
+                ret.extend(get_rules_vec_for_type(t, s, type_map));
             }
             None => (),
         }
     }
     ret
 }
+
+fn get_rules_vec_for_type(ti: &TypeInfo, s: sexp::Sexp, type_map: &TypeMap) -> Vec<sexp::Sexp> {
+    let mut ret = vec![s];
+    if !ti.is_virtual {
+        let role_assoc = if ti.is_resource(type_map) {
+            "object_r"
+        } else {
+            "system_r"
+        };
+
+        ret.push(list(&[
+            atom_s("roletype"),
+            atom_s(role_assoc),
+            atom_s(&ti.name.as_ref()),
+        ]));
+    }
+
+    ret
+}
+
+
 
 fn rules_list_to_sexp<'a, T>(rules: T) -> Vec<sexp::Sexp>
 where
