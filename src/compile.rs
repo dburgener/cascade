@@ -85,7 +85,7 @@ fn generate_cil_headers(classlist: &ClassList) -> Vec<sexp::Sexp> {
 }
 
 // TODO: Refactor below nearly identical functions to eliminate redundant code
-pub fn extend_type_map(p: &PolicyFile, type_map: &mut TypeMap) {
+pub fn extend_type_map(p: &PolicyFile, type_map: &mut TypeMap) -> Result<(), HLLErrors> {
     // TODO: This only allows declarations at the top level.
     // Nested declarations are legal, but auto-associate with the parent, so they'll need special
     // handling when association is implemented
@@ -96,11 +96,12 @@ pub fn extend_type_map(p: &PolicyFile, type_map: &mut TypeMap) {
         };
         match d {
             Declaration::Type(t) => {
-                type_map.insert(t.name.to_string(), TypeInfo::new(&**t, &p.file))
+                type_map.insert(t.name.to_string(), TypeInfo::new(&**t, &p.file)?)
             }
             Declaration::Func(_) => continue,
         };
     }
+    Ok(())
 }
 
 pub fn get_built_in_types_map() -> TypeMap {
@@ -474,7 +475,7 @@ mod tests {
         let p = Policy::new(exprs);
         let pf = PolicyFile::new(p, SimpleFile::new(String::new(), String::new()));
         let mut types = get_built_in_types_map();
-        extend_type_map(&pf, &mut types);
+        extend_type_map(&pf, &mut types).unwrap();
         match types.get("foo") {
             Some(foo) => assert_eq!(foo.name, "foo"),
             None => panic!("Foo is not in hash map"),
@@ -495,7 +496,8 @@ mod tests {
                 Vec::new(),
             ),
             &SimpleFile::new(String::new(), String::new()),
-        );
+        )
+        .unwrap();
 
         let bar_type = TypeInfo::new(
             &TypeDecl::new(
@@ -504,7 +506,8 @@ mod tests {
                 Vec::new(),
             ),
             &SimpleFile::new(String::new(), String::new()),
-        );
+        )
+        .unwrap();
 
         let baz_type = TypeInfo::new(
             &TypeDecl::new(
@@ -517,7 +520,8 @@ mod tests {
                 Vec::new(),
             ),
             &SimpleFile::new(String::new(), String::new()),
-        );
+        )
+        .unwrap();
 
         types.insert("foo".to_string(), foo_type);
         types.insert("bar".to_string(), bar_type);

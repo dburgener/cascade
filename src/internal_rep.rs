@@ -32,14 +32,14 @@ pub struct TypeInfo {
 }
 
 impl TypeInfo {
-    pub fn new(td: &TypeDecl, file: &SimpleFile<String, String>) -> TypeInfo {
-        TypeInfo {
+    pub fn new(td: &TypeDecl, file: &SimpleFile<String, String>) -> Result<TypeInfo, HLLErrors> {
+        Ok(TypeInfo {
             name: td.name.clone(),
             inherits: td.inherits.clone(),
             is_virtual: td.is_virtual,
             list_coercion: td.annotations.has_annotation("makelist"),
             declaration_file: Some(file.clone()), // TODO: Turn into reference
-        }
+        })
     }
 
     pub fn make_built_in(name: String, makelist: bool) -> TypeInfo {

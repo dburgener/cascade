@@ -49,7 +49,7 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
 
     // Collect all type declarations
     for p in &policies {
-        compile::extend_type_map(p, &mut type_map);
+        compile::extend_type_map(p, &mut type_map)?;
     }
 
     // Collect all function declarations
