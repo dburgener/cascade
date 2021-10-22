@@ -985,6 +985,7 @@ pub struct FunctionInfo<'a> {
     pub body: Option<Vec<ValidatedStatement<'a>>>,
     pub declaration_file: &'a SimpleFile<String, String>,
     pub hook_type: Option<HookType>,
+    pub decl: &'a FuncDecl,
 }
 
 impl<'a> FunctionInfo<'a> {
@@ -1087,14 +1088,12 @@ impl<'a> FunctionInfo<'a> {
             body: None,
             declaration_file: declaration_file,
             hook_type: hook_type,
+            decl: &funcdecl,
         })
     }
 
     pub fn get_cil_name(&self) -> String {
-        match &self.class {
-            Some(class) => format!("{}-{}", class.name, self.name),
-            None => self.name.clone(),
-        }
+        self.decl.get_cil_name()
     }
 
     pub fn validate_body(
