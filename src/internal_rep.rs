@@ -42,6 +42,8 @@ pub struct TypeInfo {
     pub list_coercion: bool, // Automatically transform single instances of this type to a single element list
     pub declaration_file: Option<SimpleFile<String, String>>, // Built in types have no file
     pub annotations: Vec<AnnotationInfo>,
+    // TODO: replace with Option<&TypeDecl>
+    pub decl: Option<TypeDecl>,
 }
 
 impl TypeInfo {
@@ -54,6 +56,7 @@ impl TypeInfo {
             list_coercion: td.annotations.has_annotation("makelist"),
             declaration_file: Some(file.clone()), // TODO: Turn into reference
             annotations: check_annotations(&td.annotations)?,
+            decl: Some(td.clone()),
         })
     }
 
@@ -65,6 +68,7 @@ impl TypeInfo {
             list_coercion: makelist,
             declaration_file: None,
             annotations: vec![],
+            decl: None,
         }
     }
 

@@ -133,7 +133,7 @@ impl Policy {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Expression {
     Decl(Declaration),
     Stmt(Statement),
@@ -159,7 +159,7 @@ pub trait Virtualable {
     fn set_virtual(&mut self);
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Declaration {
     Type(Box<TypeDecl>),
     Func(Box<FuncDecl>),
@@ -183,7 +183,7 @@ impl Declaration {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TypeDecl {
     pub name: HLLString,
     pub inherits: Vec<HLLString>,
@@ -217,7 +217,7 @@ impl Virtualable for TypeDecl {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct FuncDecl {
     pub class_name: Option<HLLString>,
     pub name: HLLString,
@@ -239,7 +239,7 @@ impl FuncDecl {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Statement {
     Call(Box<FuncCall>),
 }
@@ -258,7 +258,7 @@ pub enum BuiltIns {
     DomainTransition,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct FuncCall {
     pub class_name: Option<HLLString>,
     pub name: HLLString,
@@ -322,7 +322,7 @@ impl FuncCall {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Annotation {
     pub name: HLLString,
     pub arguments: Vec<Argument>,
@@ -342,7 +342,7 @@ impl Annotation {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Annotations {
     pub annotations: Vec<Annotation>,
 }
@@ -368,7 +368,7 @@ impl Annotations {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Argument {
     Var(HLLString),
     List(Vec<HLLString>),
@@ -385,7 +385,7 @@ impl fmt::Display for Argument {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct DeclaredArgument {
     pub param_type: HLLString,
     pub is_list_param: bool,
