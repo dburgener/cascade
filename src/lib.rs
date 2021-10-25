@@ -14,6 +14,8 @@ mod sexp_internal;
 
 use std::collections::HashMap;
 
+use ast::{Policy, PolicyFile};
+
 use codespan_reporting::files::SimpleFile;
 use error::{HLLErrorItem, HLLErrors};
 use lalrpop_util::ParseError;
@@ -50,6 +52,27 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
     // Collect all type declarations
     for p in &policies {
         compile::extend_type_map(p, &mut type_map)?;
+    }
+
+    // Applies annotations
+    {
+        let mut tmp_func_map = HashMap::new();
+
+        // Collect all function declarations
+        for p in &policies {
+            tmp_func_map.extend(
+                compile::build_func_map(&p.policy.exprs, &type_map, None, &p.file)?.into_iter(),
+            );
+        }
+
+        // TODO: Validate original functions before adding synthetic ones to avoid confusing errors for users.
+
+        let pf = PolicyFile::new(
+            Policy::new(compile::apply_annotations(&type_map, &tmp_func_map)?),
+            SimpleFile::new(String::new(), String::new()),
+        );
+        compile::extend_type_map(&pf, &mut type_map)?;
+        policies.push(pf);
     }
 
     // Collect all function declarations
@@ -394,10 +417,55 @@ mod tests {
         valid_policy_test(
             "associate.hll",
             &[
+                "call bar-bin-hook_associate_from_bin (bar-bin bar)",
+                "call bar-tmp-hook_associate_from_tmp (bar-tmp bar)",
+                "call bar-var-hook_associate_from_var (bar-var bar)",
+                "call baz-bin-hook_associate_from_bin (baz-bin baz)",
+                "call baz-tmp-hook_associate_from_tmp (baz-tmp baz)",
+                "call baz-var-hook_associate_from_var (baz-var baz)",
+                "call foo-tmp-hook_associate_from_tmp (foo-tmp foo)",
+                "call foo-var-hook_associate_from_var (foo-var foo)",
                 "call tmp-hook_associate_from_tmp (tmp foo)",
+                "call tmp-not_a_hook (tmp foo)",
+                "macro bar-bin-hook_associate_from_bin ((type this) (type source)) (allow source tmp (file (read)))",
+                "macro bar-tmp-hook_associate_from_tmp ((type this) (type source)) (allow source tmp (file (read)))",
+                "macro bar-tmp-not_a_hook ((type this) (type source)) (allow source tmp (file (read)))",
+                "macro bar-var-hook_associate_from_var ((type this) (type source)) (allow source tmp (file (read)))",
+                "macro baz-bin-hook_associate_from_bin ((type this) (type source)) (allow source tmp (file (read)))",
+                "macro baz-tmp-hook_associate_from_tmp ((type this) (type source)) (allow source tmp (file (read)))",
+                "macro baz-tmp-not_a_hook ((type this) (type source)) (allow source tmp (file (read)))",
+                "macro baz-var-hook_associate_from_var ((type this) (type source)) (allow source tmp (file (read)))",
                 "macro bin-hook_associate_from_bin ((type this) (type source)) (allow source tmp (file (read)))",
+                "macro foo-tmp-hook_associate_from_tmp ((type this) (type source)) (allow source tmp (file (read)))",
+                "macro foo-tmp-not_a_hook ((type this) (type source)) (allow source tmp (file (read)))",
+                "macro foo-var-hook_associate_from_var ((type this) (type source)) (allow source tmp (file (read)))",
                 "macro tmp-hook_associate_from_tmp ((type this) (type source)) (allow source tmp (file (read)))",
+                "macro tmp-not_a_hook ((type this) (type source)) (allow source tmp (file (read)))",
                 "macro var-hook_associate_from_var ((type this) (type source)) (allow source tmp (file (read)))",
+                "roletype object_r bar-bin",
+                "roletype object_r bar-tmp",
+                "roletype object_r bar-var",
+                "roletype object_r baz-bin",
+                "roletype object_r baz-tmp",
+                "roletype object_r baz-var",
+                "roletype object_r foo-tmp",
+                "roletype object_r foo-var",
+                "type bar-bin",
+                "type bar-tmp",
+                "type bar-var",
+                "type baz-bin",
+                "type baz-tmp",
+                "type baz-var",
+                "type foo-tmp",
+                "type foo-var",
+                "typeattributeset resource (bar-bin)",
+                "typeattributeset resource (bar-tmp)",
+                "typeattributeset resource (bar-var)",
+                "typeattributeset resource (baz-bin)",
+                "typeattributeset resource (baz-tmp)",
+                "typeattributeset resource (baz-var)",
+                "typeattributeset resource (foo-tmp)",
+                "typeattributeset resource (foo-var)",
             ],
         );
     }

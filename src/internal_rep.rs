@@ -25,7 +25,7 @@ pub type TypeMap = HashMap<String, TypeInfo>;
 
 #[derive(Clone, Debug)]
 pub struct HookCallAssociate {
-    resources: Vec<HLLString>,
+    pub resources: Vec<HLLString>,
 }
 
 #[derive(Clone, Debug)]

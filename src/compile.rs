@@ -4,12 +4,14 @@ use sexp::{atom_s, list, Sexp};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 
-use crate::ast::{Declaration, Expression, HLLString, PolicyFile};
+use crate::ast::{
+    Annotations, Argument, Declaration, Expression, FuncCall, HLLString, PolicyFile, Statement,
+};
 use crate::constants;
 use crate::error::{HLLErrorItem, HLLErrors, HLLInternalError};
 use crate::internal_rep::{
-    generate_sid_rules, ClassList, Context, FunctionArgument, FunctionInfo, Sid, TypeInfo, TypeMap,
-    ValidatedStatement,
+    generate_sid_rules, AnnotationInfo, ClassList, Context, FunctionArgument, FunctionInfo,
+    HookCallAssociate, HookType, Sid, TypeInfo, TypeMap, ValidatedStatement,
 };
 
 use codespan_reporting::files::SimpleFile;
@@ -183,6 +185,7 @@ pub fn build_func_map<'a>(
                 )?);
             }
             Declaration::Func(f) => {
+                // FIXME: error out for duplicate entries
                 decl_map.insert(
                     f.get_cil_name().clone(),
                     FunctionInfo::new(&**f, types, parent_type, file)?,
@@ -281,6 +284,185 @@ fn generate_type_no_parent_errors(missed_types: Vec<&TypeInfo>, types: &TypeMap)
     ret
 }
 
+fn interpret_hooks(
+    global_exprs: &mut HashSet<Expression>,
+    local_exprs: &mut HashSet<Expression>,
+    funcs: &HashMap<String, FunctionInfo>,
+    types: &HashMap<String, TypeInfo>,
+    associate: &HookCallAssociate,
+    dom_info: &TypeInfo,
+) -> Result<(), HLLErrors> {
+    // Only allow a set of specific annotation names and strictly check their arguments.
+    // TODO: Add tests to verify these checks.
+    // TODO: Check for duplicate annotations.
+
+    // Find the hooks
+    for func_info in funcs
+        .values()
+        .filter(|f| f.hook_type == Some(HookType::Associate))
+    {
+        // Multiple calls for the same hook and resource are allowed, not sure if it is a good thing.
+        if let Some(class) = func_info.class {
+            if associate.resources.contains(&class.name) {
+                // FIXME: is_resource() doesn't work (e.g. using a resource instead of a domain).
+                if !class.is_resource(types) {
+                    return Err(HLLErrors::from(
+                        HLLErrorItem::make_compile_or_internal_error(
+                            //format!("{} is not a resource in the hook_call annotation for {}", class.name, decl.name)
+                            "not a resource in the hook_call annotation",
+                            None,
+                            None,
+                            "TODO",
+                        ),
+                    ));
+                }
+
+                // Creates a synthetic resource declaration.
+                let mut dup_res_decl = class
+                    .decl
+                    .as_ref()
+                    .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
+                    .clone();
+                let res_name: HLLString = format!("{}-{}", dom_info.name, class.name).into();
+                dup_res_decl.name = res_name.clone();
+                dup_res_decl.annotations = Annotations::new();
+                dup_res_decl
+                    .expressions
+                    .iter_mut()
+                    .for_each(|e| e.set_class_name_if_decl(res_name.clone()));
+                // TODO: Check that it returns true.
+                global_exprs.insert(Expression::Decl(Declaration::Type(Box::new(dup_res_decl))));
+
+                // Creates a synthetic call.
+                let new_call = Expression::Stmt(Statement::Call(Box::new(FuncCall::new(
+                    Some(res_name),
+                    func_info.name.clone().into(),
+                    // TODO: Check (earlier) that annotated functions match this signature.
+                    vec![Argument::Var("this".into())],
+                ))));
+                // TODO: Check that it returns true.
+                local_exprs.insert(new_call);
+            }
+        }
+    }
+    Ok(())
+}
+
+// domain -> related expressions
+type HookCallExprs = HashMap<HLLString, HashSet<Expression>>;
+
+fn interpret_annotations<'a, T>(
+    global_exprs: &mut HashSet<Expression>,
+    hook_call_exprs: &mut HookCallExprs,
+    funcs: &HashMap<String, FunctionInfo>,
+    types: &HashMap<String, TypeInfo>,
+    dom_info: &'a TypeInfo,
+    extra_annotations: T,
+) -> Result<(), HLLErrors>
+where
+    T: Iterator<Item = &'a AnnotationInfo>,
+{
+    use std::collections::hash_map::Entry;
+
+    let local_exprs = match hook_call_exprs.entry(dom_info.name.clone()) {
+        // Ignores already processed domains.
+        Entry::Occupied(_) => return Ok(()),
+        vacant => vacant.or_default(),
+    };
+    for annotation in dom_info.annotations.iter().chain(extra_annotations) {
+        if let AnnotationInfo::HookCall(ref associate) = annotation {
+            interpret_hooks(
+                global_exprs,
+                local_exprs,
+                funcs,
+                types,
+                associate,
+                &dom_info,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn inherit_annotations(
+    global_exprs: &mut HashSet<Expression>,
+    hook_call_exprs: &mut HookCallExprs,
+    funcs: &HashMap<String, FunctionInfo>,
+    types: &HashMap<String, TypeInfo>,
+    dom_info: &TypeInfo,
+) -> Result<Vec<AnnotationInfo>, HLLErrors> {
+    let inherited_annotations = {
+        let mut ret = Vec::new();
+        for parent_name in &dom_info.inherits {
+            let parent_ti = match types.get(&parent_name.to_string()) {
+                Some(p) => p,
+                // Ignores inheritance issues for now, see bad_type_error_test().
+                None => continue,
+            };
+            ret.extend(inherit_annotations(
+                global_exprs,
+                hook_call_exprs,
+                funcs,
+                types,
+                parent_ti,
+            )?);
+        }
+        ret
+    };
+    interpret_annotations(
+        global_exprs,
+        hook_call_exprs,
+        funcs,
+        types,
+        dom_info,
+        inherited_annotations.iter(),
+    )?;
+    Ok(dom_info
+        .annotations
+        .iter()
+        .cloned()
+        .chain(inherited_annotations)
+        .collect())
+}
+
+pub fn apply_annotations<'a>(
+    types: &'a TypeMap,
+    funcs: &HashMap<String, FunctionInfo>,
+) -> Result<Vec<Expression>, HLLErrors> {
+    // Makes sure that there is no cycle.
+    organize_type_map(types)?;
+
+    let mut hook_call_exprs = HashMap::new();
+    let mut global_exprs = HashSet::new();
+    for type_info in types.values() {
+        inherit_annotations(
+            &mut global_exprs,
+            &mut hook_call_exprs,
+            funcs,
+            types,
+            type_info,
+        )?;
+    }
+
+    Ok(hook_call_exprs
+        .into_iter()
+        .filter(|(_, v)| v.len() != 0)
+        .map(|(k, v)| {
+            // TODO: Avoid cloning all expressions.
+            let mut new_domain = types
+                .get(&k.to_string())
+                .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
+                .decl
+                .as_ref()
+                .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
+                .clone();
+            new_domain.expressions = v.into_iter().collect();
+            Ok(Expression::Decl(Declaration::Type(Box::new(new_domain))))
+        })
+        .chain(global_exprs.into_iter().map(|e| Ok(e)))
+        .collect::<Result<_, HLLErrors>>()?)
+}
+
 // This function validates that the relationships in the HashMap are valid, and organizes a Vector
 // of type declarations in a reasonable order to be output into CIL.
 // In order to be valid, the types must meet the following properties:
@@ -376,9 +558,10 @@ fn do_rules_pass<'a>(
                     Err(mut e) => errors.append(&mut e),
                 }
             }
-            _ => continue,
+            _ => {}
         }
     }
+
     errors.into_result(ret)
 }
 
