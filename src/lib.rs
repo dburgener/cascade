@@ -23,7 +23,7 @@ use lalrpop_util::ParseError;
 lalrpop_mod!(pub parser);
 
 pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HLLErrors> {
-    let mut policies: Vec<ast::PolicyFile> = Vec::new();
+    let mut policies: Vec<PolicyFile> = Vec::new();
     // TODO: collect errors and return an HLLErrors at the end of the loop
     for f in input_files {
         let policy_str =
@@ -37,7 +37,7 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
             }
         };
 
-        policies.push(ast::PolicyFile::new(
+        policies.push(PolicyFile::new(
             *p,
             SimpleFile::new(f.into(), policy_str.clone()),
         ));
@@ -99,7 +99,7 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
 
 fn parse_policy<'a>(
     policy: &'a str,
-) -> Result<Box<ast::Policy>, ParseError<usize, lalrpop_util::lexer::Token<'a>, &'static str>> {
+) -> Result<Box<Policy>, ParseError<usize, lalrpop_util::lexer::Token<'a>, &'static str>> {
     // TODO: Probably should only construct once
     // Why though?
     parser::PolicyParser::new().parse(policy)
