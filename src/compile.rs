@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// SPDX-License-Identifier: MIT
 use sexp::{atom_s, list, Sexp};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;

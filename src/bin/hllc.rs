@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// SPDX-License-Identifier: MIT
 use selinuxhll::compile_system_policy;
 use selinuxhll::error::HLLErrorItem;
 

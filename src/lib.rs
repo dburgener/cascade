@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// SPDX-License-Identifier: MIT
 #[macro_use]
 extern crate lalrpop_util;
 

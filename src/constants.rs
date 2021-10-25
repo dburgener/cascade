@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// SPDX-License-Identifier: MIT
 pub const ALLOW_FUNCTION_NAME: &'static str = "allow";
 pub const DONTAUDIT_FUNCTION_NAME: &'static str = "dontaudit";
 pub const AUDITALLOW_FUNCTION_NAME: &'static str = "auditallow";

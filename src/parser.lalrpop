@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// SPDX-License-Identifier: MIT
 use crate::ast::{HLLString, Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, Annotations, Virtualable, FuncCall, DeclaredArgument};
 
 grammar;

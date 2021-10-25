@@ -1,5 +1,7 @@
-// Object class and permissions declarations live here
+// Copyright (c) Microsoft Corporation.
+// SPDX-License-Identifier: MIT
 
+// Object class and permissions declarations live here
 use crate::internal_rep::ClassList;
 
 const COMMON_FILE_SOCK_PERMS: &'static [&'static str] = &[

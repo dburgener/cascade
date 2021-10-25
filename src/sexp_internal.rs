@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// SPDX-License-Identifier: MIT
 use sexp::*;
 
 // the sexp crate doesn't treat foo and "foo" as separate strings, which we need
