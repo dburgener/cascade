@@ -37,10 +37,7 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
             }
         };
 
-        policies.push(PolicyFile::new(
-            *p,
-            SimpleFile::new(f.into(), policy_str.clone()),
-        ));
+        policies.push(PolicyFile::new(*p, SimpleFile::new(f.into(), policy_str)));
     }
 
     // Generic initialization

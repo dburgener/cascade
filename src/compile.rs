@@ -46,10 +46,10 @@ pub fn generate_sexp(
         generate_sid_rules(generate_sids("kernel_sid", "security_sid", "unlabeled_sid"));
 
     let mut ret = headers;
-    ret.extend(cil_types.iter().cloned());
-    ret.extend(cil_macros.iter().cloned());
-    ret.extend(cil_rules.iter().cloned());
-    ret.extend(sid_statements.iter().cloned());
+    ret.extend(cil_types);
+    ret.extend(cil_macros);
+    ret.extend(cil_rules);
+    ret.extend(sid_statements);
     Ok(ret)
 }
 
@@ -185,7 +185,7 @@ pub fn build_func_map<'a>(
             Declaration::Func(f) => {
                 // FIXME: error out for duplicate entries
                 decl_map.insert(
-                    f.get_cil_name().clone(),
+                    f.get_cil_name(),
                     FunctionInfo::new(&**f, types, parent_type, file)?,
                 );
             }
@@ -599,7 +599,7 @@ fn do_rules_pass<'a>(
                     Some(type_being_parsed),
                     file,
                 ) {
-                    Ok(r) => ret.extend(r.iter().cloned()),
+                    Ok(r) => ret.extend(r),
                     Err(mut e) => errors.append(&mut e),
                 }
             }

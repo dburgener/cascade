@@ -758,7 +758,7 @@ fn call_to_av_rule<'a>(
         source: source,
         target: target,
         class: class,
-        perms: perms.clone(),
+        perms: perms,
     })
 }
 
@@ -909,7 +909,7 @@ fn call_to_fc_rules<'a>(
         ret.push(FileContextRule {
             regex_string: regex_string.clone(),
             file_type: file_type,
-            context: context.clone(),
+            context: context,
         });
     }
 
