@@ -47,7 +47,7 @@ pub struct TypeInfo {
 }
 
 impl TypeInfo {
-    pub fn new(td: &TypeDecl, file: &SimpleFile<String, String>) -> Result<TypeInfo, HLLErrors> {
+    pub fn new(td: TypeDecl, file: &SimpleFile<String, String>) -> Result<TypeInfo, HLLErrors> {
         Ok(TypeInfo {
             name: td.name.clone(),
             inherits: td.inherits.clone(),
@@ -56,7 +56,7 @@ impl TypeInfo {
             list_coercion: td.annotations.has_annotation("makelist"),
             declaration_file: Some(file.clone()), // TODO: Turn into reference
             annotations: get_type_annotations(file, &td.annotations)?,
-            decl: Some(td.clone()),
+            decl: Some(td),
         })
     }
 

@@ -96,7 +96,7 @@ pub fn extend_type_map(p: &PolicyFile, type_map: &mut TypeMap) -> Result<(), HLL
         };
         match d {
             Declaration::Type(t) => {
-                type_map.insert(t.name.to_string(), TypeInfo::new(&**t, &p.file)?)
+                type_map.insert(t.name.to_string(), TypeInfo::new(*t.clone(), &p.file)?)
             }
             Declaration::Func(_) => continue,
         };
@@ -724,7 +724,7 @@ mod tests {
     fn organize_type_map_test() {
         let mut types = get_built_in_types_map();
         let foo_type = TypeInfo::new(
-            &TypeDecl::new(
+            TypeDecl::new(
                 HLLString::from("foo"),
                 vec![HLLString::from("domain")],
                 Vec::new(),
@@ -734,7 +734,7 @@ mod tests {
         .unwrap();
 
         let bar_type = TypeInfo::new(
-            &TypeDecl::new(
+            TypeDecl::new(
                 HLLString::from("bar"),
                 vec![HLLString::from("domain"), HLLString::from("foo")],
                 Vec::new(),
@@ -744,7 +744,7 @@ mod tests {
         .unwrap();
 
         let baz_type = TypeInfo::new(
-            &TypeDecl::new(
+            TypeDecl::new(
                 HLLString::from("baz"),
                 vec![
                     HLLString::from("domain"),
