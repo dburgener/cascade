@@ -10,8 +10,8 @@ use std::str::FromStr;
 use codespan_reporting::files::SimpleFile;
 
 use crate::ast::{
-    Annotations, Argument, BuiltIns, DeclaredArgument, FuncCall, FuncDecl, HLLString, Statement,
-    TypeDecl,
+    Annotation, Annotations, Argument, BuiltIns, DeclaredArgument, FuncCall, FuncDecl, HLLString,
+    Statement, TypeDecl,
 };
 use crate::constants;
 use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
@@ -980,6 +980,57 @@ pub enum HookType {
     Associate,
 }
 
+fn check_hook_push(hook: &Annotation) -> Result<HookType, HLLErrors> {
+    let mut args = hook.arguments.iter();
+    let name = match args.next() {
+        None => {
+            return Err(HLLErrors::from(
+                HLLErrorItem::make_compile_or_internal_error(
+                    //format!("Missing hook name in the hook_push annotation for {}", funcdecl.name),
+                    "Missing hook name in the hook_push annotation",
+                    None,
+                    None,
+                    "TODO",
+                ),
+            ));
+        }
+        Some(Argument::Var(v)) => v,
+        Some(_) => {
+            return Err(HLLErrors::from(
+                HLLErrorItem::make_compile_or_internal_error(
+                    //format!("Invalid argument type in the hook_push annotation for {}", funcdecl.name),
+                    "Invalid argument type in the hook_push annotation",
+                    None,
+                    None,
+                    "TODO",
+                ),
+            ));
+        }
+    };
+    if name != "associate" {
+        return Err(HLLErrors::from(
+            HLLErrorItem::make_compile_or_internal_error(
+                //format!("Unknown name in the hook_push annotation for {}", funcdecl.name),
+                "Unknown name in the hook_push annotation",
+                None,
+                None,
+                "TODO",
+            ),
+        ));
+    }
+    if args.next().is_some() {
+        return Err(HLLErrorItem::make_compile_or_internal_error(
+            //format!("Superfluous argument in the hook_push annotation for {}", funcdecl.name),
+            "Superfluous argument in the hook_push annotation",
+            None,
+            None,
+            "TODO",
+        )
+        .into());
+    }
+    Ok(HookType::Associate)
+}
+
 #[derive(Debug, Clone)]
 pub struct FunctionInfo<'a> {
     pub name: String,
@@ -1019,58 +1070,9 @@ impl<'a> FunctionInfo<'a> {
 
         // Only allow a set of specific annotation names and strictly check their arguments.
         // TODO: Add tests to verify these checks.
-        for hook in funcdecl.annotations.annotations.iter() {
-            match hook.name.as_ref() {
-                "hook_push" => {
-                    let mut args = hook.arguments.iter();
-                    let name = match args.next() {
-                        None => {
-                            return Err(HLLErrors::from(
-                                HLLErrorItem::make_compile_or_internal_error(
-                                    //format!("Missing hook name in the hook_push annotation for {}", funcdecl.name),
-                                    "Missing hook name in the hook_push annotation",
-                                    None,
-                                    None,
-                                    "TODO",
-                                ),
-                            ));
-                        }
-                        Some(Argument::Var(v)) => v,
-                        Some(_) => {
-                            return Err(HLLErrors::from(
-                                HLLErrorItem::make_compile_or_internal_error(
-                                    //format!("Invalid argument type in the hook_push annotation for {}", funcdecl.name),
-                                    "Invalid argument type in the hook_push annotation",
-                                    None,
-                                    None,
-                                    "TODO",
-                                ),
-                            ));
-                        }
-                    };
-                    if name != "associate" {
-                        return Err(HLLErrors::from(
-                            HLLErrorItem::make_compile_or_internal_error(
-                                //format!("Unknown name in the hook_push annotation for {}", funcdecl.name),
-                                "Unknown name in the hook_push annotation",
-                                None,
-                                None,
-                                "TODO",
-                            ),
-                        ));
-                    }
-                    if args.next().is_some() {
-                        return Err(HLLErrorItem::make_compile_or_internal_error(
-                            //format!("Superfluous argument in the hook_push annotation for {}", funcdecl.name),
-                            "Superfluous argument in the hook_push annotation",
-                            None,
-                            None,
-                            "TODO",
-                        )
-                        .into());
-                    }
-                    hook_type = Some(HookType::Associate);
-                }
+        for annotation in funcdecl.annotations.annotations.iter() {
+            match annotation.name.as_ref() {
+                "hook_push" => hook_type = Some(check_hook_push(annotation)?),
                 _ => {
                     return Err(HLLErrorItem::make_compile_or_internal_error(
                         //format!("Unknown annotation {} for {}", oth, funcdecl.name),
