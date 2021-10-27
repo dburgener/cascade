@@ -1112,7 +1112,19 @@ impl<'a> FunctionInfo<'a> {
         // TODO: Add tests to verify these checks.
         for annotation in funcdecl.annotations.annotations.iter() {
             match annotation.name.as_ref() {
-                "hook_push" => hook_type = Some(check_hook_push(annotation, funcdecl)?),
+                "hook_push" => {
+                    // Multiple @hook_push annotations doesn't make sense.
+                    if hook_type.is_some() {
+                        return Err(HLLErrorItem::make_compile_or_internal_error(
+                            "Multiple @hook_push annotations",
+                            Some(declaration_file),
+                            annotation.name.get_range(),
+                            "Only one @hook_push annotation is valid.",
+                        )
+                        .into());
+                    }
+                    hook_type = Some(check_hook_push(annotation, funcdecl)?);
+                }
                 _ => {
                     return Err(HLLErrorItem::make_compile_or_internal_error(
                         //format!("Unknown annotation {} for {}", oth, funcdecl.name),
