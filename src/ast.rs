@@ -375,6 +375,36 @@ pub enum Argument {
     Quote(HLLString),
 }
 
+impl Argument {
+    pub fn get_range(&self) -> Option<Range<usize>> {
+        match self {
+            Argument::Var(a) => a.get_range(),
+            Argument::List(l) => {
+                let start = {
+                    match l.first() {
+                        Some(s) => match s.get_range() {
+                            None => return None,
+                            Some(r) => r.start,
+                        },
+                        None => return None,
+                    }
+                };
+                let end = {
+                    match l.last() {
+                        Some(s) => match s.get_range() {
+                            None => return None,
+                            Some(r) => r.end,
+                        },
+                        None => return None,
+                    }
+                };
+                Some(start..end)
+            }
+            Argument::Quote(a) => a.get_range(),
+        }
+    }
+}
+
 impl fmt::Display for Argument {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {

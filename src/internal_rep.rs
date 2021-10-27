@@ -980,67 +980,63 @@ pub enum HookType {
     Associate,
 }
 
-fn check_hook_push(hook: &Annotation, funcdecl: &FuncDecl) -> Result<HookType, HLLErrors> {
+fn check_hook_push(
+    hook: &Annotation,
+    funcdecl: &FuncDecl,
+    file: &SimpleFile<String, String>,
+    hook_name_range: Option<Range<usize>>,
+) -> Result<HookType, HLLCompileError> {
     // Checks that annotation arguments match the expected signature.
     let mut hook_args = hook.arguments.iter();
     let name = match hook_args.next() {
         None => {
-            return Err(HLLErrors::from(
-                HLLErrorItem::make_compile_or_internal_error(
-                    //format!("Missing hook name in the hook_push annotation for {}", funcdecl.name),
-                    "Missing hook name in the hook_push annotation",
-                    None,
-                    None,
-                    "TODO",
-                ),
+            return Err(HLLCompileError::new(
+                "Missing hook name as the first argument",
+                file,
+                hook_name_range,
+                "You must use 'associate' as first argument.",
             ));
         }
         Some(Argument::Var(v)) => v,
-        Some(_) => {
-            return Err(HLLErrors::from(
-                HLLErrorItem::make_compile_or_internal_error(
-                    //format!("Invalid argument type in the hook_push annotation for {}", funcdecl.name),
-                    "Invalid argument type in the hook_push annotation",
-                    None,
-                    None,
-                    "TODO",
-                ),
+        Some(a) => {
+            return Err(HLLCompileError::new(
+                "Invalid argument type",
+                file,
+                a.get_range(),
+                "You must use 'associate' as first argument.",
             ));
         }
     };
     if name != "associate" {
-        return Err(HLLErrors::from(
-            HLLErrorItem::make_compile_or_internal_error(
-                //format!("Unknown name in the hook_push annotation for {}", funcdecl.name),
-                "Unknown name in the hook_push annotation",
-                None,
-                None,
-                "TODO",
-            ),
+        return Err(HLLCompileError::new(
+            "Unknown hook name",
+            file,
+            name.get_range(),
+            "You must use 'associate' as first argument.",
         ));
     }
-    if hook_args.next().is_some() {
-        return Err(HLLErrorItem::make_compile_or_internal_error(
-            //format!("Superfluous argument in the hook_push annotation for {}", funcdecl.name),
-            "Superfluous argument in the hook_push annotation",
-            None,
-            None,
-            "TODO",
-        )
-        .into());
+    match hook_args.next() {
+        Some(a) => {
+            return Err(HLLCompileError::new(
+                "Superfluous argument",
+                file,
+                a.get_range(),
+                "There must be only one argument.",
+            ))
+        }
+        None => {}
     }
 
     // Checks that annotated functions match the expected signature.
     let mut func_args = funcdecl.args.iter();
     match func_args.next() {
         None => {
-            return Err(HLLErrorItem::make_compile_or_internal_error(
+            return Err(HLLCompileError::new(
                 "Invalid method signature for @hook_push annotation: missing firth argument",
-                None,
-                None,
+                file,
+                funcdecl.name.get_range(),
                 "Add a 'domain' argument.",
-            )
-            .into())
+            ))
         }
         Some(DeclaredArgument {
             param_type,
@@ -1048,24 +1044,25 @@ fn check_hook_push(hook: &Annotation, funcdecl: &FuncDecl) -> Result<HookType, H
             name: _,
         }) => {
             if param_type.as_ref() != "domain" || *is_list_param {
-                return Err(HLLErrorItem::make_compile_or_internal_error(
+                return Err(HLLCompileError::new(
                     "Invalid method signature for @hook_push annotation: invalid firth argument",
-                    None,
-                    None,
+                    file,
+                    param_type.get_range(),
                     "The type of the first method argument must be 'domain'.",
-                )
-                .into());
+                ));
             }
         }
     }
-    if func_args.next().is_some() {
-        return Err(HLLErrorItem::make_compile_or_internal_error(
-            "Invalid method signature for @hook_push annotation: too much arguments",
-            None,
-            None,
-            "Only one argument of type 'domain' is accepted.",
-        )
-        .into());
+    match func_args.next() {
+        Some(a) => {
+            return Err(HLLCompileError::new(
+                "Invalid method signature for @hook_push annotation: too much arguments",
+                file,
+                a.param_type.get_range(),
+                "Only one argument of type 'domain' is accepted.",
+            ));
+        }
+        None => {}
     }
 
     Ok(HookType::Associate)
@@ -1115,23 +1112,27 @@ impl<'a> FunctionInfo<'a> {
                 "hook_push" => {
                     // Multiple @hook_push annotations doesn't make sense.
                     if hook_type.is_some() {
-                        return Err(HLLErrorItem::make_compile_or_internal_error(
+                        return Err(HLLCompileError::new(
                             "Multiple @hook_push annotations",
-                            Some(declaration_file),
+                            declaration_file,
                             annotation.name.get_range(),
-                            "Only one @hook_push annotation is valid.",
+                            "You need to remove duplicated @hook_push annotations.",
                         )
                         .into());
                     }
-                    hook_type = Some(check_hook_push(annotation, funcdecl)?);
+                    hook_type = Some(check_hook_push(
+                        annotation,
+                        funcdecl,
+                        declaration_file,
+                        annotation.name.get_range(),
+                    )?);
                 }
                 _ => {
-                    return Err(HLLErrorItem::make_compile_or_internal_error(
-                        //format!("Unknown annotation {} for {}", oth, funcdecl.name),
+                    return Err(HLLCompileError::new(
                         "Unknown annotation",
-                        None,
-                        None,
-                        "TODO",
+                        declaration_file,
+                        annotation.name.get_range(),
+                        "The only valid annotation is '@hook_push'",
                     )
                     .into());
                 }
