@@ -337,7 +337,6 @@ fn interpret_hooks(
                 let new_call = Expression::Stmt(Statement::Call(Box::new(FuncCall::new(
                     Some(res_name),
                     func_info.name.clone().into(),
-                    // TODO: Check (earlier) that annotated functions match this signature.
                     vec![Argument::Var("this".into())],
                 ))));
                 // TODO: Check that it returns true.

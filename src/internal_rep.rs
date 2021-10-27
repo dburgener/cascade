@@ -980,9 +980,10 @@ pub enum HookType {
     Associate,
 }
 
-fn check_hook_push(hook: &Annotation) -> Result<HookType, HLLErrors> {
-    let mut args = hook.arguments.iter();
-    let name = match args.next() {
+fn check_hook_push(hook: &Annotation, funcdecl: &FuncDecl) -> Result<HookType, HLLErrors> {
+    // Checks that annotation arguments match the expected signature.
+    let mut hook_args = hook.arguments.iter();
+    let name = match hook_args.next() {
         None => {
             return Err(HLLErrors::from(
                 HLLErrorItem::make_compile_or_internal_error(
@@ -1018,7 +1019,7 @@ fn check_hook_push(hook: &Annotation) -> Result<HookType, HLLErrors> {
             ),
         ));
     }
-    if args.next().is_some() {
+    if hook_args.next().is_some() {
         return Err(HLLErrorItem::make_compile_or_internal_error(
             //format!("Superfluous argument in the hook_push annotation for {}", funcdecl.name),
             "Superfluous argument in the hook_push annotation",
@@ -1028,6 +1029,45 @@ fn check_hook_push(hook: &Annotation) -> Result<HookType, HLLErrors> {
         )
         .into());
     }
+
+    // Checks that annotated functions match the expected signature.
+    let mut func_args = funcdecl.args.iter();
+    match func_args.next() {
+        None => {
+            return Err(HLLErrorItem::make_compile_or_internal_error(
+                "Invalid method signature for @hook_push annotation: missing firth argument",
+                None,
+                None,
+                "Add a 'domain' argument.",
+            )
+            .into())
+        }
+        Some(DeclaredArgument {
+            param_type,
+            is_list_param,
+            name: _,
+        }) => {
+            if param_type.as_ref() != "domain" || *is_list_param {
+                return Err(HLLErrorItem::make_compile_or_internal_error(
+                    "Invalid method signature for @hook_push annotation: invalid firth argument",
+                    None,
+                    None,
+                    "The type of the first method argument must be 'domain'.",
+                )
+                .into());
+            }
+        }
+    }
+    if func_args.next().is_some() {
+        return Err(HLLErrorItem::make_compile_or_internal_error(
+            "Invalid method signature for @hook_push annotation: too much arguments",
+            None,
+            None,
+            "Only one argument of type 'domain' is accepted.",
+        )
+        .into());
+    }
+
     Ok(HookType::Associate)
 }
 
@@ -1072,7 +1112,7 @@ impl<'a> FunctionInfo<'a> {
         // TODO: Add tests to verify these checks.
         for annotation in funcdecl.annotations.annotations.iter() {
             match annotation.name.as_ref() {
-                "hook_push" => hook_type = Some(check_hook_push(annotation)?),
+                "hook_push" => hook_type = Some(check_hook_push(annotation, funcdecl)?),
                 _ => {
                     return Err(HLLErrorItem::make_compile_or_internal_error(
                         //format!("Unknown annotation {} for {}", oth, funcdecl.name),
