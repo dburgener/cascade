@@ -326,8 +326,10 @@ fn interpret_hooks(
                     .expressions
                     .iter_mut()
                     .for_each(|e| e.set_class_name_if_decl(res_name.clone()));
-                // TODO: Check that it returns true.
-                global_exprs.insert(Expression::Decl(Declaration::Type(Box::new(dup_res_decl))));
+                if !global_exprs.insert(Expression::Decl(Declaration::Type(Box::new(dup_res_decl))))
+                {
+                    return Err(HLLErrorItem::Internal(HLLInternalError {}));
+                }
 
                 // Creates a synthetic call.
                 let new_call = Expression::Stmt(Statement::Call(Box::new(FuncCall::new(
@@ -335,8 +337,9 @@ fn interpret_hooks(
                     func_info.name.clone().into(),
                     vec![Argument::Var("this".into())],
                 ))));
-                // TODO: Check that it returns true.
-                local_exprs.insert(new_call);
+                if !local_exprs.insert(new_call) {
+                    return Err(HLLErrorItem::Internal(HLLInternalError {}));
+                }
             }
         }
     }
