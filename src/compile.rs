@@ -4,9 +4,7 @@ use sexp::{atom_s, list, Sexp};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::convert::TryFrom;
 
-use crate::ast::{
-    Annotations, Argument, Declaration, Expression, FuncCall, HLLString, PolicyFile, Statement,
-};
+use crate::ast::{Argument, Declaration, Expression, FuncCall, HLLString, PolicyFile, Statement};
 use crate::constants;
 use crate::error::{HLLErrorItem, HLLErrors, HLLInternalError};
 use crate::internal_rep::{
@@ -323,7 +321,7 @@ fn interpret_hooks(
                     .clone();
                 let res_name: HLLString = format!("{}-{}", dom_info.name, class.name).into();
                 dup_res_decl.name = res_name.clone();
-                dup_res_decl.annotations = Annotations::new();
+                // Keep annotations as-is.
                 dup_res_decl
                     .expressions
                     .iter_mut()
