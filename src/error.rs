@@ -203,8 +203,11 @@ impl HLLErrors {
         HLLErrors { errors: Vec::new() }
     }
 
-    pub fn add_error(&mut self, error: HLLErrorItem) {
-        self.errors.push(error);
+    pub fn add_error<T>(&mut self, error: T)
+    where
+        T: Into<HLLErrorItem>,
+    {
+        self.errors.push(error.into());
     }
 
     fn is_empty(&self) -> bool {
