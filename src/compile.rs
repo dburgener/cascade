@@ -289,9 +289,12 @@ fn interpret_hooks(
     types: &HashMap<String, TypeInfo>,
     associate: &HookCallAssociate,
     dom_info: &TypeInfo,
-) -> Result<(), HLLErrorItem> {
+) -> Result<(), HLLErrors> {
     // Only allow a set of specific annotation names and strictly check their arguments.
     // TODO: Add tests to verify these checks.
+
+    let mut errors = HLLErrors::new();
+    let mut remaining_resources = associate.resources.clone();
 
     // Find the hooks
     for func_info in funcs
@@ -299,7 +302,7 @@ fn interpret_hooks(
         .filter(|f| f.hook_type == Some(HookType::Associate))
     {
         if let Some(class) = func_info.class {
-            if let Some(res) = associate.resources.get(&class.name) {
+            if let Some(res) = remaining_resources.take(&class.name) {
                 // FIXME: is_resource() doesn't work (e.g. using a resource instead of a domain).
                 if !class.is_resource(types) {
                     return Err(HLLErrorItem::Compile(HLLCompileError::new(
@@ -310,7 +313,8 @@ fn interpret_hooks(
                             .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?,
                         res.get_range(),
                         "This should not be a domain but a resource.",
-                    )));
+                    ))
+                    .into());
                 }
 
                 // Creates a synthetic resource declaration.
@@ -328,7 +332,7 @@ fn interpret_hooks(
                     .for_each(|e| e.set_class_name_if_decl(res_name.clone()));
                 if !global_exprs.insert(Expression::Decl(Declaration::Type(Box::new(dup_res_decl))))
                 {
-                    return Err(HLLErrorItem::Internal(HLLInternalError {}));
+                    return Err(HLLErrorItem::Internal(HLLInternalError {}).into());
                 }
 
                 // Creates a synthetic call.
@@ -338,12 +342,23 @@ fn interpret_hooks(
                     vec![Argument::Var("this".into())],
                 ))));
                 if !local_exprs.insert(new_call) {
-                    return Err(HLLErrorItem::Internal(HLLInternalError {}));
+                    return Err(HLLErrorItem::Internal(HLLInternalError {}).into());
                 }
             }
         }
     }
-    Ok(())
+    for res in remaining_resources {
+        errors.add_error(HLLErrorItem::Compile(HLLCompileError::new(
+            "unassociated resource",
+            dom_info
+                .declaration_file
+                .as_ref()
+                .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?,
+            res.get_range(),
+            "this resource is missing a function annotated with @hook_push(associate)",
+        )));
+    }
+    errors.into_result(())
 }
 
 // domain -> related expressions
