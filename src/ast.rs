@@ -1,5 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
+use std::cmp::Ordering;
 use std::fmt;
 use std::ops::Range;
 
@@ -7,7 +8,7 @@ use codespan_reporting::files::SimpleFile;
 
 use crate::constants;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Hash)]
 pub struct HLLString {
     string: String,
     range: Option<Range<usize>>,
@@ -107,6 +108,18 @@ impl PartialEq<HLLString> for &str {
     }
 }
 
+impl PartialOrd for HLLString {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.string.partial_cmp(&other.string)
+    }
+}
+
+impl Ord for HLLString {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.string.cmp(&other.string)
+    }
+}
+
 #[derive(Debug)]
 pub struct PolicyFile {
     pub policy: Policy,
@@ -133,7 +146,7 @@ impl Policy {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Expression {
     Decl(Declaration),
     Stmt(Statement),
@@ -159,7 +172,7 @@ pub trait Virtualable {
     fn set_virtual(&mut self);
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Declaration {
     Type(Box<TypeDecl>),
     Func(Box<FuncDecl>),
@@ -183,7 +196,7 @@ impl Declaration {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, Hash)]
 pub struct TypeDecl {
     pub name: HLLString,
     pub inherits: Vec<HLLString>,
@@ -217,7 +230,7 @@ impl Virtualable for TypeDecl {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FuncDecl {
     pub class_name: Option<HLLString>,
     pub name: HLLString,
@@ -239,7 +252,7 @@ impl FuncDecl {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Statement {
     Call(Box<FuncCall>),
 }
@@ -258,7 +271,7 @@ pub enum BuiltIns {
     DomainTransition,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FuncCall {
     pub class_name: Option<HLLString>,
     pub name: HLLString,
@@ -322,12 +335,27 @@ impl FuncCall {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Annotation {
     pub name: HLLString,
+    pub arguments: Vec<Argument>,
 }
 
-#[derive(Debug)]
+impl Annotation {
+    pub fn new(name: HLLString) -> Self {
+        Annotation {
+            name: name,
+            arguments: Vec::new(),
+        }
+    }
+
+    pub fn set_arguments(mut self, args: Vec<Argument>) -> Self {
+        self.arguments = args;
+        self
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Annotations {
     pub annotations: Vec<Annotation>,
 }
@@ -353,11 +381,21 @@ impl Annotations {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Argument {
     Var(HLLString),
     List(Vec<HLLString>),
     Quote(HLLString),
+}
+
+impl Argument {
+    pub fn get_range(&self) -> Option<Range<usize>> {
+        match self {
+            Argument::Var(a) => a.get_range(),
+            Argument::List(l) => HLLString::vec_to_range(&l.iter().collect()),
+            Argument::Quote(a) => a.get_range(),
+        }
+    }
 }
 
 impl fmt::Display for Argument {
@@ -370,7 +408,7 @@ impl fmt::Display for Argument {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct DeclaredArgument {
     pub param_type: HLLString,
     pub is_list_param: bool,

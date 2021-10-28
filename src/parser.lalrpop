@@ -81,8 +81,8 @@ Stmt: Statement = {
 }
 
 Ann: Annotation = {
-	"@" <s:Symbol> "(" Comma<Arg> ")" => Annotation {name: s},
-	"@" <s:Symbol> => Annotation {name: s},
+	"@" <s:Symbol> "(" <a:Comma<Arg>> ")" => Annotation::new(s).set_arguments(a),
+	"@" <s:Symbol> => Annotation::new(s),
 }
 
 Symbol: HLLString = {

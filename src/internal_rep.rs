@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
 use sexp::{atom_s, list, Atom, Sexp};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::convert::TryFrom;
 use std::fmt;
 use std::ops::Range;
@@ -10,7 +10,8 @@ use std::str::FromStr;
 use codespan_reporting::files::SimpleFile;
 
 use crate::ast::{
-    Argument, BuiltIns, DeclaredArgument, FuncCall, FuncDecl, HLLString, Statement, TypeDecl,
+    Annotation, Annotations, Argument, BuiltIns, DeclaredArgument, FuncCall, FuncDecl, HLLString,
+    Statement, TypeDecl,
 };
 use crate::constants;
 use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
@@ -22,6 +23,17 @@ const DEFAULT_MLS: &str = "s0";
 
 pub type TypeMap = HashMap<String, TypeInfo>;
 
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct HookCallAssociate {
+    pub resources: BTreeSet<HLLString>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum AnnotationInfo {
+    MakeList,
+    HookCall(HookCallAssociate),
+}
+
 #[derive(Clone, Debug)]
 pub struct TypeInfo {
     pub name: HLLString,
@@ -29,17 +41,23 @@ pub struct TypeInfo {
     pub is_virtual: bool,
     pub list_coercion: bool, // Automatically transform single instances of this type to a single element list
     pub declaration_file: Option<SimpleFile<String, String>>, // Built in types have no file
+    pub annotations: BTreeSet<AnnotationInfo>,
+    // TODO: replace with Option<&TypeDecl>
+    pub decl: Option<TypeDecl>,
 }
 
 impl TypeInfo {
-    pub fn new(td: &TypeDecl, file: &SimpleFile<String, String>) -> TypeInfo {
-        TypeInfo {
+    pub fn new(td: &TypeDecl, file: &SimpleFile<String, String>) -> Result<TypeInfo, HLLErrors> {
+        Ok(TypeInfo {
             name: td.name.clone(),
             inherits: td.inherits.clone(),
             is_virtual: td.is_virtual,
+            // TODO: Use AnnotationInfo::MakeList instead
             list_coercion: td.annotations.has_annotation("makelist"),
             declaration_file: Some(file.clone()), // TODO: Turn into reference
-        }
+            annotations: get_type_annotations(file, &td.annotations)?,
+            decl: Some(td.clone()),
+        })
     }
 
     pub fn make_built_in(name: String, makelist: bool) -> TypeInfo {
@@ -49,6 +67,8 @@ impl TypeInfo {
             is_virtual: true,
             list_coercion: makelist,
             declaration_file: None,
+            annotations: BTreeSet::new(),
+            decl: None,
         }
     }
 
@@ -113,6 +133,139 @@ impl From<&TypeInfo> for Option<sexp::Sexp> {
         };
         Some(list(&[atom_s(flavor), atom_s(&typeinfo.name.as_ref())]))
     }
+}
+
+fn get_hook_call(
+    file: &SimpleFile<String, String>,
+    annotation_name_range: Option<Range<usize>>,
+    annotation: &Annotation,
+) -> Result<AnnotationInfo, HLLCompileError> {
+    let mut args = annotation.arguments.iter();
+    let name = match args.next() {
+        None => {
+            return Err(HLLCompileError::new(
+                "Missing hook name as the first argument",
+                file,
+                annotation_name_range,
+                "You must use 'associate' as first argument.",
+            ));
+        }
+        Some(Argument::Var(v)) => v,
+        Some(a) => {
+            return Err(HLLCompileError::new(
+                "Invalid argument type",
+                file,
+                a.get_range(),
+                "You must use 'associate' as first argument.",
+            ));
+        }
+    };
+    if name != "associate" {
+        return Err(HLLCompileError::new(
+            "Unknown hook name",
+            file,
+            name.get_range(),
+            "You must use 'associate' as first argument.",
+        ));
+    }
+
+    let res_list = match args.next() {
+        None => {
+            return Err(HLLCompileError::new(
+                "Missing resource list as second argument",
+                file,
+                annotation_name_range,
+                "You must use a set of resource names, enclosed by square brackets, as second argument.",
+            ));
+        }
+        Some(Argument::List(l)) => l,
+        Some(a) => {
+            return Err(HLLCompileError::new(
+                "Invalid argument type",
+                file,
+                a.get_range(),
+                "You must use a set of resource names, enclosed by square brackets, as second argument.",
+            ));
+        }
+    };
+
+    match args.next() {
+        Some(a) => {
+            return Err(HLLCompileError::new(
+                "Superfluous argument",
+                file,
+                a.get_range(),
+                "There must be only two arguments.",
+            ))
+        }
+        None => {}
+    }
+
+    Ok(AnnotationInfo::HookCall(HookCallAssociate {
+        // Checks for duplicate resources.
+        resources: res_list.iter().try_fold(BTreeSet::new(), |mut s, e| {
+            if !s.insert(e.clone()) {
+                Err(HLLCompileError::new(
+                    "Duplicate resource",
+                    file,
+                    e.get_range(),
+                    "Only unique resource names are valid.",
+                ))
+            } else {
+                Ok(s)
+            }
+        })?,
+    }))
+}
+
+fn get_type_annotations(
+    file: &SimpleFile<String, String>,
+    annotations: &Annotations,
+) -> Result<BTreeSet<AnnotationInfo>, HLLCompileError> {
+    let mut infos = BTreeSet::new();
+
+    // Only allow a set of specific annotation names and strictly check their arguments.
+    // TODO: Add tests to verify these checks.
+    for annotation in annotations.annotations.iter() {
+        match annotation.name.as_ref() {
+            "makelist" => {
+                // TODO: Check arguments
+                // Multiple @makelist annotations doesn't make sense.
+                if !infos.insert(AnnotationInfo::MakeList) {
+                    return Err(HLLCompileError::new(
+                        "Multiple @makelist annotations",
+                        file,
+                        annotation.name.get_range(),
+                        "You need to remove duplicated @makelist annotations.",
+                    ));
+                }
+            }
+            "hook_call" => {
+                // Multiple @hook_call annotations doesn't make sense.
+                if !infos.insert(get_hook_call(
+                    file,
+                    annotation.name.get_range(),
+                    annotation,
+                )?) {
+                    return Err(HLLCompileError::new(
+                        "Multiple @hook_call annotations",
+                        file,
+                        annotation.name.get_range(),
+                        "You need to remove duplicated @hook_call annotations.",
+                    ));
+                }
+            }
+            _ => {
+                return Err(HLLCompileError::new(
+                    "Unknown annotation",
+                    file,
+                    annotation.name.get_range(),
+                    "The only known annotations are '@makelist' and '@hook_call'.",
+                ));
+            }
+        }
+    }
+    Ok(infos)
 }
 
 // strings may be paths or strings
@@ -846,6 +999,99 @@ fn call_to_domain_transition<'a>(
     })
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum HookType {
+    Associate,
+}
+
+fn check_hook_push(
+    hook: &Annotation,
+    funcdecl: &FuncDecl,
+    file: &SimpleFile<String, String>,
+    hook_name_range: Option<Range<usize>>,
+) -> Result<HookType, HLLCompileError> {
+    // Checks that annotation arguments match the expected signature.
+    let mut hook_args = hook.arguments.iter();
+    let name = match hook_args.next() {
+        None => {
+            return Err(HLLCompileError::new(
+                "Missing hook name as the first argument",
+                file,
+                hook_name_range,
+                "You must use 'associate' as first argument.",
+            ));
+        }
+        Some(Argument::Var(v)) => v,
+        Some(a) => {
+            return Err(HLLCompileError::new(
+                "Invalid argument type",
+                file,
+                a.get_range(),
+                "You must use 'associate' as first argument.",
+            ));
+        }
+    };
+    if name != "associate" {
+        return Err(HLLCompileError::new(
+            "Unknown hook name",
+            file,
+            name.get_range(),
+            "You must use 'associate' as first argument.",
+        ));
+    }
+    match hook_args.next() {
+        Some(a) => {
+            return Err(HLLCompileError::new(
+                "Superfluous argument",
+                file,
+                a.get_range(),
+                "There must be only one argument.",
+            ))
+        }
+        None => {}
+    }
+
+    // Checks that annotated functions match the expected signature.
+    let mut func_args = funcdecl.args.iter();
+    match func_args.next() {
+        None => {
+            return Err(HLLCompileError::new(
+                "Invalid method signature for @hook_push annotation: missing firth argument",
+                file,
+                funcdecl.name.get_range(),
+                "Add a 'domain' argument.",
+            ))
+        }
+        Some(DeclaredArgument {
+            param_type,
+            is_list_param,
+            name: _,
+        }) => {
+            if param_type.as_ref() != "domain" || *is_list_param {
+                return Err(HLLCompileError::new(
+                    "Invalid method signature for @hook_push annotation: invalid firth argument",
+                    file,
+                    param_type.get_range(),
+                    "The type of the first method argument must be 'domain'.",
+                ));
+            }
+        }
+    }
+    match func_args.next() {
+        Some(a) => {
+            return Err(HLLCompileError::new(
+                "Invalid method signature for @hook_push annotation: too much arguments",
+                file,
+                a.param_type.get_range(),
+                "Only one argument of type 'domain' is accepted.",
+            ));
+        }
+        None => {}
+    }
+
+    Ok(HookType::Associate)
+}
+
 #[derive(Debug, Clone)]
 pub struct FunctionInfo<'a> {
     pub name: String,
@@ -854,6 +1100,8 @@ pub struct FunctionInfo<'a> {
     pub original_body: &'a Vec<Statement>,
     pub body: Option<Vec<ValidatedStatement<'a>>>,
     pub declaration_file: &'a SimpleFile<String, String>,
+    pub hook_type: Option<HookType>,
+    pub decl: &'a FuncDecl,
 }
 
 impl<'a> FunctionInfo<'a> {
@@ -879,14 +1127,56 @@ impl<'a> FunctionInfo<'a> {
             }
         }
 
+        let mut hook_type = None;
+
+        // Only allow a set of specific annotation names and strictly check their arguments.
+        // TODO: Add tests to verify these checks.
+        for annotation in funcdecl.annotations.annotations.iter() {
+            match annotation.name.as_ref() {
+                "hook_push" => {
+                    // For now, there is only one @hook_push(associate) allowed.
+                    if hook_type.is_some() {
+                        return Err(HLLCompileError::new(
+                            "Multiple @hook_push(associate) annotations",
+                            declaration_file,
+                            annotation.name.get_range(),
+                            "You need to remove superfluous @hook_push(associate) annotation.",
+                        )
+                        .into());
+                    }
+                    hook_type = Some(check_hook_push(
+                        annotation,
+                        funcdecl,
+                        declaration_file,
+                        annotation.name.get_range(),
+                    )?);
+                }
+                _ => {
+                    return Err(HLLCompileError::new(
+                        "Unknown annotation",
+                        declaration_file,
+                        annotation.name.get_range(),
+                        "The only valid annotation is '@hook_push'",
+                    )
+                    .into());
+                }
+            }
+        }
+
         errors.into_result(FunctionInfo {
-            name: funcdecl.get_cil_name(),
+            name: funcdecl.name.to_string(),
             class: parent_type,
             args: args,
             original_body: &funcdecl.body,
             body: None,
             declaration_file: declaration_file,
+            hook_type: hook_type,
+            decl: &funcdecl,
         })
+    }
+
+    pub fn get_cil_name(&self) -> String {
+        self.decl.get_cil_name()
     }
 
     pub fn validate_body(
@@ -924,7 +1214,7 @@ impl TryFrom<&FunctionInfo<'_>> for sexp::Sexp {
     fn try_from(f: &FunctionInfo) -> Result<sexp::Sexp, HLLErrorItem> {
         let mut macro_cil = vec![
             atom_s("macro"),
-            atom_s(&f.name),
+            atom_s(&f.get_cil_name()),
             Sexp::List(f.args.iter().map(|a| Sexp::from(a)).collect()),
         ];
         match &f.body {
