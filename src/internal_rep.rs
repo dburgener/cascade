@@ -1794,12 +1794,16 @@ mod tests {
 
         match classlist.verify_permission(&"bar".into(), &"baz".into(), &fake_file) {
             Ok(_) => panic!("Nonexistent class verified"),
-            Err(e) => assert!(e.diagnostic.message.contains("No such object class")),
+            Err(e) => assert!(e.diagnostic.inner.message.contains("No such object class")),
         }
 
         match classlist.verify_permission(&"foo".into(), &"cap_bar".into(), &fake_file) {
             Ok(_) => panic!("Nonexistent permission verified"),
-            Err(e) => assert!(e.diagnostic.message.contains("cap_bar is not defined for")),
+            Err(e) => assert!(e
+                .diagnostic
+                .inner
+                .message
+                .contains("cap_bar is not defined for")),
         }
     }
 

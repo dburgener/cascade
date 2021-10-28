@@ -12,15 +12,27 @@ use std::ops::Range;
 use thiserror::Error;
 
 #[derive(Error, Clone, Debug)]
+#[error("{diagnostic}")]
 pub struct HLLCompileError {
-    pub diagnostic: Diagnostic<()>,
+    pub diagnostic: Diag,
     pub file: SimpleFile<String, String>,
 }
 
-impl fmt::Display for HLLCompileError {
+#[derive(Clone, Debug)]
+pub struct Diag {
+    pub inner: Diagnostic<()>,
+}
+
+impl From<Diagnostic<()>> for Diag {
+    fn from(d: Diagnostic<()>) -> Self {
+        Self { inner: d }
+    }
+}
+
+impl fmt::Display for Diag {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         //write!(f, "{}:{} {}", self.filename, self.lineno, self.msg)
-        write!(f, "{}", self.diagnostic.message)
+        write!(f, "{}", self.inner.message)
     }
 }
 
@@ -38,7 +50,7 @@ impl HLLCompileError {
             Some(r) => diagnostic.with_labels(vec![Label::primary((), r).with_message(help)]),
         };
         HLLCompileError {
-            diagnostic: diagnostic,
+            diagnostic: diagnostic.into(),
             file: file.clone(),
         }
     }
@@ -46,7 +58,12 @@ impl HLLCompileError {
         let writer = StandardStream::stderr(ColorChoice::Auto);
         let config = term::Config::default();
         // Ignores print errors.
-        let _ = term::emit(&mut writer.lock(), &config, &self.file, &self.diagnostic);
+        let _ = term::emit(
+            &mut writer.lock(),
+            &config,
+            &self.file,
+            &self.diagnostic.inner,
+        );
     }
 }
 
@@ -55,15 +72,10 @@ impl HLLCompileError {
 pub struct HLLInternalError {}
 
 #[derive(Error, Clone, Debug)]
+#[error("{diagnostic}")]
 pub struct HLLParseError {
+    pub diagnostic: Diag,
     pub file: SimpleFile<String, String>,
-    pub diagnostic: Diagnostic<()>,
-}
-
-impl fmt::Display for HLLParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.diagnostic.message)
-    }
 }
 
 struct ParseErrorMsg {
@@ -130,7 +142,8 @@ impl HLLParseError {
                 Some(range) => diagnostic.with_labels(vec![
                     Label::primary((), range.clone()).with_message(msg.help)
                 ]),
-            },
+            }
+            .into(),
         }
     }
 
@@ -138,7 +151,12 @@ impl HLLParseError {
         let writer = StandardStream::stderr(ColorChoice::Auto);
         let config = term::Config::default();
         // Ignores print errors.
-        let _ = term::emit(&mut writer.lock(), &config, &self.file, &self.diagnostic);
+        let _ = term::emit(
+            &mut writer.lock(),
+            &config,
+            &self.file,
+            &self.diagnostic.inner,
+        );
     }
 }
 

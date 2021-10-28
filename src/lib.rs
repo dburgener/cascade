@@ -115,7 +115,7 @@ fn generate_cil(v: Vec<sexp::Sexp>) -> String {
 mod tests {
     lalrpop_mod!(pub parser);
 
-    use crate::error::{HLLCompileError, HLLParseError};
+    use crate::error::{Diag, HLLCompileError, HLLParseError};
     use codespan_reporting::diagnostic::Diagnostic;
     use std::fs;
     use std::io::Write;
@@ -334,9 +334,11 @@ mod tests {
                     assert!(matches!(
                                 error,
                                 HLLErrorItem::Parse(HLLParseError {
-                                    diagnostic: Diagnostic {
-                                        message: msg,
-                                        ..
+                                    diagnostic: Diag {
+                                        inner: Diagnostic {
+                                            message: msg,
+                                            ..
+                                        }
                                     },
                                     ..
                                 })
@@ -357,9 +359,11 @@ mod tests {
                     assert!(matches!(
                                 error,
                                 HLLErrorItem::Parse(HLLParseError {
-                                    diagnostic: Diagnostic {
-                                        message: msg,
-                                        ..
+                                    diagnostic: Diag {
+                                        inner: Diagnostic {
+                                            message: msg,
+                                            ..
+                                        }
                                     },
                                     ..
                                 })
@@ -380,9 +384,11 @@ mod tests {
                     assert!(matches!(
                                 error,
                                 HLLErrorItem::Parse(HLLParseError {
-                                    diagnostic: Diagnostic {
-                                        message: msg,
-                                        ..
+                                    diagnostic: Diag {
+                                        inner: Diagnostic {
+                                            message: msg,
+                                            ..
+                                        }
                                     },
                                     ..
                                 })
@@ -400,12 +406,16 @@ mod tests {
             Ok(_) => panic!("file_context() in domain compiled successfully"),
             Err(e) => {
                 for error in e {
-                    assert!(
-                        matches!(error, HLLErrorItem::Compile(HLLCompileError { diagnostic: Diagnostic {
-                            message: msg, .. },
-                            .. })
-                                     if msg.contains("file_context() calls are only allowed in resources"))
-                    );
+                    assert!(matches!(error, HLLErrorItem::Compile(HLLCompileError {
+                                diagnostic: Diag {
+                                    inner: Diagnostic {
+                                        message: msg,
+                                        ..
+                                    }
+                                },
+                                ..
+                            }) if msg.contains("file_context() calls are only allowed in resources")
+                    ));
                 }
             }
         }
