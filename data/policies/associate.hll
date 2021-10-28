@@ -17,7 +17,7 @@ resource var {
 }
 
 resource bin {
-	@hook_push(associate)
+	// no @hook_push(associate)
 	fn hook_associate_from_bin(domain source) {
 		allow(source, tmp, file, [read]);
 	}

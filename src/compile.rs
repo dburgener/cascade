@@ -282,6 +282,45 @@ fn generate_type_no_parent_errors(missed_types: Vec<&TypeInfo>, types: &TypeMap)
     ret
 }
 
+fn create_synthetic_resource(
+    types: &HashMap<String, TypeInfo>,
+    dom_info: &TypeInfo,
+    class: &TypeInfo,
+    class_string: &HLLString,
+    global_exprs: &mut HashSet<Expression>,
+) -> Result<HLLString, HLLErrors> {
+    if !class.is_resource(types) {
+        return Err(HLLErrorItem::Compile(HLLCompileError::new(
+            "not a resource",
+            dom_info
+                .declaration_file
+                .as_ref()
+                .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?,
+            class_string.get_range(),
+            "This should not be a domain but a resource.",
+        ))
+        .into());
+    }
+
+    // Creates a synthetic resource declaration.
+    let mut dup_res_decl = class
+        .decl
+        .as_ref()
+        .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?
+        .clone();
+    let res_name: HLLString = format!("{}-{}", dom_info.name, class.name).into();
+    dup_res_decl.name = res_name.clone();
+    // Keep annotations as-is.
+    dup_res_decl
+        .expressions
+        .iter_mut()
+        .for_each(|e| e.set_class_name_if_decl(res_name.clone()));
+    if !global_exprs.insert(Expression::Decl(Declaration::Type(Box::new(dup_res_decl)))) {
+        return Err(HLLErrorItem::Internal(HLLInternalError {}).into());
+    }
+    Ok(res_name)
+}
+
 fn interpret_hooks(
     global_exprs: &mut HashSet<Expression>,
     local_exprs: &mut HashSet<Expression>,
@@ -317,36 +356,8 @@ fn interpret_hooks(
                 }
                 *seen = true;
 
-                if !class.is_resource(types) {
-                    return Err(HLLErrorItem::Compile(HLLCompileError::new(
-                        "not a resource",
-                        class
-                            .declaration_file
-                            .as_ref()
-                            .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?,
-                        res.get_range(),
-                        "This should not be a domain but a resource.",
-                    ))
-                    .into());
-                }
-
-                // Creates a synthetic resource declaration.
-                let mut dup_res_decl = class
-                    .decl
-                    .as_ref()
-                    .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?
-                    .clone();
-                let res_name: HLLString = format!("{}-{}", dom_info.name, class.name).into();
-                dup_res_decl.name = res_name.clone();
-                // Keep annotations as-is.
-                dup_res_decl
-                    .expressions
-                    .iter_mut()
-                    .for_each(|e| e.set_class_name_if_decl(res_name.clone()));
-                if !global_exprs.insert(Expression::Decl(Declaration::Type(Box::new(dup_res_decl))))
-                {
-                    return Err(HLLErrorItem::Internal(HLLInternalError {}).into());
-                }
+                let res_name =
+                    create_synthetic_resource(types, dom_info, class, res, global_exprs)?;
 
                 // Creates a synthetic call.
                 let new_call = Expression::Stmt(Statement::Call(Box::new(FuncCall::new(
@@ -362,16 +373,23 @@ fn interpret_hooks(
     }
 
     for (_, (res, _)) in potential_resources.iter().filter(|(_, (_, seen))| !seen) {
-        errors.add_error(HLLErrorItem::Compile(HLLCompileError::new(
-            "unassociated resource",
-            dom_info
-                .declaration_file
-                .as_ref()
-                .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?,
-            res.get_range(),
-            "this resource is missing a function annotated with @hook_push(associate)",
-        )));
+        match types.get(&res.to_string()) {
+            Some(class) => {
+                let _: HLLString =
+                    create_synthetic_resource(types, dom_info, class, res, global_exprs)?;
+            }
+            None => errors.add_error(HLLErrorItem::Compile(HLLCompileError::new(
+                "unknown resource",
+                dom_info
+                    .declaration_file
+                    .as_ref()
+                    .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?,
+                res.get_range(),
+                "didn't find this resource in the policy",
+            ))),
+        }
     }
+
     errors.into_result(())
 }
 

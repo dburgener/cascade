@@ -417,10 +417,8 @@ mod tests {
         valid_policy_test(
             "associate.hll",
             &[
-                "call bar-bin-hook_associate_from_bin (bar-bin bar)",
                 "call bar-tmp-hook_associate_from_tmp (bar-tmp bar)",
                 "call bar-var-hook_associate_from_var (bar-var bar)",
-                "call baz-bin-hook_associate_from_bin (baz-bin baz)",
                 "call baz-tmp-hook_associate_from_tmp (baz-tmp baz)",
                 "call baz-var-hook_associate_from_var (baz-var baz)",
                 "call foo-tmp-hook_associate_from_tmp (foo-tmp foo)",
