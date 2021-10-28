@@ -1134,13 +1134,13 @@ impl<'a> FunctionInfo<'a> {
         for annotation in funcdecl.annotations.annotations.iter() {
             match annotation.name.as_ref() {
                 "hook_push" => {
-                    // Multiple @hook_push annotations doesn't make sense.
+                    // For now, there is only one @hook_push(associate) allowed.
                     if hook_type.is_some() {
                         return Err(HLLCompileError::new(
-                            "Multiple @hook_push annotations",
+                            "Multiple @hook_push(associate) annotations",
                             declaration_file,
                             annotation.name.get_range(),
-                            "You need to remove duplicated @hook_push annotations.",
+                            "You need to remove superfluous @hook_push(associate) annotation.",
                         )
                         .into());
                     }
