@@ -6,7 +6,7 @@ use std::convert::TryFrom;
 
 use crate::ast::{Argument, Declaration, Expression, FuncCall, HLLString, PolicyFile, Statement};
 use crate::constants;
-use crate::error::{HLLErrorItem, HLLErrors, HLLInternalError};
+use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
 use crate::internal_rep::{
     generate_sid_rules, AnnotationInfo, ClassList, Context, FunctionArgument, FunctionInfo,
     HookCallAssociate, HookType, Sid, TypeInfo, TypeMap, ValidatedStatement,
@@ -289,7 +289,7 @@ fn interpret_hooks(
     types: &HashMap<String, TypeInfo>,
     associate: &HookCallAssociate,
     dom_info: &TypeInfo,
-) -> Result<(), HLLErrors> {
+) -> Result<(), HLLErrorItem> {
     // Only allow a set of specific annotation names and strictly check their arguments.
     // TODO: Add tests to verify these checks.
 
@@ -299,25 +299,25 @@ fn interpret_hooks(
         .filter(|f| f.hook_type == Some(HookType::Associate))
     {
         if let Some(class) = func_info.class {
-            if associate.resources.contains(&class.name) {
+            if let Some(res) = associate.resources.get(&class.name) {
                 // FIXME: is_resource() doesn't work (e.g. using a resource instead of a domain).
                 if !class.is_resource(types) {
-                    return Err(HLLErrors::from(
-                        HLLErrorItem::make_compile_or_internal_error(
-                            //format!("{} is not a resource in the hook_call annotation for {}", class.name, decl.name)
-                            "not a resource in the hook_call annotation",
-                            None,
-                            None,
-                            "TODO",
-                        ),
-                    ));
+                    return Err(HLLErrorItem::Compile(HLLCompileError::new(
+                        "not a resource",
+                        class
+                            .declaration_file
+                            .as_ref()
+                            .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?,
+                        res.get_range(),
+                        "This should not be a domain but a resource.",
+                    )));
                 }
 
                 // Creates a synthetic resource declaration.
                 let mut dup_res_decl = class
                     .decl
                     .as_ref()
-                    .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
+                    .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?
                     .clone();
                 let res_name: HLLString = format!("{}-{}", dom_info.name, class.name).into();
                 dup_res_decl.name = res_name.clone();
