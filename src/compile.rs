@@ -294,7 +294,11 @@ fn interpret_hooks(
     // TODO: Add tests to verify these checks.
 
     let mut errors = HLLErrors::new();
-    let mut remaining_resources = associate.resources.clone();
+    let mut potential_resources: HashMap<_, _> = associate
+        .resources
+        .iter()
+        .map(|r| (r.as_ref(), (r, false)))
+        .collect();
 
     // Find the hooks
     for func_info in funcs
@@ -302,8 +306,17 @@ fn interpret_hooks(
         .filter(|f| f.hook_type == Some(HookType::Associate))
     {
         if let Some(class) = func_info.class {
-            if let Some(res) = remaining_resources.take(&class.name) {
-                // FIXME: is_resource() doesn't work (e.g. using a resource instead of a domain).
+            if let Some((res, seen)) = potential_resources.get_mut(class.name.as_ref()) {
+                if *seen {
+                    Err(HLLErrorItem::Compile(HLLCompileError::new(
+                        "multiple @hook_push(associate) in the same resource",
+                        func_info.declaration_file,
+                        func_info.decl.name.get_range(),
+                        "Only one function in the same resource can be annotated with @hook_push(associate).",
+                    )))?;
+                }
+                *seen = true;
+
                 if !class.is_resource(types) {
                     return Err(HLLErrorItem::Compile(HLLCompileError::new(
                         "not a resource",
@@ -347,7 +360,8 @@ fn interpret_hooks(
             }
         }
     }
-    for res in remaining_resources {
+
+    for (_, (res, _)) in potential_resources.iter().filter(|(_, (_, seen))| !seen) {
         errors.add_error(HLLErrorItem::Compile(HLLCompileError::new(
             "unassociated resource",
             dom_info
