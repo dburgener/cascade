@@ -135,6 +135,88 @@ impl From<&TypeInfo> for Option<sexp::Sexp> {
     }
 }
 
+fn check_hook_call(annotation: &Annotation) -> Result<AnnotationInfo, HLLErrors> {
+    let mut args = annotation.arguments.iter();
+    let name = match args.next() {
+        None => {
+            return Err(HLLErrors::from(
+                HLLErrorItem::make_compile_or_internal_error(
+                    //format!("Missing hook name in the hook_call annotation for {}", decl.name),
+                    "Missing hook name in the hook_call annotation",
+                    None,
+                    None,
+                    "TODO",
+                ),
+            ));
+        }
+        Some(Argument::Var(v)) => v,
+        Some(_) => {
+            return Err(HLLErrors::from(
+                HLLErrorItem::make_compile_or_internal_error(
+                    //format!("Invalid argument type in the hook_call annotation for {}", decl.name),
+                    "Invalid argument type in the hook_call annotation",
+                    None,
+                    None,
+                    "TODO",
+                ),
+            ));
+        }
+    };
+    if name != "associate" {
+        return Err(HLLErrors::from(
+            HLLErrorItem::make_compile_or_internal_error(
+                //format!("Unknown name in the hook_call annotation for {}", decl.name),
+                "Unknown name in the hook_call annotation",
+                None,
+                None,
+                "TODO",
+            ),
+        ));
+    }
+
+    let res_list = match args.next() {
+        None => {
+            return Err(HLLErrors::from(
+                HLLErrorItem::make_compile_or_internal_error(
+                    //format!("Missing resource list in the hook_call annotation for {}", decl.name),
+                    "Missing resource list in the hook_call annotation",
+                    None,
+                    None,
+                    "TODO",
+                ),
+            ));
+        }
+        // TODO: Check for duplicate resources.
+        Some(Argument::List(l)) => l,
+        Some(_) => {
+            return Err(HLLErrors::from(
+                HLLErrorItem::make_compile_or_internal_error(
+                    //format!("Invalid argument type in the hook_call annotation for {}", decl.name),
+                    "Invalid argument type in the hook_call annotation",
+                    None,
+                    None,
+                    "TODO",
+                ),
+            ));
+        }
+    };
+
+    if args.next().is_some() {
+        return Err(HLLErrorItem::make_compile_or_internal_error(
+            //format!("Superfluous argument in the hook_call annotation for {}", decl.name),
+            "Superfluous argument in the hook_call annotation",
+            None,
+            None,
+            "TODO",
+        )
+        .into());
+    }
+
+    Ok(AnnotationInfo::HookCall(HookCallAssociate {
+        resources: res_list.clone(),
+    }))
+}
+
 fn check_annotations(annotations: &Annotations) -> Result<Vec<AnnotationInfo>, HLLErrors> {
     let mut infos = Vec::new();
 
@@ -148,85 +230,7 @@ fn check_annotations(annotations: &Annotations) -> Result<Vec<AnnotationInfo>, H
                 infos.push(AnnotationInfo::MakeList);
             }
             "hook_call" => {
-                let mut args = annotation.arguments.iter();
-                let name = match args.next() {
-                    None => {
-                        return Err(HLLErrors::from(
-                            HLLErrorItem::make_compile_or_internal_error(
-                                //format!("Missing hook name in the hook_call annotation for {}", decl.name),
-                                "Missing hook name in the hook_call annotation",
-                                None,
-                                None,
-                                "TODO",
-                            ),
-                        ));
-                    }
-                    Some(Argument::Var(v)) => v,
-                    Some(_) => {
-                        return Err(HLLErrors::from(
-                            HLLErrorItem::make_compile_or_internal_error(
-                                //format!("Invalid argument type in the hook_call annotation for {}", decl.name),
-                                "Invalid argument type in the hook_call annotation",
-                                None,
-                                None,
-                                "TODO",
-                            ),
-                        ));
-                    }
-                };
-                if name != "associate" {
-                    return Err(HLLErrors::from(
-                        HLLErrorItem::make_compile_or_internal_error(
-                            //format!("Unknown name in the hook_call annotation for {}", decl.name),
-                            "Unknown name in the hook_call annotation",
-                            None,
-                            None,
-                            "TODO",
-                        ),
-                    ));
-                }
-
-                let res_list = match args.next() {
-                    None => {
-                        return Err(HLLErrors::from(
-                            HLLErrorItem::make_compile_or_internal_error(
-                                //format!("Missing resource list in the hook_call annotation for {}", decl.name),
-                                "Missing resource list in the hook_call annotation",
-                                None,
-                                None,
-                                "TODO",
-                            ),
-                        ));
-                    }
-                    // TODO: Check for duplicate resources.
-                    Some(Argument::List(l)) => l,
-                    Some(_) => {
-                        return Err(HLLErrors::from(
-                            HLLErrorItem::make_compile_or_internal_error(
-                                //format!("Invalid argument type in the hook_call annotation for {}", decl.name),
-                                "Invalid argument type in the hook_call annotation",
-                                None,
-                                None,
-                                "TODO",
-                            ),
-                        ));
-                    }
-                };
-
-                if args.next().is_some() {
-                    return Err(HLLErrorItem::make_compile_or_internal_error(
-                        //format!("Superfluous argument in the hook_call annotation for {}", decl.name),
-                        "Superfluous argument in the hook_call annotation",
-                        None,
-                        None,
-                        "TODO",
-                    )
-                    .into());
-                }
-
-                infos.push(AnnotationInfo::HookCall(HookCallAssociate {
-                    resources: res_list.clone(),
-                }));
+                infos.push(check_hook_call(annotation)?);
             }
             _ => {
                 return Err(HLLErrorItem::make_compile_or_internal_error(
