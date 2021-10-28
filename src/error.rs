@@ -6,12 +6,12 @@ use codespan_reporting::term;
 use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
 use lalrpop_util::lexer::Token;
 use lalrpop_util::ParseError;
-use std::error::Error;
 use std::fmt;
 use std::io;
 use std::ops::Range;
+use thiserror::Error;
 
-#[derive(Clone, Debug)]
+#[derive(Error, Clone, Debug)]
 pub struct HLLCompileError {
     pub diagnostic: Diagnostic<()>,
     pub file: SimpleFile<String, String>,
@@ -50,25 +50,15 @@ impl HLLCompileError {
     }
 }
 
-impl Error for HLLCompileError {}
-
-#[derive(Clone, Debug)]
+#[derive(Error, Clone, Debug)]
+#[error("TODO")]
 pub struct HLLInternalError {}
-impl Error for HLLInternalError {}
 
-impl fmt::Display for HLLInternalError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "TODO")
-    }
-}
-
-#[derive(Clone, Debug)]
+#[derive(Error, Clone, Debug)]
 pub struct HLLParseError {
     pub file: SimpleFile<String, String>,
     pub diagnostic: Diagnostic<()>,
 }
-
-impl Error for HLLParseError {}
 
 impl fmt::Display for HLLParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -152,23 +142,17 @@ impl HLLParseError {
     }
 }
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum HLLErrorItem {
-    Compile(HLLCompileError),
-    Internal(HLLInternalError),
-    Parse(HLLParseError),
-    IO(io::Error),
-}
-
-impl fmt::Display for HLLErrorItem {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            HLLErrorItem::Compile(e) => write!(f, "Error: {}", e),
-            HLLErrorItem::Parse(e) => write!(f, "Parsing Error: {}", e),
-            HLLErrorItem::Internal(e) => write!(f, "Internal Error: {}", e),
-            HLLErrorItem::IO(e) => write!(f, "IO Error: {}", e),
-        }
-    }
+    #[error("Compilation error: {0}")]
+    Compile(#[from] HLLCompileError),
+    #[error("Internal error: {0}")]
+    Internal(#[from] HLLInternalError),
+    #[error("Parsing error: {0}")]
+    Parse(#[from] HLLParseError),
+    // TODO: Replace IO() with semantic errors wraping io::Error.
+    #[error("I/O error: {0}")]
+    IO(#[from] io::Error),
 }
 
 impl HLLErrorItem {
@@ -191,19 +175,8 @@ impl From<HLLErrorItem> for Vec<HLLErrorItem> {
     }
 }
 
-impl From<io::Error> for HLLErrorItem {
-    fn from(error: io::Error) -> Self {
-        HLLErrorItem::IO(error)
-    }
-}
-
-impl From<HLLCompileError> for HLLErrorItem {
-    fn from(error: HLLCompileError) -> Self {
-        HLLErrorItem::Compile(error)
-    }
-}
-
-#[derive(Debug)]
+#[derive(Error, Debug)]
+#[error("{errors:#?}")]
 pub struct HLLErrors {
     errors: Vec<HLLErrorItem>,
 }

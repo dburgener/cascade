@@ -3,6 +3,8 @@
 #[macro_use]
 extern crate lalrpop_util;
 
+extern crate thiserror;
+
 mod ast;
 mod compile;
 mod constants;
