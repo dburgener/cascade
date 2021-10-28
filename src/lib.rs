@@ -131,7 +131,7 @@ mod tests {
         let policy_file = [POLICIES_DIR, filename].concat();
         let policy_contents = match compile_system_policy(vec![&policy_file]) {
             Ok(p) => p,
-            Err(e) => panic!("Compilation of {} failed with {:?}", filename, e),
+            Err(e) => panic!("Compilation of {} failed with {}", filename, e),
         };
         for query in expected_contents {
             assert!(
@@ -255,7 +255,7 @@ mod tests {
                 //));
                 ()
             }
-            Err(e) => panic!("Makelist compilation failed with {:?}", e),
+            Err(e) => panic!("Makelist compilation failed with {}", e),
         }
     }
 
@@ -276,7 +276,7 @@ mod tests {
                 Ok(p) => {
                     assert!(p.contains("(call foo-read"));
                 }
-                Err(e) => panic!("Multi file compilation failed with {:?}", e),
+                Err(e) => panic!("Multi file compilation failed with {}", e),
             }
         }
     }

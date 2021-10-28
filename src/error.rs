@@ -194,7 +194,6 @@ impl From<HLLErrorItem> for Vec<HLLErrorItem> {
 }
 
 #[derive(Error, Debug)]
-#[error("{errors:#?}")]
 pub struct HLLErrors {
     errors: Vec<HLLErrorItem>,
 }
@@ -247,5 +246,21 @@ impl Iterator for HLLErrors {
     type Item = HLLErrorItem;
     fn next(&mut self) -> Option<Self::Item> {
         self.errors.pop() // TODO: This reverses the list of errors
+    }
+}
+
+impl fmt::Display for HLLErrors {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let num_errors = self.errors.len();
+        let s = match num_errors {
+            0 => return writeln!(f, "no error"),
+            1 => "",
+            _ => "s",
+        };
+        writeln!(f, "{} error{}:", num_errors, s)?;
+        for (i, e) in self.errors.iter().enumerate() {
+            writeln!(f, "{}: {:#?}", i + 1, e)?
+        }
+        Ok(())
     }
 }
