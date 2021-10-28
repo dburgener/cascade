@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
 use sexp::{atom_s, list, Atom, Sexp};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::convert::TryFrom;
 use std::fmt;
 use std::ops::Range;
@@ -23,12 +23,12 @@ const DEFAULT_MLS: &str = "s0";
 
 pub type TypeMap = HashMap<String, TypeInfo>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct HookCallAssociate {
-    pub resources: Vec<HLLString>,
+    pub resources: BTreeSet<HLLString>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AnnotationInfo {
     MakeList,
     HookCall(HookCallAssociate),
@@ -41,7 +41,7 @@ pub struct TypeInfo {
     pub is_virtual: bool,
     pub list_coercion: bool, // Automatically transform single instances of this type to a single element list
     pub declaration_file: Option<SimpleFile<String, String>>, // Built in types have no file
-    pub annotations: Vec<AnnotationInfo>,
+    pub annotations: BTreeSet<AnnotationInfo>,
     // TODO: replace with Option<&TypeDecl>
     pub decl: Option<TypeDecl>,
 }
@@ -67,7 +67,7 @@ impl TypeInfo {
             is_virtual: true,
             list_coercion: makelist,
             declaration_file: None,
-            annotations: vec![],
+            annotations: BTreeSet::new(),
             decl: None,
         }
     }
@@ -178,7 +178,6 @@ fn get_hook_call(
                 "You must use a set of resource names, enclosed by square brackets, as second argument.",
             ));
         }
-        // TODO: Check for duplicate resources.
         Some(Argument::List(l)) => l,
         Some(a) => {
             return Err(HLLCompileError::new(
@@ -203,31 +202,58 @@ fn get_hook_call(
     }
 
     Ok(AnnotationInfo::HookCall(HookCallAssociate {
-        resources: res_list.clone(),
+        // Checks for duplicate resources.
+        resources: res_list.iter().try_fold(BTreeSet::new(), |mut s, e| {
+            if !s.insert(e.clone()) {
+                Err(HLLCompileError::new(
+                    "Duplicate resource",
+                    file,
+                    e.get_range(),
+                    "Only unique resource names are valid.",
+                ))
+            } else {
+                Ok(s)
+            }
+        })?,
     }))
 }
 
 fn get_type_annotations(
     file: &SimpleFile<String, String>,
     annotations: &Annotations,
-) -> Result<Vec<AnnotationInfo>, HLLCompileError> {
-    let mut infos = Vec::new();
+) -> Result<BTreeSet<AnnotationInfo>, HLLCompileError> {
+    let mut infos = BTreeSet::new();
 
     // Only allow a set of specific annotation names and strictly check their arguments.
     // TODO: Add tests to verify these checks.
-    // TODO: Check for duplicate annotations.
     for annotation in annotations.annotations.iter() {
         match annotation.name.as_ref() {
             "makelist" => {
                 // TODO: Check arguments
-                infos.push(AnnotationInfo::MakeList);
+                // Multiple @makelist annotations doesn't make sense.
+                if !infos.insert(AnnotationInfo::MakeList) {
+                    return Err(HLLCompileError::new(
+                        "Multiple @makelist annotations",
+                        file,
+                        annotation.name.get_range(),
+                        "You need to remove duplicated @makelist annotations.",
+                    ));
+                }
             }
             "hook_call" => {
-                infos.push(get_hook_call(
+                // Multiple @hook_call annotations doesn't make sense.
+                if !infos.insert(get_hook_call(
                     file,
                     annotation.name.get_range(),
                     annotation,
-                )?);
+                )?) {
+                    return Err(HLLCompileError::new(
+                        "Multiple @hook_call annotations",
+                        file,
+                        annotation.name.get_range(),
+                        "You need to remove duplicated @hook_call annotations.",
+                    ));
+                }
             }
             _ => {
                 return Err(HLLCompileError::new(
@@ -239,7 +265,6 @@ fn get_type_annotations(
             }
         }
     }
-    // TODO: Check that there is no duplicate entries (i.e. function or resource with the same names)?
     Ok(infos)
 }
 

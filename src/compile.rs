@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
 use sexp::{atom_s, list, Sexp};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::convert::TryFrom;
 
 use crate::ast::{
@@ -125,7 +125,7 @@ pub fn get_built_in_types_map() -> TypeMap {
         is_virtual: false,
         list_coercion: false,
         declaration_file: None,
-        annotations: vec![],
+        annotations: BTreeSet::new(),
         decl: None,
     };
 
@@ -135,7 +135,7 @@ pub fn get_built_in_types_map() -> TypeMap {
         is_virtual: false,
         list_coercion: false,
         declaration_file: None,
-        annotations: vec![],
+        annotations: BTreeSet::new(),
         decl: None,
     };
 
@@ -145,7 +145,7 @@ pub fn get_built_in_types_map() -> TypeMap {
         is_virtual: false,
         list_coercion: false,
         declaration_file: None,
-        annotations: vec![],
+        annotations: BTreeSet::new(),
         decl: None,
     };
 
@@ -294,14 +294,12 @@ fn interpret_hooks(
 ) -> Result<(), HLLErrors> {
     // Only allow a set of specific annotation names and strictly check their arguments.
     // TODO: Add tests to verify these checks.
-    // TODO: Check for duplicate annotations.
 
     // Find the hooks
     for func_info in funcs
         .values()
         .filter(|f| f.hook_type == Some(HookType::Associate))
     {
-        // Multiple calls for the same hook and resource are allowed, not sure if it is a good thing.
         if let Some(class) = func_info.class {
             if associate.resources.contains(&class.name) {
                 // FIXME: is_resource() doesn't work (e.g. using a resource instead of a domain).

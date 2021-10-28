@@ -1,5 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
+use std::cmp::Ordering;
 use std::fmt;
 use std::ops::Range;
 
@@ -104,6 +105,18 @@ impl PartialEq<&str> for HLLString {
 impl PartialEq<HLLString> for &str {
     fn eq(&self, other: &HLLString) -> bool {
         *self == other.string
+    }
+}
+
+impl PartialOrd for HLLString {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.string.partial_cmp(&other.string)
+    }
+}
+
+impl Ord for HLLString {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.string.cmp(&other.string)
     }
 }
 
