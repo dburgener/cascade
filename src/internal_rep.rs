@@ -683,7 +683,7 @@ fn call_to_av_rule<'a>(
         constants::DONTAUDIT_FUNCTION_NAME => AvRuleFlavor::Dontaudit,
         constants::AUDITALLOW_FUNCTION_NAME => AvRuleFlavor::Auditallow,
         constants::NEVERALLOW_FUNCTION_NAME => AvRuleFlavor::Neverallow,
-        _ => return Err(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {}))),
+        _ => Err(HLLErrorItem::Internal(HLLInternalError {}))?,
     };
 
     let target_args = vec![
@@ -730,23 +730,23 @@ fn call_to_av_rule<'a>(
 
     let source = args_iter
         .next()
-        .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
+        .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?
         .get_name_or_string()?;
     let target = args_iter
         .next()
-        .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
+        .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?
         .get_name_or_string()?;
     let class = args_iter
         .next()
-        .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
+        .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?
         .get_name_or_string()?;
     let perms = args_iter
         .next()
-        .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
+        .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?
         .get_list()?;
 
     if args_iter.next().is_some() {
-        return Err(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})));
+        Err(HLLErrorItem::Internal(HLLInternalError {}))?;
     }
 
     for p in &perms {
@@ -871,16 +871,16 @@ fn call_to_fc_rules<'a>(
 
     let regex_string = args_iter
         .next()
-        .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
+        .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?
         .get_name_or_string()?
         .to_string();
     let file_types = args_iter
         .next()
-        .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
+        .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?
         .get_list()?;
     let context = args_iter
         .next()
-        .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
+        .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?
         .get_name_or_string()?;
     let context = match Context::try_from(context.as_ref()) {
         Ok(c) => c,
@@ -977,19 +977,19 @@ fn call_to_domain_transition<'a>(
 
     let source = args_iter
         .next()
-        .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
+        .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?
         .type_info;
     let executable = args_iter
         .next()
-        .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
+        .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?
         .type_info;
     let target = args_iter
         .next()
-        .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
+        .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?
         .type_info;
 
     if args_iter.next().is_some() {
-        return Err(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})));
+        Err(HLLErrorItem::Internal(HLLInternalError {}))?;
     }
 
     Ok(DomtransRule {
@@ -1218,7 +1218,7 @@ impl TryFrom<&FunctionInfo<'_>> for sexp::Sexp {
             Sexp::List(f.args.iter().map(|a| Sexp::from(a)).collect()),
         ];
         match &f.body {
-            None => return Err(HLLErrorItem::Internal(HLLInternalError {})),
+            None => Err(HLLInternalError {})?,
             Some(statements) => {
                 for statement in statements {
                     match statement {
@@ -1620,7 +1620,7 @@ fn validate_argument<'a>(
             }
             let target_ti = match types.get(&target_argument.param_type.name.to_string()) {
                 Some(t) => t,
-                None => return Err(HLLErrorItem::Internal(HLLInternalError {})),
+                None => Err(HLLInternalError {})?,
             };
             let arg_typeinfo_vec = argument_to_typeinfo_vec(&v, types, class_perms, args, file)?;
 
@@ -1794,12 +1794,16 @@ mod tests {
 
         match classlist.verify_permission(&"bar".into(), &"baz".into(), &fake_file) {
             Ok(_) => panic!("Nonexistent class verified"),
-            Err(e) => assert!(e.diagnostic.message.contains("No such object class")),
+            Err(e) => assert!(e.diagnostic.inner.message.contains("No such object class")),
         }
 
         match classlist.verify_permission(&"foo".into(), &"cap_bar".into(), &fake_file) {
             Ok(_) => panic!("Nonexistent permission verified"),
-            Err(e) => assert!(e.diagnostic.message.contains("cap_bar is not defined for")),
+            Err(e) => assert!(e
+                .diagnostic
+                .inner
+                .message
+                .contains("cap_bar is not defined for")),
         }
     }
 

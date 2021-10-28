@@ -171,9 +171,7 @@ pub fn build_func_map<'a>(
             Declaration::Type(t) => {
                 let type_being_parsed = match types.get(&t.name.to_string()) {
                     Some(t) => t,
-                    None => {
-                        return Err(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))
-                    }
+                    None => Err(HLLErrorItem::Internal(HLLInternalError {}))?,
                 };
                 decl_map.extend(build_func_map(
                     &t.expressions,
@@ -272,7 +270,7 @@ fn generate_type_no_parent_errors(missed_types: Vec<&TypeInfo>, types: &TypeMap)
     for t in &missed_types {
         match find_cycles_or_bad_types(&t, types, HashSet::new()) {
             Ok(()) => {
-                ret.add_error(HLLErrorItem::Internal(HLLInternalError {}));
+                ret.add_error(HLLInternalError {});
                 return ret;
             }
             Err(mut e) => ret.append(&mut e),
@@ -290,7 +288,7 @@ fn create_synthetic_resource(
     global_exprs: &mut HashSet<Expression>,
 ) -> Result<HLLString, HLLErrors> {
     if !class.is_resource(types) {
-        return Err(HLLErrorItem::Compile(HLLCompileError::new(
+        Err(HLLErrorItem::Compile(HLLCompileError::new(
             "not a resource",
             dom_info
                 .declaration_file
@@ -298,8 +296,7 @@ fn create_synthetic_resource(
                 .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?,
             class_string.get_range(),
             "This should not be a domain but a resource.",
-        ))
-        .into());
+        )))?;
     }
 
     // Creates a synthetic resource declaration.
@@ -316,7 +313,7 @@ fn create_synthetic_resource(
         .iter_mut()
         .for_each(|e| e.set_class_name_if_decl(res_name.clone()));
     if !global_exprs.insert(Expression::Decl(Declaration::Type(Box::new(dup_res_decl)))) {
-        return Err(HLLErrorItem::Internal(HLLInternalError {}).into());
+        Err(HLLErrorItem::Internal(HLLInternalError {}))?;
     }
     Ok(res_name)
 }
@@ -366,7 +363,7 @@ fn interpret_hooks(
                     vec![Argument::Var("this".into())],
                 ))));
                 if !local_exprs.insert(new_call) {
-                    return Err(HLLErrorItem::Internal(HLLInternalError {}).into());
+                    Err(HLLErrorItem::Internal(HLLInternalError {}))?;
                 }
             }
         }
@@ -378,7 +375,7 @@ fn interpret_hooks(
                 let _: HLLString =
                     create_synthetic_resource(types, dom_info, class, res, global_exprs)?;
             }
-            None => errors.add_error(HLLErrorItem::Compile(HLLCompileError::new(
+            None => errors.add_error(HLLCompileError::new(
                 "unknown resource",
                 dom_info
                     .declaration_file
@@ -386,7 +383,7 @@ fn interpret_hooks(
                     .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?,
                 res.get_range(),
                 "didn't find this resource in the policy",
-            ))),
+            )),
         }
     }
 
@@ -496,10 +493,10 @@ pub fn apply_annotations<'a>(
             // TODO: Avoid cloning all expressions.
             let mut new_domain = types
                 .get(&k.to_string())
-                .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
+                .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?
                 .decl
                 .as_ref()
-                .ok_or(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))?
+                .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?
                 .clone();
             new_domain.expressions = v.into_iter().collect();
             Ok(Expression::Decl(Declaration::Type(Box::new(new_domain))))
@@ -587,9 +584,7 @@ fn do_rules_pass<'a>(
             Expression::Decl(Declaration::Type(t)) => {
                 let type_being_parsed = match types.get(&t.name.to_string()) {
                     Some(t) => t,
-                    None => {
-                        return Err(HLLErrors::from(HLLErrorItem::Internal(HLLInternalError {})))
-                    }
+                    None => Err(HLLErrorItem::Internal(HLLInternalError {}))?,
                 };
                 match do_rules_pass(
                     &t.expressions,

@@ -6,21 +6,33 @@ use codespan_reporting::term;
 use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
 use lalrpop_util::lexer::Token;
 use lalrpop_util::ParseError;
-use std::error::Error;
 use std::fmt;
 use std::io;
 use std::ops::Range;
+use thiserror::Error;
 
-#[derive(Clone, Debug)]
+#[derive(Error, Clone, Debug)]
+#[error("{diagnostic}")]
 pub struct HLLCompileError {
-    pub diagnostic: Diagnostic<()>,
+    pub diagnostic: Diag,
     pub file: SimpleFile<String, String>,
 }
 
-impl fmt::Display for HLLCompileError {
+#[derive(Clone, Debug)]
+pub struct Diag {
+    pub inner: Diagnostic<()>,
+}
+
+impl From<Diagnostic<()>> for Diag {
+    fn from(d: Diagnostic<()>) -> Self {
+        Self { inner: d }
+    }
+}
+
+impl fmt::Display for Diag {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         //write!(f, "{}:{} {}", self.filename, self.lineno, self.msg)
-        write!(f, "{}", self.diagnostic.message)
+        write!(f, "{}", self.inner.message)
     }
 }
 
@@ -38,7 +50,7 @@ impl HLLCompileError {
             Some(r) => diagnostic.with_labels(vec![Label::primary((), r).with_message(help)]),
         };
         HLLCompileError {
-            diagnostic: diagnostic,
+            diagnostic: diagnostic.into(),
             file: file.clone(),
         }
     }
@@ -46,34 +58,24 @@ impl HLLCompileError {
         let writer = StandardStream::stderr(ColorChoice::Auto);
         let config = term::Config::default();
         // Ignores print errors.
-        let _ = term::emit(&mut writer.lock(), &config, &self.file, &self.diagnostic);
+        let _ = term::emit(
+            &mut writer.lock(),
+            &config,
+            &self.file,
+            &self.diagnostic.inner,
+        );
     }
 }
 
-impl Error for HLLCompileError {}
-
-#[derive(Clone, Debug)]
+#[derive(Error, Clone, Debug)]
+#[error("TODO")]
 pub struct HLLInternalError {}
-impl Error for HLLInternalError {}
 
-impl fmt::Display for HLLInternalError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "TODO")
-    }
-}
-
-#[derive(Clone, Debug)]
+#[derive(Error, Clone, Debug)]
+#[error("{diagnostic}")]
 pub struct HLLParseError {
+    pub diagnostic: Diag,
     pub file: SimpleFile<String, String>,
-    pub diagnostic: Diagnostic<()>,
-}
-
-impl Error for HLLParseError {}
-
-impl fmt::Display for HLLParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.diagnostic.message)
-    }
 }
 
 struct ParseErrorMsg {
@@ -140,7 +142,8 @@ impl HLLParseError {
                 Some(range) => diagnostic.with_labels(vec![
                     Label::primary((), range.clone()).with_message(msg.help)
                 ]),
-            },
+            }
+            .into(),
         }
     }
 
@@ -148,27 +151,26 @@ impl HLLParseError {
         let writer = StandardStream::stderr(ColorChoice::Auto);
         let config = term::Config::default();
         // Ignores print errors.
-        let _ = term::emit(&mut writer.lock(), &config, &self.file, &self.diagnostic);
+        let _ = term::emit(
+            &mut writer.lock(),
+            &config,
+            &self.file,
+            &self.diagnostic.inner,
+        );
     }
 }
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum HLLErrorItem {
-    Compile(HLLCompileError),
-    Internal(HLLInternalError),
-    Parse(HLLParseError),
-    IO(io::Error),
-}
-
-impl fmt::Display for HLLErrorItem {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            HLLErrorItem::Compile(e) => write!(f, "Error: {}", e),
-            HLLErrorItem::Parse(e) => write!(f, "Parsing Error: {}", e),
-            HLLErrorItem::Internal(e) => write!(f, "Internal Error: {}", e),
-            HLLErrorItem::IO(e) => write!(f, "IO Error: {}", e),
-        }
-    }
+    #[error("Compilation error: {0}")]
+    Compile(#[from] HLLCompileError),
+    #[error("Internal error: {0}")]
+    Internal(#[from] HLLInternalError),
+    #[error("Parsing error: {0}")]
+    Parse(#[from] HLLParseError),
+    // TODO: Replace IO() with semantic errors wraping io::Error.
+    #[error("I/O error: {0}")]
+    IO(#[from] io::Error),
 }
 
 impl HLLErrorItem {
@@ -191,19 +193,7 @@ impl From<HLLErrorItem> for Vec<HLLErrorItem> {
     }
 }
 
-impl From<io::Error> for HLLErrorItem {
-    fn from(error: io::Error) -> Self {
-        HLLErrorItem::IO(error)
-    }
-}
-
-impl From<HLLCompileError> for HLLErrorItem {
-    fn from(error: HLLCompileError) -> Self {
-        HLLErrorItem::Compile(error)
-    }
-}
-
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub struct HLLErrors {
     errors: Vec<HLLErrorItem>,
 }
@@ -213,8 +203,11 @@ impl HLLErrors {
         HLLErrors { errors: Vec::new() }
     }
 
-    pub fn add_error(&mut self, error: HLLErrorItem) {
-        self.errors.push(error);
+    pub fn add_error<T>(&mut self, error: T)
+    where
+        T: Into<HLLErrorItem>,
+    {
+        self.errors.push(error.into());
     }
 
     fn is_empty(&self) -> bool {
@@ -256,5 +249,21 @@ impl Iterator for HLLErrors {
     type Item = HLLErrorItem;
     fn next(&mut self) -> Option<Self::Item> {
         self.errors.pop() // TODO: This reverses the list of errors
+    }
+}
+
+impl fmt::Display for HLLErrors {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let num_errors = self.errors.len();
+        let s = match num_errors {
+            0 => return writeln!(f, "no error"),
+            1 => "",
+            _ => "s",
+        };
+        writeln!(f, "{} error{}:", num_errors, s)?;
+        for (i, e) in self.errors.iter().enumerate() {
+            writeln!(f, "{}: {:#?}", i + 1, e)?
+        }
+        Ok(())
     }
 }

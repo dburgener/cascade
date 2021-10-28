@@ -3,6 +3,8 @@
 #[macro_use]
 extern crate lalrpop_util;
 
+extern crate thiserror;
+
 mod ast;
 mod compile;
 mod constants;
@@ -113,7 +115,7 @@ fn generate_cil(v: Vec<sexp::Sexp>) -> String {
 mod tests {
     lalrpop_mod!(pub parser);
 
-    use crate::error::{HLLCompileError, HLLParseError};
+    use crate::error::{Diag, HLLCompileError, HLLParseError};
     use codespan_reporting::diagnostic::Diagnostic;
     use std::fs;
     use std::io::Write;
@@ -129,7 +131,7 @@ mod tests {
         let policy_file = [POLICIES_DIR, filename].concat();
         let policy_contents = match compile_system_policy(vec![&policy_file]) {
             Ok(p) => p,
-            Err(e) => panic!("Compilation of {} failed with {:?}", filename, e),
+            Err(e) => panic!("Compilation of {} failed with {}", filename, e),
         };
         for query in expected_contents {
             assert!(
@@ -253,7 +255,7 @@ mod tests {
                 //));
                 ()
             }
-            Err(e) => panic!("Makelist compilation failed with {:?}", e),
+            Err(e) => panic!("Makelist compilation failed with {}", e),
         }
     }
 
@@ -274,7 +276,7 @@ mod tests {
                 Ok(p) => {
                     assert!(p.contains("(call foo-read"));
                 }
-                Err(e) => panic!("Multi file compilation failed with {:?}", e),
+                Err(e) => panic!("Multi file compilation failed with {}", e),
             }
         }
     }
@@ -332,9 +334,11 @@ mod tests {
                     assert!(matches!(
                                 error,
                                 HLLErrorItem::Parse(HLLParseError {
-                                    diagnostic: Diagnostic {
-                                        message: msg,
-                                        ..
+                                    diagnostic: Diag {
+                                        inner: Diagnostic {
+                                            message: msg,
+                                            ..
+                                        }
                                     },
                                     ..
                                 })
@@ -355,9 +359,11 @@ mod tests {
                     assert!(matches!(
                                 error,
                                 HLLErrorItem::Parse(HLLParseError {
-                                    diagnostic: Diagnostic {
-                                        message: msg,
-                                        ..
+                                    diagnostic: Diag {
+                                        inner: Diagnostic {
+                                            message: msg,
+                                            ..
+                                        }
                                     },
                                     ..
                                 })
@@ -378,9 +384,11 @@ mod tests {
                     assert!(matches!(
                                 error,
                                 HLLErrorItem::Parse(HLLParseError {
-                                    diagnostic: Diagnostic {
-                                        message: msg,
-                                        ..
+                                    diagnostic: Diag {
+                                        inner: Diagnostic {
+                                            message: msg,
+                                            ..
+                                        }
                                     },
                                     ..
                                 })
@@ -398,12 +406,16 @@ mod tests {
             Ok(_) => panic!("file_context() in domain compiled successfully"),
             Err(e) => {
                 for error in e {
-                    assert!(
-                        matches!(error, HLLErrorItem::Compile(HLLCompileError { diagnostic: Diagnostic {
-                            message: msg, .. },
-                            .. })
-                                     if msg.contains("file_context() calls are only allowed in resources"))
-                    );
+                    assert!(matches!(error, HLLErrorItem::Compile(HLLCompileError {
+                                diagnostic: Diag {
+                                    inner: Diagnostic {
+                                        message: msg,
+                                        ..
+                                    }
+                                },
+                                ..
+                            }) if msg.contains("file_context() calls are only allowed in resources")
+                    ));
                 }
             }
         }
