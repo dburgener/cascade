@@ -55,7 +55,7 @@ impl TypeInfo {
             // TODO: Use AnnotationInfo::MakeList instead
             list_coercion: td.annotations.has_annotation("makelist"),
             declaration_file: Some(file.clone()), // TODO: Turn into reference
-            annotations: check_annotations(&td.annotations)?,
+            annotations: get_type_annotations(file, &td.annotations)?,
             decl: Some(td.clone()),
         })
     }
@@ -135,81 +135,71 @@ impl From<&TypeInfo> for Option<sexp::Sexp> {
     }
 }
 
-fn check_hook_call(annotation: &Annotation) -> Result<AnnotationInfo, HLLErrors> {
+fn get_hook_call(
+    file: &SimpleFile<String, String>,
+    annotation_name_range: Option<Range<usize>>,
+    annotation: &Annotation,
+) -> Result<AnnotationInfo, HLLCompileError> {
     let mut args = annotation.arguments.iter();
     let name = match args.next() {
         None => {
-            return Err(HLLErrors::from(
-                HLLErrorItem::make_compile_or_internal_error(
-                    //format!("Missing hook name in the hook_call annotation for {}", decl.name),
-                    "Missing hook name in the hook_call annotation",
-                    None,
-                    None,
-                    "TODO",
-                ),
+            return Err(HLLCompileError::new(
+                "Missing hook name as the first argument",
+                file,
+                annotation_name_range,
+                "You must use 'associate' as first argument.",
             ));
         }
         Some(Argument::Var(v)) => v,
-        Some(_) => {
-            return Err(HLLErrors::from(
-                HLLErrorItem::make_compile_or_internal_error(
-                    //format!("Invalid argument type in the hook_call annotation for {}", decl.name),
-                    "Invalid argument type in the hook_call annotation",
-                    None,
-                    None,
-                    "TODO",
-                ),
+        Some(a) => {
+            return Err(HLLCompileError::new(
+                "Invalid argument type",
+                file,
+                a.get_range(),
+                "You must use 'associate' as first argument.",
             ));
         }
     };
     if name != "associate" {
-        return Err(HLLErrors::from(
-            HLLErrorItem::make_compile_or_internal_error(
-                //format!("Unknown name in the hook_call annotation for {}", decl.name),
-                "Unknown name in the hook_call annotation",
-                None,
-                None,
-                "TODO",
-            ),
+        return Err(HLLCompileError::new(
+            "Unknown hook name",
+            file,
+            name.get_range(),
+            "You must use 'associate' as first argument.",
         ));
     }
 
     let res_list = match args.next() {
         None => {
-            return Err(HLLErrors::from(
-                HLLErrorItem::make_compile_or_internal_error(
-                    //format!("Missing resource list in the hook_call annotation for {}", decl.name),
-                    "Missing resource list in the hook_call annotation",
-                    None,
-                    None,
-                    "TODO",
-                ),
+            return Err(HLLCompileError::new(
+                "Missing resource list as second argument",
+                file,
+                annotation_name_range,
+                "You must use a set of resource names, enclosed by square brackets, as second argument.",
             ));
         }
         // TODO: Check for duplicate resources.
         Some(Argument::List(l)) => l,
-        Some(_) => {
-            return Err(HLLErrors::from(
-                HLLErrorItem::make_compile_or_internal_error(
-                    //format!("Invalid argument type in the hook_call annotation for {}", decl.name),
-                    "Invalid argument type in the hook_call annotation",
-                    None,
-                    None,
-                    "TODO",
-                ),
+        Some(a) => {
+            return Err(HLLCompileError::new(
+                "Invalid argument type",
+                file,
+                a.get_range(),
+                "You must use a set of resource names, enclosed by square brackets, as second argument.",
             ));
         }
     };
 
-    if args.next().is_some() {
-        return Err(HLLErrorItem::make_compile_or_internal_error(
-            //format!("Superfluous argument in the hook_call annotation for {}", decl.name),
-            "Superfluous argument in the hook_call annotation",
-            None,
-            None,
-            "TODO",
-        )
-        .into());
+    match args.next() {
+        Some(a) => {
+            return Err(HLLCompileError::new(
+                "Superfluous argument",
+                file,
+                a.get_range(),
+                "There must be only two arguments.",
+            ))
+        }
+        None => {}
     }
 
     Ok(AnnotationInfo::HookCall(HookCallAssociate {
@@ -217,7 +207,10 @@ fn check_hook_call(annotation: &Annotation) -> Result<AnnotationInfo, HLLErrors>
     }))
 }
 
-fn check_annotations(annotations: &Annotations) -> Result<Vec<AnnotationInfo>, HLLErrors> {
+fn get_type_annotations(
+    file: &SimpleFile<String, String>,
+    annotations: &Annotations,
+) -> Result<Vec<AnnotationInfo>, HLLCompileError> {
     let mut infos = Vec::new();
 
     // Only allow a set of specific annotation names and strictly check their arguments.
@@ -230,17 +223,19 @@ fn check_annotations(annotations: &Annotations) -> Result<Vec<AnnotationInfo>, H
                 infos.push(AnnotationInfo::MakeList);
             }
             "hook_call" => {
-                infos.push(check_hook_call(annotation)?);
+                infos.push(get_hook_call(
+                    file,
+                    annotation.name.get_range(),
+                    annotation,
+                )?);
             }
             _ => {
-                return Err(HLLErrorItem::make_compile_or_internal_error(
-                    //format!("Unknown annotation {} for {}", other, decl.name),
+                return Err(HLLCompileError::new(
                     "Unknown annotation",
-                    None,
-                    None,
-                    "TODO",
-                )
-                .into());
+                    file,
+                    annotation.name.get_range(),
+                    "The only known annotations are '@makelist' and '@hook_call'.",
+                ));
             }
         }
     }
