@@ -8,8 +8,8 @@ use crate::ast::{Argument, Declaration, Expression, FuncCall, HLLString, PolicyF
 use crate::constants;
 use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
 use crate::internal_rep::{
-    generate_sid_rules, AnnotationInfo, ClassList, Context, FunctionArgument, FunctionInfo,
-    HookCallAssociate, HookType, Sid, TypeInfo, TypeMap, ValidatedStatement,
+    generate_sid_rules, AnnotationInfo, Associated, ClassList, Context, FunctionArgument,
+    FunctionInfo, Sid, TypeInfo, TypeMap, ValidatedStatement,
 };
 
 use codespan_reporting::files::SimpleFile;
@@ -318,12 +318,12 @@ fn create_synthetic_resource(
     Ok(res_name)
 }
 
-fn interpret_hooks(
+fn interpret_associate(
     global_exprs: &mut HashSet<Expression>,
     local_exprs: &mut HashSet<Expression>,
     funcs: &HashMap<String, FunctionInfo>,
     types: &HashMap<String, TypeInfo>,
-    associate: &HookCallAssociate,
+    associate: &Associated,
     dom_info: &TypeInfo,
 ) -> Result<(), HLLErrors> {
     // Only allow a set of specific annotation names and strictly check their arguments.
@@ -336,19 +336,16 @@ fn interpret_hooks(
         .map(|r| (r.as_ref(), (r, false)))
         .collect();
 
-    // Find the hooks
-    for func_info in funcs
-        .values()
-        .filter(|f| f.hook_type == Some(HookType::Associate))
-    {
+    // Finds the associated call.
+    for func_info in funcs.values().filter(|f| f.is_associated_call) {
         if let Some(class) = func_info.class {
             if let Some((res, seen)) = potential_resources.get_mut(class.name.as_ref()) {
                 if *seen {
                     Err(HLLErrorItem::Compile(HLLCompileError::new(
-                        "multiple @hook_push(associate) in the same resource",
+                        "multiple @associated_call in the same resource",
                         func_info.declaration_file,
                         func_info.decl.name.get_range(),
-                        "Only one function in the same resource can be annotated with @hook_push(associate).",
+                        "Only one function in the same resource can be annotated with @associated_call.",
                     )))?;
                 }
                 *seen = true;
@@ -391,11 +388,11 @@ fn interpret_hooks(
 }
 
 // domain -> related expressions
-type HookCallExprs = HashMap<HLLString, HashSet<Expression>>;
+type AssociateExprs = HashMap<HLLString, HashSet<Expression>>;
 
 fn interpret_annotations<'a, T>(
     global_exprs: &mut HashSet<Expression>,
-    hook_call_exprs: &mut HookCallExprs,
+    associate_exprs: &mut AssociateExprs,
     funcs: &HashMap<String, FunctionInfo>,
     types: &HashMap<String, TypeInfo>,
     dom_info: &'a TypeInfo,
@@ -406,14 +403,14 @@ where
 {
     use std::collections::hash_map::Entry;
 
-    let local_exprs = match hook_call_exprs.entry(dom_info.name.clone()) {
+    let local_exprs = match associate_exprs.entry(dom_info.name.clone()) {
         // Ignores already processed domains.
         Entry::Occupied(_) => return Ok(()),
         vacant => vacant.or_default(),
     };
     for annotation in dom_info.annotations.iter().chain(extra_annotations) {
-        if let AnnotationInfo::HookCall(ref associate) = annotation {
-            interpret_hooks(
+        if let AnnotationInfo::Associate(ref associate) = annotation {
+            interpret_associate(
                 global_exprs,
                 local_exprs,
                 funcs,
@@ -428,7 +425,7 @@ where
 
 fn inherit_annotations(
     global_exprs: &mut HashSet<Expression>,
-    hook_call_exprs: &mut HookCallExprs,
+    associate_exprs: &mut AssociateExprs,
     funcs: &HashMap<String, FunctionInfo>,
     types: &HashMap<String, TypeInfo>,
     dom_info: &TypeInfo,
@@ -443,7 +440,7 @@ fn inherit_annotations(
             };
             ret.extend(inherit_annotations(
                 global_exprs,
-                hook_call_exprs,
+                associate_exprs,
                 funcs,
                 types,
                 parent_ti,
@@ -453,7 +450,7 @@ fn inherit_annotations(
     };
     interpret_annotations(
         global_exprs,
-        hook_call_exprs,
+        associate_exprs,
         funcs,
         types,
         dom_info,
@@ -474,19 +471,19 @@ pub fn apply_annotations<'a>(
     // Makes sure that there is no cycle.
     organize_type_map(types)?;
 
-    let mut hook_call_exprs = HashMap::new();
+    let mut associate_exprs = HashMap::new();
     let mut global_exprs = HashSet::new();
     for type_info in types.values() {
         inherit_annotations(
             &mut global_exprs,
-            &mut hook_call_exprs,
+            &mut associate_exprs,
             funcs,
             types,
             type_info,
         )?;
     }
 
-    Ok(hook_call_exprs
+    Ok(associate_exprs
         .into_iter()
         .filter(|(_, v)| v.len() != 0)
         .map(|(k, v)| {
