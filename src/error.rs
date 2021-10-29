@@ -214,7 +214,7 @@ impl HLLErrors {
         self.errors.is_empty()
     }
 
-    pub fn append(&mut self, other: &mut HLLErrors) {
+    pub fn append(&mut self, mut other: HLLErrors) {
         self.errors.append(&mut other.errors);
     }
 

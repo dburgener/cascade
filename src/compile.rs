@@ -209,7 +209,7 @@ pub fn validate_functions<'a, 'b>(
             function.declaration_file,
         ) {
             Ok(_) => (),
-            Err(mut e) => errors.append(&mut e),
+            Err(e) => errors.append(e),
         }
     }
     errors.into_result(())
@@ -258,7 +258,7 @@ fn find_cycles_or_bad_types(
 
         match find_cycles_or_bad_types(&parent_ti, types, new_visited_types) {
             Ok(()) => (),
-            Err(mut e) => ret.append(&mut e),
+            Err(e) => ret.append(e),
         }
     }
 
@@ -273,7 +273,7 @@ fn generate_type_no_parent_errors(missed_types: Vec<&TypeInfo>, types: &TypeMap)
                 ret.add_error(HLLInternalError {});
                 return ret;
             }
-            Err(mut e) => ret.append(&mut e),
+            Err(e) => ret.append(e),
         }
     }
     // TODO: Deduplication
@@ -575,7 +575,7 @@ fn do_rules_pass<'a>(
                     file,
                 ) {
                     Ok(mut s) => ret.append(&mut s),
-                    Err(mut e) => errors.append(&mut e),
+                    Err(e) => errors.append(e),
                 }
             }
             Expression::Decl(Declaration::Type(t)) => {
@@ -592,7 +592,7 @@ fn do_rules_pass<'a>(
                     file,
                 ) {
                     Ok(r) => ret.extend(r),
-                    Err(mut e) => errors.append(&mut e),
+                    Err(e) => errors.append(e),
                 }
             }
             _ => {}
