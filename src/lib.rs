@@ -24,6 +24,12 @@ use lalrpop_util::ParseError;
 
 lalrpop_mod!(pub parser);
 
+/// Compile a complete system policy
+/// The list of input files list should contain filenames of files containing policy to be
+/// compiled.
+/// Returns a Result containing either a string of CIL policy which is the compiled result or a
+/// list of errors.
+/// In order to convert the compiled CIL policy into a usable policy, you must use secilc
 pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HLLErrors> {
     let mut policies: Vec<PolicyFile> = Vec::new();
     // TODO: collect errors and return an HLLErrors at the end of the loop
