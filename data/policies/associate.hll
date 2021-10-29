@@ -1,24 +1,24 @@
 resource tmp {
 	@associated_call
-	fn hook_associate_from_tmp(domain source) {
+	fn associated_call_from_tmp(domain source) {
 		allow(source, tmp, file, [read]);
 	}
 
-	fn not_a_hook(domain source) {
+	fn not_an_associated_call(domain source) {
 		allow(source, tmp, file, [read]);
 	}
 }
 
 resource var {
 	@associated_call
-	fn hook_associate_from_var(domain source) {
+	fn associated_call_from_var(domain source) {
 		allow(source, tmp, file, [read]);
 	}
 }
 
 resource bin {
 	// no @associated_call
-	fn hook_associate_from_bin(domain source) {
+	fn not_an_associated_call_from_bin(domain source) {
 		allow(source, tmp, file, [read]);
 	}
 }
@@ -26,20 +26,20 @@ resource bin {
 @associate([tmp var])
 virtual domain foo {
 	// Creates new resources foo.tmp and foo.var, and implicitly calls
-	// foo.tmp.hook_associate_from_tmp(foo) and foo.var.hook_associate_from_var(foo)
-	tmp.hook_associate_from_tmp(this);
-	tmp.not_a_hook(this);
+	// foo.tmp.associated_call_from_tmp(foo) and foo.var.associated_call_from_var(foo)
+	tmp.associated_call_from_tmp(this);
+	tmp.not_an_associated_call(this);
 }
 
 @associate([bin])
 virtual domain bar inherits foo {
 	// Creates new resources bar.tmp, bar.var and bar.bin, and implicitly calls
-	// bar.tmp.hook_associate_from_tmp(bar), bar.var.hook_associate_from_var(bar) and
-	// bar.bin.hook_associate_from_var(bar)
+	// bar.tmp.associated_call_from_tmp(bar), bar.var.associated_call_from_var(bar) and
+	// bar.bin.associated_call_from_var(bar)
 }
 
 domain baz inherits bar {
 	// Creates new resources baz.tmp, baz.var and baz.bin, and implicitly calls
-	// baz.tmp.hook_associate_from_tmp(baz), baz.var.hook_associate_from_var(baz) and
-	// baz.bin.hook_associate_from_var(baz)
+	// baz.tmp.associated_call_from_tmp(baz), baz.var.associated_call_from_var(baz) and
+	// baz.bin.associated_call_from_var(baz)
 }
