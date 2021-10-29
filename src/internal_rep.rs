@@ -972,53 +972,21 @@ fn call_to_domain_transition<'a>(
     })
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum HookType {
-    Associate,
-}
-
-fn check_hook_push(
-    hook: &Annotation,
+fn check_associated_call(
+    annotation: &Annotation,
     funcdecl: &FuncDecl,
     file: &SimpleFile<String, String>,
-    hook_name_range: Option<Range<usize>>,
-) -> Result<HookType, HLLCompileError> {
+) -> Result<bool, HLLCompileError> {
     // Checks that annotation arguments match the expected signature.
-    let mut hook_args = hook.arguments.iter();
-    let name = match hook_args.next() {
-        None => {
-            return Err(HLLCompileError::new(
-                "Missing hook name as the first argument",
-                file,
-                hook_name_range,
-                "You must use 'associate' as first argument.",
-            ));
-        }
-        Some(Argument::Var(v)) => v,
-        Some(a) => {
-            return Err(HLLCompileError::new(
-                "Invalid argument type",
-                file,
-                a.get_range(),
-                "You must use 'associate' as first argument.",
-            ));
-        }
-    };
-    if name != "associate" {
-        return Err(HLLCompileError::new(
-            "Unknown hook name",
-            file,
-            name.get_range(),
-            "You must use 'associate' as first argument.",
-        ));
-    }
-    match hook_args.next() {
+    let mut annotation_args = annotation.arguments.iter();
+
+    match annotation_args.next() {
         Some(a) => {
             return Err(HLLCompileError::new(
                 "Superfluous argument",
                 file,
                 a.get_range(),
-                "There must be only one argument.",
+                "@associated_call doesn't take argument.",
             ))
         }
         None => {}
@@ -1029,7 +997,7 @@ fn check_hook_push(
     match func_args.next() {
         None => {
             return Err(HLLCompileError::new(
-                "Invalid method signature for @hook_push annotation: missing firth argument",
+                "Invalid method signature for @associated_call annotation: missing firth argument",
                 file,
                 funcdecl.name.get_range(),
                 "Add a 'domain' argument.",
@@ -1042,7 +1010,7 @@ fn check_hook_push(
         }) => {
             if param_type.as_ref() != "domain" || *is_list_param {
                 return Err(HLLCompileError::new(
-                    "Invalid method signature for @hook_push annotation: invalid firth argument",
+                    "Invalid method signature for @associated_call annotation: invalid firth argument",
                     file,
                     param_type.get_range(),
                     "The type of the first method argument must be 'domain'.",
@@ -1053,7 +1021,7 @@ fn check_hook_push(
     match func_args.next() {
         Some(a) => {
             return Err(HLLCompileError::new(
-                "Invalid method signature for @hook_push annotation: too much arguments",
+                "Invalid method signature for @associated_call annotation: too much arguments",
                 file,
                 a.param_type.get_range(),
                 "Only one argument of type 'domain' is accepted.",
@@ -1062,7 +1030,7 @@ fn check_hook_push(
         None => {}
     }
 
-    Ok(HookType::Associate)
+    Ok(true)
 }
 
 #[derive(Debug, Clone)]
@@ -1073,7 +1041,7 @@ pub struct FunctionInfo<'a> {
     pub original_body: &'a Vec<Statement>,
     pub body: Option<Vec<ValidatedStatement<'a>>>,
     pub declaration_file: &'a SimpleFile<String, String>,
-    pub hook_type: Option<HookType>,
+    pub is_associated_call: bool,
     pub decl: &'a FuncDecl,
 }
 
@@ -1100,36 +1068,32 @@ impl<'a> FunctionInfo<'a> {
             }
         }
 
-        let mut hook_type = None;
+        let mut is_associated_call = false;
 
         // Only allow a set of specific annotation names and strictly check their arguments.
         // TODO: Add tests to verify these checks.
         for annotation in funcdecl.annotations.annotations.iter() {
             match annotation.name.as_ref() {
-                "hook_push" => {
-                    // For now, there is only one @hook_push(associate) allowed.
-                    if hook_type.is_some() {
+                "associated_call" => {
+                    // For now, there is only one @associated_call allowed.
+                    if is_associated_call {
                         return Err(HLLCompileError::new(
-                            "Multiple @hook_push(associate) annotations",
+                            "Multiple @associated_call annotations",
                             declaration_file,
                             annotation.name.get_range(),
-                            "You need to remove superfluous @hook_push(associate) annotation.",
+                            "You need to remove superfluous @associated_call annotation.",
                         )
                         .into());
                     }
-                    hook_type = Some(check_hook_push(
-                        annotation,
-                        funcdecl,
-                        declaration_file,
-                        annotation.name.get_range(),
-                    )?);
+                    is_associated_call =
+                        check_associated_call(annotation, funcdecl, declaration_file)?;
                 }
                 _ => {
                     return Err(HLLCompileError::new(
                         "Unknown annotation",
                         declaration_file,
                         annotation.name.get_range(),
-                        "The only valid annotation is '@hook_push'",
+                        "The only valid annotation is '@associated_call'",
                     )
                     .into());
                 }
@@ -1143,7 +1107,7 @@ impl<'a> FunctionInfo<'a> {
             original_body: &funcdecl.body,
             body: None,
             declaration_file: declaration_file,
-            hook_type: hook_type,
+            is_associated_call: is_associated_call,
             decl: &funcdecl,
         })
     }

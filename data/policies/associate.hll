@@ -1,5 +1,5 @@
 resource tmp {
-	@hook_push(associate)
+	@associated_call
 	fn hook_associate_from_tmp(domain source) {
 		allow(source, tmp, file, [read]);
 	}
@@ -10,14 +10,14 @@ resource tmp {
 }
 
 resource var {
-	@hook_push(associate)
+	@associated_call
 	fn hook_associate_from_var(domain source) {
 		allow(source, tmp, file, [read]);
 	}
 }
 
 resource bin {
-	// no @hook_push(associate)
+	// no @associated_call
 	fn hook_associate_from_bin(domain source) {
 		allow(source, tmp, file, [read]);
 	}

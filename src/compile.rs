@@ -9,7 +9,7 @@ use crate::constants;
 use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
 use crate::internal_rep::{
     generate_sid_rules, AnnotationInfo, Associated, ClassList, Context, FunctionArgument,
-    FunctionInfo, HookType, Sid, TypeInfo, TypeMap, ValidatedStatement,
+    FunctionInfo, Sid, TypeInfo, TypeMap, ValidatedStatement,
 };
 
 use codespan_reporting::files::SimpleFile;
@@ -336,19 +336,16 @@ fn interpret_associate(
         .map(|r| (r.as_ref(), (r, false)))
         .collect();
 
-    // Find the hooks
-    for func_info in funcs
-        .values()
-        .filter(|f| f.hook_type == Some(HookType::Associate))
-    {
+    // Finds the associated call.
+    for func_info in funcs.values().filter(|f| f.is_associated_call) {
         if let Some(class) = func_info.class {
             if let Some((res, seen)) = potential_resources.get_mut(class.name.as_ref()) {
                 if *seen {
                     Err(HLLErrorItem::Compile(HLLCompileError::new(
-                        "multiple @hook_push(associate) in the same resource",
+                        "multiple @associated_call in the same resource",
                         func_info.declaration_file,
                         func_info.decl.name.get_range(),
-                        "Only one function in the same resource can be annotated with @hook_push(associate).",
+                        "Only one function in the same resource can be annotated with @associated_call.",
                     )))?;
                 }
                 *seen = true;
