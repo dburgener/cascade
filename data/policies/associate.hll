@@ -23,7 +23,7 @@ resource bin {
 	}
 }
 
-@hook_call(associate, [tmp var])
+@associate([tmp var])
 virtual domain foo {
 	// Creates new resources foo.tmp and foo.var, and implicitly calls
 	// foo.tmp.hook_associate_from_tmp(foo) and foo.var.hook_associate_from_var(foo)
@@ -31,7 +31,7 @@ virtual domain foo {
 	tmp.not_a_hook(this);
 }
 
-@hook_call(associate, [bin])
+@associate([bin])
 virtual domain bar inherits foo {
 	// Creates new resources bar.tmp, bar.var and bar.bin, and implicitly calls
 	// bar.tmp.hook_associate_from_tmp(bar), bar.var.hook_associate_from_var(bar) and

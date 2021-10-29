@@ -24,14 +24,14 @@ const DEFAULT_MLS: &str = "s0";
 pub type TypeMap = HashMap<String, TypeInfo>;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct HookCallAssociate {
+pub struct Associated {
     pub resources: BTreeSet<HLLString>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AnnotationInfo {
     MakeList,
-    HookCall(HookCallAssociate),
+    Associate(Associated),
 }
 
 #[derive(Clone, Debug)]
@@ -135,47 +135,20 @@ impl From<&TypeInfo> for Option<sexp::Sexp> {
     }
 }
 
-fn get_hook_call(
+fn get_associate(
     file: &SimpleFile<String, String>,
     annotation_name_range: Option<Range<usize>>,
     annotation: &Annotation,
 ) -> Result<AnnotationInfo, HLLCompileError> {
     let mut args = annotation.arguments.iter();
-    let name = match args.next() {
-        None => {
-            return Err(HLLCompileError::new(
-                "Missing hook name as the first argument",
-                file,
-                annotation_name_range,
-                "You must use 'associate' as first argument.",
-            ));
-        }
-        Some(Argument::Var(v)) => v,
-        Some(a) => {
-            return Err(HLLCompileError::new(
-                "Invalid argument type",
-                file,
-                a.get_range(),
-                "You must use 'associate' as first argument.",
-            ));
-        }
-    };
-    if name != "associate" {
-        return Err(HLLCompileError::new(
-            "Unknown hook name",
-            file,
-            name.get_range(),
-            "You must use 'associate' as first argument.",
-        ));
-    }
 
     let res_list = match args.next() {
         None => {
             return Err(HLLCompileError::new(
-                "Missing resource list as second argument",
+                "Missing resource list as first argument",
                 file,
                 annotation_name_range,
-                "You must use a set of resource names, enclosed by square brackets, as second argument.",
+                "You must use a set of resource names, enclosed by square brackets, as first argument.",
             ));
         }
         Some(Argument::List(l)) => l,
@@ -184,7 +157,7 @@ fn get_hook_call(
                 "Invalid argument type",
                 file,
                 a.get_range(),
-                "You must use a set of resource names, enclosed by square brackets, as second argument.",
+                "You must use a set of resource names, enclosed by square brackets, as first argument.",
             ));
         }
     };
@@ -195,13 +168,13 @@ fn get_hook_call(
                 "Superfluous argument",
                 file,
                 a.get_range(),
-                "There must be only two arguments.",
+                "There must be only one argument.",
             ))
         }
         None => {}
     }
 
-    Ok(AnnotationInfo::HookCall(HookCallAssociate {
+    Ok(AnnotationInfo::Associate(Associated {
         // Checks for duplicate resources.
         resources: res_list.iter().try_fold(BTreeSet::new(), |mut s, e| {
             if !s.insert(e.clone()) {
@@ -240,18 +213,18 @@ fn get_type_annotations(
                     ));
                 }
             }
-            "hook_call" => {
-                // Multiple @hook_call annotations doesn't make sense.
-                if !infos.insert(get_hook_call(
+            "associate" => {
+                // Multiple @associate annotations doesn't make sense.
+                if !infos.insert(get_associate(
                     file,
                     annotation.name.get_range(),
                     annotation,
                 )?) {
                     return Err(HLLCompileError::new(
-                        "Multiple @hook_call annotations",
+                        "Multiple @associate annotations",
                         file,
                         annotation.name.get_range(),
-                        "You need to remove duplicated @hook_call annotations.",
+                        "You need to remove duplicated @associate annotations.",
                     ));
                 }
             }
@@ -260,7 +233,7 @@ fn get_type_annotations(
                     "Unknown annotation",
                     file,
                     annotation.name.get_range(),
-                    "The only known annotations are '@makelist' and '@hook_call'.",
+                    "The only known annotations are '@makelist' and '@associate'.",
                 ));
             }
         }
