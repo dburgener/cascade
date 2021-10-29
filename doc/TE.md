@@ -105,6 +105,28 @@ can be done by manually defining a new funtion (which may call parent classes
 using the syntax classname::function_name()), or using the "derive" annotation.
 See the section on annotations for details on deriving.
 
+The common case for type inheritance will be inheriting from virtual types,
+which conveniently allows reference to all derived types, automatically
+generates common resources, and reduces boilerplate by including common
+functions.
+
+Inheriting from concrete types can be desirable for various applications, and
+is made more useful than previous cloning implementations by the resource
+association mechanism, but is not currently supported in the current version.
+
+### Virtual types
+A virtual type does not result in a concrete type existing on the system.
+Virtual types are highly similar to attributes in traditional policy (and are
+compiled into attributes), but with benefits of member functions and
+inheritance, member functions on a virtual type automatically create member
+functions on the child, greatly reducing boilerplate.
+
+Virtual types are created using the virtual keyword:
+
+```
+virtual domain foo {}
+```
+
 ### List of built in types
 The following types are built in to the language:
 
@@ -210,12 +232,14 @@ Runtime resource transitions are achieved through the resource_transition()
 built in function, which has the following prototypes:
 
 ```
-fn resource_transition(resource target, source domain, resource parent_dir, class obj_class);
-fn resource_transition(resource target, source domain, resource parent_dir, [class] obj_classes);
+fn resource_transition(resource default, source domain, resource parent, class obj_class);
+fn resource_transition(resource default, source domain, resource parent, [class] obj_classes);
 ```
 
-The target field is first so that it can be passed in when called as a member
+The default field is first so that it can be passed in when called as a member
 function from resources.
+
+TODO: Named resource transitions
 
 TODO: File context labeling
 
