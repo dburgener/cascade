@@ -218,12 +218,19 @@ impl HLLErrors {
         self.errors.append(&mut other.errors);
     }
 
-    pub fn into_result<T>(self, ok: T) -> Result<T, HLLErrors> {
+    pub fn into_result_with<F, T>(self, ok_with: F) -> Result<T, HLLErrors>
+    where
+        F: FnOnce() -> T,
+    {
         if self.is_empty() {
-            Ok(ok)
+            Ok(ok_with())
         } else {
             Err(self)
         }
+    }
+
+    pub fn into_result<T>(self, ok: T) -> Result<T, HLLErrors> {
+        self.into_result_with(|| ok)
     }
 
     pub fn error_count(&self) -> usize {
