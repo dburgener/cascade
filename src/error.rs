@@ -214,13 +214,38 @@ impl HLLErrors {
         self.errors.is_empty()
     }
 
-    pub fn append(&mut self, other: &mut HLLErrors) {
+    pub fn append(&mut self, mut other: HLLErrors) {
         self.errors.append(&mut other.errors);
     }
 
-    pub fn into_result<T>(self, ok: T) -> Result<T, HLLErrors> {
+    pub fn into_result_with<F, T>(self, ok_with: F) -> Result<T, HLLErrors>
+    where
+        F: FnOnce() -> T,
+    {
         if self.is_empty() {
-            Ok(ok)
+            Ok(ok_with())
+        } else {
+            Err(self)
+        }
+    }
+
+    pub fn into_result<T>(self, ok: T) -> Result<T, HLLErrors> {
+        self.into_result_with(|| ok)
+    }
+
+    /// Enables to easily stop a workflow after a failed major step.  This is
+    /// useful to avoid accumulating more errors that may be hard to understand
+    /// because of unsatisfied prerequiste.
+    ///
+    /// For a multi-step workflow, it works as follow:
+    /// 1. creates an accumulator with `let mut errors = HLLErrors::new();`
+    /// 2. within a major step accumulate errors with `errors.add_error(e);`
+    /// 3. between major steps check for any errors with `errors =
+    ///    errors.into_result_self()?;` which returns `Err(self)` if there are
+    ///    any. If there aren't, just keep the empty list and proceed.
+    pub fn into_result_self(self) -> Result<Self, Self> {
+        if self.is_empty() {
+            Ok(self)
         } else {
             Err(self)
         }

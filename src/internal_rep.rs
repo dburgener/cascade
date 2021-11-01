@@ -1137,7 +1137,7 @@ impl<'a> FunctionInfo<'a> {
                 file,
             ) {
                 Ok(mut s) => new_body.append(&mut s),
-                Err(mut e) => errors.append(&mut e),
+                Err(e) => errors.append(e),
             }
         }
         self.body = Some(new_body);

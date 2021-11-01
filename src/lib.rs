@@ -19,8 +19,11 @@ use std::collections::HashMap;
 use ast::{Policy, PolicyFile};
 
 use codespan_reporting::files::SimpleFile;
-use error::{HLLErrorItem, HLLErrors};
+use error::HLLErrors;
 use lalrpop_util::ParseError;
+
+#[cfg(test)]
+use error::HLLErrorItem;
 
 lalrpop_mod!(pub parser);
 
@@ -32,21 +35,29 @@ lalrpop_mod!(pub parser);
 /// In order to convert the compiled CIL policy into a usable policy, you must use secilc
 pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HLLErrors> {
     let mut policies: Vec<PolicyFile> = Vec::new();
-    // TODO: collect errors and return an HLLErrors at the end of the loop
+    let mut errors = HLLErrors::new();
+
     for f in input_files {
-        let policy_str =
-            std::fs::read_to_string(&f).map_err(|e| HLLErrors::from(HLLErrorItem::from(e)))?;
+        let policy_str = match std::fs::read_to_string(&f) {
+            Ok(s) => s,
+            Err(e) => {
+                errors.add_error(e);
+                continue;
+            }
+        };
         let p = match parse_policy(&policy_str) {
             Ok(p) => p,
             Err(e) => {
                 // TODO: avoid String duplication
-                let err = error::HLLParseError::new(e, f.into(), policy_str.clone());
-                return Err(HLLErrors::from(HLLErrorItem::Parse(err)));
+                errors.add_error(error::HLLParseError::new(e, f.into(), policy_str.clone()));
+                continue;
             }
         };
 
         policies.push(PolicyFile::new(*p, SimpleFile::new(f.into(), policy_str)));
     }
+    // Stops if something went wrong for this major step.
+    errors = errors.into_result_self()?;
 
     // Generic initialization
     let classlist = obj_class::make_classlist();
@@ -56,8 +67,16 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
 
     // Collect all type declarations
     for p in &policies {
-        compile::extend_type_map(p, &mut type_map)?;
+        match compile::extend_type_map(p, &mut type_map) {
+            Ok(()) => {}
+            Err(e) => {
+                errors.append(e);
+                continue;
+            }
+        }
     }
+    // Stops if something went wrong for this major step.
+    errors = errors.into_result_self()?;
 
     // Applies annotations
     {
@@ -66,26 +85,49 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
         // Collect all function declarations
         for p in &policies {
             tmp_func_map.extend(
-                compile::build_func_map(&p.policy.exprs, &type_map, None, &p.file)?.into_iter(),
+                match compile::build_func_map(&p.policy.exprs, &type_map, None, &p.file) {
+                    Ok(m) => m.into_iter(),
+                    Err(e) => {
+                        errors.append(e);
+                        continue;
+                    }
+                },
             );
         }
 
         // TODO: Validate original functions before adding synthetic ones to avoid confusing errors for users.
 
-        let pf = PolicyFile::new(
-            Policy::new(compile::apply_annotations(&type_map, &tmp_func_map)?),
-            SimpleFile::new(String::new(), String::new()),
-        );
-        compile::extend_type_map(&pf, &mut type_map)?;
-        policies.push(pf);
+        match compile::apply_annotations(&type_map, &tmp_func_map) {
+            Ok(exprs) => {
+                let pf = PolicyFile::new(
+                    Policy::new(exprs),
+                    SimpleFile::new(String::new(), String::new()),
+                );
+                match compile::extend_type_map(&pf, &mut type_map) {
+                    Ok(()) => policies.push(pf),
+                    Err(e) => errors.append(e),
+                }
+            }
+            Err(e) => errors.append(e),
+        }
     }
+    // Stops if something went wrong for this major step.
+    errors = errors.into_result_self()?;
 
     // Collect all function declarations
     for p in &policies {
         func_map.extend(
-            compile::build_func_map(&p.policy.exprs, &type_map, None, &p.file)?.into_iter(),
+            match compile::build_func_map(&p.policy.exprs, &type_map, None, &p.file) {
+                Ok(m) => m.into_iter(),
+                Err(e) => {
+                    errors.append(e);
+                    continue;
+                }
+            },
         );
     }
+    // Stops if something went wrong for this major step.
+    errors = errors.into_result_self()?;
 
     // Validate all functions
     let func_map_copy = func_map.clone(); // In order to read function info while mutating
@@ -93,13 +135,21 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
 
     for p in &policies {
         policy_rules.extend(
-            compile::compile_rules_one_file(&p, &classlist, &type_map, &func_map)?.into_iter(),
+            match compile::compile_rules_one_file(&p, &classlist, &type_map, &func_map) {
+                Ok(r) => r.into_iter(),
+                Err(e) => {
+                    errors.append(e);
+                    continue;
+                }
+            },
         );
     }
+    // Stops if something went wrong for this major step.
+    errors = errors.into_result_self()?;
 
     let cil_tree = compile::generate_sexp(&type_map, &classlist, policy_rules, &func_map)?;
 
-    Ok(generate_cil(cil_tree))
+    errors.into_result(generate_cil(cil_tree))
 }
 
 fn parse_policy<'a>(

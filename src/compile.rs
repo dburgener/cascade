@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
 use sexp::{atom_s, list, Sexp};
+use std::collections::hash_map::Entry;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::convert::TryFrom;
 
@@ -209,7 +210,7 @@ pub fn validate_functions<'a, 'b>(
             function.declaration_file,
         ) {
             Ok(_) => (),
-            Err(mut e) => errors.append(&mut e),
+            Err(e) => errors.append(e),
         }
     }
     errors.into_result(())
@@ -258,7 +259,7 @@ fn find_cycles_or_bad_types(
 
         match find_cycles_or_bad_types(&parent_ti, types, new_visited_types) {
             Ok(()) => (),
-            Err(mut e) => ret.append(&mut e),
+            Err(e) => ret.append(e),
         }
     }
 
@@ -273,7 +274,7 @@ fn generate_type_no_parent_errors(missed_types: Vec<&TypeInfo>, types: &TypeMap)
                 ret.add_error(HLLInternalError {});
                 return ret;
             }
-            Err(mut e) => ret.append(&mut e),
+            Err(e) => ret.append(e),
         }
     }
     // TODO: Deduplication
@@ -286,9 +287,9 @@ fn create_synthetic_resource(
     class: &TypeInfo,
     class_string: &HLLString,
     global_exprs: &mut HashSet<Expression>,
-) -> Result<HLLString, HLLErrors> {
+) -> Result<HLLString, HLLErrorItem> {
     if !class.is_resource(types) {
-        Err(HLLErrorItem::Compile(HLLCompileError::new(
+        Err(HLLCompileError::new(
             "not a resource",
             dom_info
                 .declaration_file
@@ -296,15 +297,11 @@ fn create_synthetic_resource(
                 .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?,
             class_string.get_range(),
             "This should not be a domain but a resource.",
-        )))?;
+        ))?;
     }
 
     // Creates a synthetic resource declaration.
-    let mut dup_res_decl = class
-        .decl
-        .as_ref()
-        .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?
-        .clone();
+    let mut dup_res_decl = class.decl.as_ref().ok_or(HLLInternalError {})?.clone();
     let res_name: HLLString = format!("{}-{}", dom_info.name, class.name).into();
     dup_res_decl.name = res_name.clone();
     // Keep annotations as-is.
@@ -313,7 +310,7 @@ fn create_synthetic_resource(
         .iter_mut()
         .for_each(|e| e.set_class_name_if_decl(res_name.clone()));
     if !global_exprs.insert(Expression::Decl(Declaration::Type(Box::new(dup_res_decl)))) {
-        Err(HLLErrorItem::Internal(HLLInternalError {}))?;
+        Err(HLLInternalError {})?;
     }
     Ok(res_name)
 }
@@ -340,18 +337,26 @@ fn interpret_associate(
     for func_info in funcs.values().filter(|f| f.is_associated_call) {
         if let Some(class) = func_info.class {
             if let Some((res, seen)) = potential_resources.get_mut(class.name.as_ref()) {
-                if *seen {
-                    Err(HLLErrorItem::Compile(HLLCompileError::new(
+                *seen = if *seen {
+                    errors.add_error(HLLErrorItem::Compile(HLLCompileError::new(
                         "multiple @associated_call in the same resource",
                         func_info.declaration_file,
                         func_info.decl.name.get_range(),
                         "Only one function in the same resource can be annotated with @associated_call.",
-                    )))?;
-                }
-                *seen = true;
+                    )));
+                    continue;
+                } else {
+                    true
+                };
 
                 let res_name =
-                    create_synthetic_resource(types, dom_info, class, res, global_exprs)?;
+                    match create_synthetic_resource(types, dom_info, class, res, global_exprs) {
+                        Ok(n) => n,
+                        Err(e) => {
+                            errors.add_error(e);
+                            continue;
+                        }
+                    };
 
                 // Creates a synthetic call.
                 let new_call = Expression::Stmt(Statement::Call(Box::new(FuncCall::new(
@@ -369,8 +374,10 @@ fn interpret_associate(
     for (_, (res, _)) in potential_resources.iter().filter(|(_, (_, seen))| !seen) {
         match types.get(&res.to_string()) {
             Some(class) => {
-                let _: HLLString =
-                    create_synthetic_resource(types, dom_info, class, res, global_exprs)?;
+                match create_synthetic_resource(types, dom_info, class, res, global_exprs) {
+                    Ok(_) => {}
+                    Err(e) => errors.add_error(e),
+                }
             }
             None => errors.add_error(HLLCompileError::new(
                 "unknown resource",
@@ -401,7 +408,7 @@ fn interpret_annotations<'a, T>(
 where
     T: Iterator<Item = &'a AnnotationInfo>,
 {
-    use std::collections::hash_map::Entry;
+    let mut errors = HLLErrors::new();
 
     let local_exprs = match associate_exprs.entry(dom_info.name.clone()) {
         // Ignores already processed domains.
@@ -410,17 +417,21 @@ where
     };
     for annotation in dom_info.annotations.iter().chain(extra_annotations) {
         if let AnnotationInfo::Associate(ref associate) = annotation {
-            interpret_associate(
+            match interpret_associate(
                 global_exprs,
                 local_exprs,
                 funcs,
                 types,
                 associate,
                 &dom_info,
-            )?;
+            ) {
+                Ok(()) => {}
+                Err(e) => errors.append(e),
+            }
         }
     }
-    Ok(())
+
+    errors.into_result(())
 }
 
 fn inherit_annotations(
@@ -430,6 +441,8 @@ fn inherit_annotations(
     types: &HashMap<String, TypeInfo>,
     dom_info: &TypeInfo,
 ) -> Result<Vec<AnnotationInfo>, HLLErrors> {
+    let mut errors = HLLErrors::new();
+
     let inherited_annotations = {
         let mut ret = Vec::new();
         for parent_name in &dom_info.inherits {
@@ -438,52 +451,67 @@ fn inherit_annotations(
                 // Ignores inheritance issues for now, see bad_type_error_test().
                 None => continue,
             };
-            ret.extend(inherit_annotations(
-                global_exprs,
-                associate_exprs,
-                funcs,
-                types,
-                parent_ti,
-            )?);
+            ret.extend(
+                match inherit_annotations(global_exprs, associate_exprs, funcs, types, parent_ti) {
+                    Ok(a) => a,
+                    Err(e) => {
+                        // Can generate duplicated errors because of nested calls.
+                        // TODO: Deduplicate errors and sort them by file and line.
+                        errors.append(e);
+                        continue;
+                    }
+                },
+            );
         }
         ret
     };
-    interpret_annotations(
+    match interpret_annotations(
         global_exprs,
         associate_exprs,
         funcs,
         types,
         dom_info,
         inherited_annotations.iter(),
-    )?;
-    Ok(dom_info
-        .annotations
-        .iter()
-        .cloned()
-        .chain(inherited_annotations)
-        .collect())
+    ) {
+        Ok(()) => {}
+        Err(e) => errors.append(e),
+    }
+
+    errors.into_result_with(|| {
+        dom_info
+            .annotations
+            .iter()
+            .cloned()
+            .chain(inherited_annotations)
+            .collect()
+    })
 }
 
 pub fn apply_annotations<'a>(
     types: &'a TypeMap,
     funcs: &HashMap<String, FunctionInfo>,
 ) -> Result<Vec<Expression>, HLLErrors> {
+    let mut errors = HLLErrors::new();
+
     // Makes sure that there is no cycle.
     organize_type_map(types)?;
 
     let mut associate_exprs = HashMap::new();
     let mut global_exprs = HashSet::new();
     for type_info in types.values() {
-        inherit_annotations(
+        match inherit_annotations(
             &mut global_exprs,
             &mut associate_exprs,
             funcs,
             types,
             type_info,
-        )?;
+        ) {
+            Ok(_) => {}
+            Err(e) => errors.append(e),
+        }
     }
 
-    Ok(associate_exprs
+    match associate_exprs
         .into_iter()
         .filter(|(_, v)| v.len() != 0)
         .map(|(k, v)| {
@@ -499,7 +527,14 @@ pub fn apply_annotations<'a>(
             Ok(Expression::Decl(Declaration::Type(Box::new(new_domain))))
         })
         .chain(global_exprs.into_iter().map(|e| Ok(e)))
-        .collect::<Result<_, HLLErrors>>()?)
+        .collect::<Result<_, HLLErrors>>()
+    {
+        Ok(r) => errors.into_result(r),
+        Err(e) => {
+            errors.append(e);
+            Err(errors)
+        }
+    }
 }
 
 // This function validates that the relationships in the HashMap are valid, and organizes a Vector
@@ -575,7 +610,7 @@ fn do_rules_pass<'a>(
                     file,
                 ) {
                     Ok(mut s) => ret.append(&mut s),
-                    Err(mut e) => errors.append(&mut e),
+                    Err(e) => errors.append(e),
                 }
             }
             Expression::Decl(Declaration::Type(t)) => {
@@ -592,7 +627,7 @@ fn do_rules_pass<'a>(
                     file,
                 ) {
                     Ok(r) => ret.extend(r),
-                    Err(mut e) => errors.append(&mut e),
+                    Err(e) => errors.append(e),
                 }
             }
             _ => {}
