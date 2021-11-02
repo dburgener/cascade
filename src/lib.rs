@@ -14,6 +14,8 @@ mod internal_rep;
 mod obj_class;
 mod sexp_internal;
 
+use std::collections::BTreeSet;
+
 use ast::{Policy, PolicyFile};
 use internal_rep::FunctionMap;
 
@@ -62,7 +64,7 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
     let classlist = obj_class::make_classlist();
     let mut type_map = compile::get_built_in_types_map();
     let mut func_map = FunctionMap::new();
-    let mut policy_rules = Vec::new();
+    let mut policy_rules = BTreeSet::new();
 
     // Collect all type declarations
     for p in &policies {
@@ -131,15 +133,14 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
     compile::validate_functions(&mut func_map, &type_map, &classlist, &func_map_copy)?;
 
     for p in &policies {
-        policy_rules.extend(
-            match compile::compile_rules_one_file(&p, &classlist, &type_map, &func_map) {
-                Ok(r) => r.into_iter(),
-                Err(e) => {
-                    errors.append(e);
-                    continue;
-                }
-            },
-        );
+        let mut r = match compile::compile_rules_one_file(&p, &classlist, &type_map, &func_map) {
+            Ok(r) => r,
+            Err(e) => {
+                errors.append(e);
+                continue;
+            }
+        };
+        policy_rules.append(&mut r);
     }
     // Stops if something went wrong for this major step.
     errors = errors.into_result_self()?;

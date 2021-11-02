@@ -22,7 +22,7 @@ pub fn compile_rules_one_file<'a>(
     classlist: &'a ClassList<'a>,
     type_map: &'a TypeMap,
     func_map: &'a FunctionMap<'a>,
-) -> Result<Vec<ValidatedStatement<'a>>, HLLErrors> {
+) -> Result<BTreeSet<ValidatedStatement<'a>>, HLLErrors> {
     Ok(do_rules_pass(
         &p.policy.exprs,
         &type_map,
@@ -36,7 +36,7 @@ pub fn compile_rules_one_file<'a>(
 pub fn generate_sexp(
     type_map: &TypeMap,
     classlist: &ClassList,
-    policy_rules: Vec<ValidatedStatement>,
+    policy_rules: BTreeSet<ValidatedStatement>,
     func_map: &FunctionMap<'_>,
 ) -> Result<Vec<sexp::Sexp>, HLLErrors> {
     let type_decl_list = organize_type_map(type_map)?;
@@ -341,7 +341,7 @@ fn interpret_associate(
     // TODO: Add tests to verify these checks.
 
     let mut errors = HLLErrors::new();
-    let mut potential_resources: HashMap<_, _> = associate
+    let mut potential_resources: BTreeMap<_, _> = associate
         .resources
         .iter()
         .map(|r| (r.as_ref(), (r, false)))
@@ -666,8 +666,8 @@ fn do_rules_pass<'a>(
     class_perms: &ClassList<'a>,
     parent_type: Option<&'a TypeInfo>,
     file: &'a SimpleFile<String, String>,
-) -> Result<Vec<ValidatedStatement<'a>>, HLLErrors> {
-    let mut ret = Vec::new();
+) -> Result<BTreeSet<ValidatedStatement<'a>>, HLLErrors> {
+    let mut ret = BTreeSet::new();
     let mut errors = HLLErrors::new();
     for e in exprs {
         match e {
@@ -702,7 +702,7 @@ fn do_rules_pass<'a>(
                     Some(type_being_parsed),
                     file,
                 ) {
-                    Ok(r) => ret.extend(r),
+                    Ok(mut r) => ret.append(&mut r),
                     Err(e) => errors.append(e),
                 }
             }

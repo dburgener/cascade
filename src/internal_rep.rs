@@ -1,6 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
 use sexp::{atom_s, list, Atom, Sexp};
+
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryFrom;
 use std::fmt;
@@ -44,6 +46,27 @@ pub struct TypeInfo {
     pub annotations: BTreeSet<AnnotationInfo>,
     // TODO: replace with Option<&TypeDecl>
     pub decl: Option<TypeDecl>,
+}
+
+impl PartialEq for TypeInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl Eq for TypeInfo {}
+
+// This implementation is for deterministic CIL generation.
+impl PartialOrd for TypeInfo {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for TypeInfo {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.name.cmp(&other.name)
+    }
 }
 
 impl TypeInfo {
@@ -325,7 +348,7 @@ fn argument_to_typeinfo_vec<'a>(
     Ok(ret)
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AvRuleFlavor {
     Allow,
     Dontaudit,
@@ -333,7 +356,7 @@ pub enum AvRuleFlavor {
     Neverallow,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AvRule<'a> {
     pub av_rule_flavor: AvRuleFlavor,
     pub source: &'a HLLString,
@@ -378,7 +401,7 @@ impl From<&AvRule<'_>> for sexp::Sexp {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Context<'a> {
     user: &'a str,
     role: &'a str,
@@ -735,7 +758,7 @@ fn call_to_av_rule<'a>(
     })
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FileType {
     File,
     Directory,
@@ -783,7 +806,7 @@ impl FromStr for FileType {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct FileContextRule<'a> {
     pub regex_string: String,
     pub file_type: FileType,
@@ -889,7 +912,7 @@ fn call_to_fc_rules<'a>(
     Ok(ret)
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DomtransRule<'a> {
     pub source: &'a TypeInfo,
     pub target: &'a TypeInfo,
@@ -1041,7 +1064,7 @@ pub struct FunctionInfo<'a> {
     pub class: Option<&'a TypeInfo>,
     pub args: Vec<FunctionArgument<'a>>,
     pub original_body: &'a Vec<Statement>,
-    pub body: Option<Vec<ValidatedStatement<'a>>>,
+    pub body: Option<BTreeSet<ValidatedStatement<'a>>>,
     pub declaration_file: &'a SimpleFile<String, String>,
     pub is_associated_call: bool,
     pub decl: &'a FuncDecl,
@@ -1125,7 +1148,7 @@ impl<'a> FunctionInfo<'a> {
         class_perms: &'a ClassList,
         file: &'a SimpleFile<String, String>,
     ) -> Result<(), HLLErrors> {
-        let mut new_body = Vec::new();
+        let mut new_body = BTreeSet::new();
         let mut errors = HLLErrors::new();
 
         for statement in self.original_body {
@@ -1231,7 +1254,7 @@ impl fmt::Display for FunctionArgument<'_> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ValidatedStatement<'a> {
     Call(Box<ValidatedCall>),
     AvRule(AvRule<'a>),
@@ -1248,62 +1271,73 @@ impl<'a> ValidatedStatement<'a> {
         args: &Vec<FunctionArgument<'a>>,
         parent_type: Option<&TypeInfo>,
         file: &'a SimpleFile<String, String>,
-    ) -> Result<Vec<ValidatedStatement<'a>>, HLLErrors> {
+    ) -> Result<BTreeSet<ValidatedStatement<'a>>, HLLErrors> {
         let in_resource = match parent_type {
             Some(t) => t.is_resource(types),
             None => false,
         };
 
         match statement {
-            Statement::Call(c) => match c.check_builtin() {
-                Some(BuiltIns::AvRule) => {
-                    return Ok(vec![ValidatedStatement::AvRule(call_to_av_rule(
+            Statement::Call(c) => {
+                match c.check_builtin() {
+                    Some(BuiltIns::AvRule) => Ok(Some(ValidatedStatement::AvRule(
+                        call_to_av_rule(c, types, class_perms, Some(args), file)?,
+                    ))
+                    .into_iter()
+                    .collect()),
+                    Some(BuiltIns::FileContext) => {
+                        if in_resource {
+                            Ok(call_to_fc_rules(c, types, class_perms, Some(args), file)?
+                                .into_iter()
+                                .map(|f| ValidatedStatement::FcRule(f))
+                                .collect())
+                        } else {
+                            Err(HLLErrors::from(HLLErrorItem::Compile(
+                                HLLCompileError::new(
+                                    "file_context() calls are only allowed in resources",
+                                    file,
+                                    c.name.get_range(),
+                                    "Not allowed here",
+                                ),
+                            )))
+                        }
+                    }
+                    Some(BuiltIns::DomainTransition) => {
+                        if !in_resource {
+                            Ok(
+                                Some(ValidatedStatement::DomtransRule(call_to_domain_transition(
+                                    c,
+                                    types,
+                                    class_perms,
+                                    Some(args),
+                                    file,
+                                )?))
+                                .into_iter()
+                                .collect(),
+                            )
+                        } else {
+                            Err(HLLErrors::from(HLLErrorItem::Compile(
+                                HLLCompileError::new(
+                                    "domain_transition() calls are not allowed in resources",
+                                    file,
+                                    c.name.get_range(),
+                                    "Not allowed here",
+                                ),
+                            )))
+                        }
+                    }
+                    None => Ok(Some(ValidatedStatement::Call(Box::new(ValidatedCall::new(
                         c,
+                        functions,
                         types,
                         class_perms,
                         Some(args),
                         file,
-                    )?)])
+                    )?)))
+                    .into_iter()
+                    .collect()),
                 }
-                Some(BuiltIns::FileContext) => {
-                    if in_resource {
-                        return Ok(call_to_fc_rules(c, types, class_perms, Some(args), file)?
-                            .into_iter()
-                            .map(|f| ValidatedStatement::FcRule(f))
-                            .collect());
-                    } else {
-                        Err(HLLErrors::from(HLLErrorItem::Compile(
-                            HLLCompileError::new(
-                                "file_context() calls are only allowed in resources",
-                                file,
-                                c.name.get_range(),
-                                "Not allowed here",
-                            ),
-                        )))
-                    }
-                }
-                Some(BuiltIns::DomainTransition) => {
-                    if !in_resource {
-                        return Ok(vec![ValidatedStatement::DomtransRule(
-                            call_to_domain_transition(c, types, class_perms, Some(args), file)?,
-                        )]);
-                    } else {
-                        Err(HLLErrors::from(HLLErrorItem::Compile(
-                            HLLCompileError::new(
-                                "domain_transition() calls are not allowed in resources",
-                                file,
-                                c.name.get_range(),
-                                "Not allowed here",
-                            ),
-                        )))
-                    }
-                }
-                None => {
-                    return Ok(vec![ValidatedStatement::Call(Box::new(
-                        ValidatedCall::new(c, functions, types, class_perms, Some(args), file)?,
-                    ))])
-                }
-            },
+            }
         }
     }
 }
@@ -1319,7 +1353,7 @@ impl From<&ValidatedStatement<'_>> for sexp::Sexp {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ValidatedCall {
     cil_name: String,
     args: Vec<String>,
