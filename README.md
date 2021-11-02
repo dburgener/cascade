@@ -1,4 +1,4 @@
-# Introduction 
+# Introduction
 HLL is a project to build a new high level language for defining SELinux policy.
 
 The overall structure of the language is essentially object oriented, with types
