@@ -46,7 +46,7 @@ developer in making intelligent decisions about handling denials rather than
 simply adding raw allow rules.
 
 # Writing hll policy
-For details on writing HLL policy, see doc/TE.md
+For details on writing HLL policy, see [Type Enforcement](doc/TE.md).
 
 # Contribute
 TODO
