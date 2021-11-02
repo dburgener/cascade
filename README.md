@@ -29,7 +29,7 @@ The HLL compiler is named hllc, and will be located at target/debug/hllc after a
 successful build.  It takes one argument, the name of a policy file to be built:
 
 ```
-$ hllc my_policy.hll
+$ hllc my_policy.cas
 ```
 
 Hllc will create a file named out.cil, containing CIL policy.  This CIL policy

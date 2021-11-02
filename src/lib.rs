@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     fn basic_policy_parse_test() {
-        let policy_file = [POLICIES_DIR, "tmp_file.hll"].concat();
+        let policy_file = [POLICIES_DIR, "tmp_file.cas"].concat();
         let policy = fs::read_to_string(policy_file).unwrap();
 
         let res = parser::PolicyParser::new().parse(&policy);
@@ -245,7 +245,7 @@ mod tests {
     #[test]
     fn attributes_test() {
         valid_policy_test(
-            "attribute.hll",
+            "attribute.cas",
             &[
                 "attribute user_type",
                 "type staff",
@@ -257,31 +257,31 @@ mod tests {
 
     #[test]
     fn simple_policy_build_test() {
-        valid_policy_test("simple.hll", &[]);
+        valid_policy_test("simple.cas", &[]);
     }
 
     #[test]
     fn function_build_test() {
         valid_policy_test(
-            "function.hll",
+            "function.cas",
             &["macro my_file-read", "call my_file-read", "allow source"],
         );
     }
 
     #[test]
     fn auditallow_test() {
-        valid_policy_test("auditallow.hll", &["auditallow my_domain foo"]);
+        valid_policy_test("auditallow.cas", &["auditallow my_domain foo"]);
     }
 
     #[test]
     fn dontaudit_test() {
-        valid_policy_test("dontaudit.hll", &["(dontaudit my_domain foo"]);
+        valid_policy_test("dontaudit.cas", &["(dontaudit my_domain foo"]);
     }
 
     #[test]
     fn arguments_test() {
         valid_policy_test(
-            "arguments.hll",
+            "arguments.cas",
             &["(macro foo-some_func ((type this) (name a) (name b) (type c) (type d))"],
         );
     }
@@ -289,23 +289,23 @@ mod tests {
     #[test]
     fn filecon_test() {
         valid_policy_test(
-            "filecon.hll",
+            "filecon.cas",
             &["(filecon \"/bin\" file (", "(filecon \"/bin\" dir ("],
         );
     }
 
     #[test]
     fn domtrans_test() {
-        valid_policy_test("domtrans.hll", &["typetransition bar foo_exec process foo"]);
+        valid_policy_test("domtrans.cas", &["typetransition bar foo_exec process foo"]);
     }
 
     #[test]
     fn makelist_test() {
-        let policy_file = [POLICIES_DIR, "makelist.hll"].concat();
+        let policy_file = [POLICIES_DIR, "makelist.cas"].concat();
 
         match compile_system_policy(vec![&policy_file]) {
             Ok(_p) => {
-                // TODO: reenable.  See note in data/policies/makelist.hll
+                // TODO: reenable.  See note in data/policies/makelist.cas
                 //assert!(p.contains(
                 //    "(call foo.foo_func"
                 //));
@@ -320,8 +320,8 @@ mod tests {
         // valid_policy_test() is somewhat tightly wound to the one file case, so we'll code our
         // own copy here
         let policy_files = vec![
-            [POLICIES_DIR, "multifile1.hll"].concat(),
-            [POLICIES_DIR, "multifile2.hll"].concat(),
+            [POLICIES_DIR, "multifile1.cas"].concat(),
+            [POLICIES_DIR, "multifile2.cas"].concat(),
         ];
         let policy_files: Vec<&str> = policy_files.iter().map(|s| s as &str).collect();
         let mut policy_files_reversed = policy_files.clone();
@@ -339,7 +339,7 @@ mod tests {
 
     #[test]
     fn cycle_error_test() {
-        let policy_file = [ERROR_POLICIES_DIR, "cycle.hll"].concat();
+        let policy_file = [ERROR_POLICIES_DIR, "cycle.cas"].concat();
 
         match compile_system_policy(vec![&policy_file]) {
             Ok(_) => panic!("Cycle compiled successfully"),
@@ -353,7 +353,7 @@ mod tests {
 
     #[test]
     fn bad_type_error_test() {
-        let policy_file = [ERROR_POLICIES_DIR, "nonexistent_inheritance.hll"].concat();
+        let policy_file = [ERROR_POLICIES_DIR, "nonexistent_inheritance.cas"].concat();
 
         match compile_system_policy(vec![&policy_file]) {
             Ok(_) => panic!("Nonexistent type compiled successfully"),
@@ -366,7 +366,7 @@ mod tests {
 
     #[test]
     fn bad_allow_rules_test() {
-        let policy_file = [ERROR_POLICIES_DIR, "bad_allow.hll"].concat();
+        let policy_file = [ERROR_POLICIES_DIR, "bad_allow.cas"].concat();
 
         match compile_system_policy(vec![&policy_file]) {
             Ok(_) => panic!("Bad allow rules compiled successfully"),
@@ -381,7 +381,7 @@ mod tests {
 
     #[test]
     fn parsing_unrecognized_token() {
-        let policy_file = [ERROR_POLICIES_DIR, "parse_unrecognized_token.hll"].concat();
+        let policy_file = [ERROR_POLICIES_DIR, "parse_unrecognized_token.cas"].concat();
 
         match compile_system_policy(vec![&policy_file]) {
             Ok(_) => panic!("Bad grammar compiled successfully"),
@@ -406,7 +406,7 @@ mod tests {
 
     #[test]
     fn parsing_unknown_token() {
-        let policy_file = [ERROR_POLICIES_DIR, "parse_unknown_token.hll"].concat();
+        let policy_file = [ERROR_POLICIES_DIR, "parse_unknown_token.cas"].concat();
 
         match compile_system_policy(vec![&policy_file]) {
             Ok(_) => panic!("Bad grammar compiled successfully"),
@@ -431,7 +431,7 @@ mod tests {
 
     #[test]
     fn parsing_unexpected_eof() {
-        let policy_file = [ERROR_POLICIES_DIR, "parse_unexpected_eof.hll"].concat();
+        let policy_file = [ERROR_POLICIES_DIR, "parse_unexpected_eof.cas"].concat();
 
         match compile_system_policy(vec![&policy_file]) {
             Ok(_) => panic!("Bad grammar compiled successfully"),
@@ -456,7 +456,7 @@ mod tests {
 
     #[test]
     fn domain_filecon_test() {
-        let policy_file = [ERROR_POLICIES_DIR, "domain_filecon.hll"].concat();
+        let policy_file = [ERROR_POLICIES_DIR, "domain_filecon.cas"].concat();
 
         match compile_system_policy(vec![&policy_file]) {
             Ok(_) => panic!("file_context() in domain compiled successfully"),
@@ -480,7 +480,7 @@ mod tests {
     #[test]
     fn associate_test() {
         valid_policy_test(
-            "associate.hll",
+            "associate.cas",
             &[
                 "call bar-tmp-associated_call_from_tmp (bar-tmp bar)",
                 "call bar-var-associated_call_from_var (bar-var bar)",
