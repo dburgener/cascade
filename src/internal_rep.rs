@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
 use sexp::{atom_s, list, Atom, Sexp};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::convert::TryFrom;
 use std::fmt;
 use std::ops::Range;
@@ -1033,6 +1033,8 @@ fn check_associated_call(
     Ok(true)
 }
 
+pub type FunctionMap<'a> = BTreeMap<String, FunctionInfo<'a>>;
+
 #[derive(Debug, Clone)]
 pub struct FunctionInfo<'a> {
     pub name: String,
@@ -1118,7 +1120,7 @@ impl<'a> FunctionInfo<'a> {
 
     pub fn validate_body(
         &mut self,
-        functions: &'a HashMap<String, FunctionInfo>,
+        functions: &'a FunctionMap<'a>,
         types: &'a TypeMap,
         class_perms: &'a ClassList,
         file: &'a SimpleFile<String, String>,
@@ -1240,7 +1242,7 @@ pub enum ValidatedStatement<'a> {
 impl<'a> ValidatedStatement<'a> {
     pub fn new(
         statement: &'a Statement,
-        functions: &HashMap<String, FunctionInfo>,
+        functions: &FunctionMap<'a>,
         types: &'a TypeMap,
         class_perms: &ClassList<'a>,
         args: &Vec<FunctionArgument<'a>>,
@@ -1326,7 +1328,7 @@ pub struct ValidatedCall {
 impl ValidatedCall {
     fn new(
         call: &FuncCall,
-        functions: &HashMap<String, FunctionInfo>,
+        functions: &FunctionMap<'_>,
         types: &TypeMap,
         class_perms: &ClassList,
         parent_args: Option<&Vec<FunctionArgument>>,

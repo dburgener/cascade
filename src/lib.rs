@@ -14,9 +14,8 @@ mod internal_rep;
 mod obj_class;
 mod sexp_internal;
 
-use std::collections::HashMap;
-
 use ast::{Policy, PolicyFile};
+use internal_rep::FunctionMap;
 
 use codespan_reporting::files::SimpleFile;
 use error::HLLErrors;
@@ -62,7 +61,7 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
     // Generic initialization
     let classlist = obj_class::make_classlist();
     let mut type_map = compile::get_built_in_types_map();
-    let mut func_map = HashMap::new();
+    let mut func_map = FunctionMap::new();
     let mut policy_rules = Vec::new();
 
     // Collect all type declarations
@@ -80,19 +79,18 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
 
     // Applies annotations
     {
-        let mut tmp_func_map = HashMap::new();
+        let mut tmp_func_map = FunctionMap::new();
 
         // Collect all function declarations
         for p in &policies {
-            tmp_func_map.extend(
-                match compile::build_func_map(&p.policy.exprs, &type_map, None, &p.file) {
-                    Ok(m) => m.into_iter(),
-                    Err(e) => {
-                        errors.append(e);
-                        continue;
-                    }
-                },
-            );
+            let mut m = match compile::build_func_map(&p.policy.exprs, &type_map, None, &p.file) {
+                Ok(m) => m,
+                Err(e) => {
+                    errors.append(e);
+                    continue;
+                }
+            };
+            tmp_func_map.append(&mut m);
         }
 
         // TODO: Validate original functions before adding synthetic ones to avoid confusing errors for users.
@@ -116,15 +114,14 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
 
     // Collect all function declarations
     for p in &policies {
-        func_map.extend(
-            match compile::build_func_map(&p.policy.exprs, &type_map, None, &p.file) {
-                Ok(m) => m.into_iter(),
-                Err(e) => {
-                    errors.append(e);
-                    continue;
-                }
-            },
-        );
+        let mut m = match compile::build_func_map(&p.policy.exprs, &type_map, None, &p.file) {
+            Ok(m) => m,
+            Err(e) => {
+                errors.append(e);
+                continue;
+            }
+        };
+        func_map.append(&mut m);
     }
     // Stops if something went wrong for this major step.
     errors = errors.into_result_self()?;
