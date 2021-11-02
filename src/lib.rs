@@ -180,6 +180,60 @@ mod tests {
 
     const POLICIES_DIR: &str = "data/policies/";
     const ERROR_POLICIES_DIR: &str = "data/error_policies/";
+    const EXPECTED_CIL_DIR: &str = "data/expected_cil/";
+
+    #[test]
+    fn characterization_tests() {
+        let mut count = 0;
+
+        for f in fs::read_dir(POLICIES_DIR).unwrap() {
+            count += 1;
+            let policy_path = f.unwrap().path();
+            let cil_path = match policy_path.extension() {
+                Some(e) if e == "cas" => std::path::Path::new(EXPECTED_CIL_DIR).join(
+                    policy_path
+                        .with_extension("cil")
+                        .file_name()
+                        .expect(&format!(
+                            "failed to extract file name from `{}`",
+                            policy_path.to_string_lossy()
+                        )),
+                ),
+                _ => continue,
+            };
+
+            // TODO: Make compile_system_policy() take an iterator of AsRef<Path>.
+            let cil_gen = match compile_system_policy(vec![&policy_path.to_string_lossy()]) {
+                Ok(c) => c,
+                Err(e) => match fs::read_to_string(&cil_path) {
+                    Ok(_) => panic!(
+                        "Failed to compile '{}' whereas there is a reference CIL file: {}",
+                        policy_path.to_string_lossy(),
+                        e
+                    ),
+                    Err(_) => continue,
+                },
+            };
+            let cil_ref = fs::read_to_string(&cil_path).unwrap_or_else(|e| {
+                panic!(
+                    "Failed to read file '{}': {}. \
+                    You may want to create it with tools/update-expected-cil.sh",
+                    cil_path.to_string_lossy(),
+                    e
+                )
+            });
+            if cil_gen != cil_ref {
+                panic!(
+                    "CIL generation doesn't match the recorded one for '{}'. \
+                    You may want to update it with tools/update-expected-cil.sh",
+                    policy_path.to_string_lossy()
+                )
+            }
+        }
+
+        // Make sure we don't check an empty directory.
+        assert!(count > 9);
+    }
 
     fn valid_policy_test(filename: &str, expected_contents: &[&str]) {
         let policy_file = [POLICIES_DIR, filename].concat();
