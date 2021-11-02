@@ -21,7 +21,7 @@ const DEFAULT_OBJECT_ROLE: &str = "object_r";
 const DEFAULT_DOMAIN_ROLE: &str = "system_r";
 const DEFAULT_MLS: &str = "s0";
 
-pub type TypeMap = HashMap<String, TypeInfo>;
+pub type TypeMap = BTreeMap<String, TypeInfo>;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Associated {
