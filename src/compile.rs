@@ -5,7 +5,9 @@ use std::collections::hash_map::Entry;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::convert::TryFrom;
 
-use crate::ast::{Argument, Declaration, Expression, FuncCall, HLLString, PolicyFile, Statement};
+use crate::ast::{
+    Annotations, Argument, Declaration, Expression, FuncCall, HLLString, PolicyFile, Statement,
+};
 use crate::constants;
 use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
 use crate::internal_rep::{
@@ -281,9 +283,14 @@ fn generate_type_no_parent_errors(missed_types: Vec<&TypeInfo>, types: &TypeMap)
     ret
 }
 
+fn get_synthetic_resource_name(dom_info: &TypeInfo, associated_resource: &HLLString) -> HLLString {
+    format!("{}-{}", dom_info.name, associated_resource).into()
+}
+
 fn create_synthetic_resource(
     types: &HashMap<String, TypeInfo>,
     dom_info: &TypeInfo,
+    associated_parent: Option<&TypeInfo>,
     class: &TypeInfo,
     class_string: &HLLString,
     global_exprs: &mut HashSet<Expression>,
@@ -302,9 +309,15 @@ fn create_synthetic_resource(
 
     // Creates a synthetic resource declaration.
     let mut dup_res_decl = class.decl.as_ref().ok_or(HLLInternalError {})?.clone();
-    let res_name: HLLString = format!("{}-{}", dom_info.name, class.name).into();
+    let res_name = get_synthetic_resource_name(dom_info, &class.name);
     dup_res_decl.name = res_name.clone();
-    // Keep annotations as-is.
+    // See TypeDecl::new() in parser.lalrpop for resource inheritance.
+    let parent_name = match associated_parent {
+        None => class.name.clone(),
+        Some(parent) => get_synthetic_resource_name(parent, &class.name),
+    };
+    dup_res_decl.inherits = vec![parent_name, "resource".into()];
+    dup_res_decl.annotations = Annotations::new();
     dup_res_decl
         .expressions
         .iter_mut()
@@ -321,6 +334,7 @@ fn interpret_associate(
     funcs: &HashMap<String, FunctionInfo>,
     types: &HashMap<String, TypeInfo>,
     associate: &Associated,
+    associated_parent: Option<&TypeInfo>,
     dom_info: &TypeInfo,
 ) -> Result<(), HLLErrors> {
     // Only allow a set of specific annotation names and strictly check their arguments.
@@ -349,14 +363,20 @@ fn interpret_associate(
                     true
                 };
 
-                let res_name =
-                    match create_synthetic_resource(types, dom_info, class, res, global_exprs) {
-                        Ok(n) => n,
-                        Err(e) => {
-                            errors.add_error(e);
-                            continue;
-                        }
-                    };
+                let res_name = match create_synthetic_resource(
+                    types,
+                    dom_info,
+                    associated_parent,
+                    class,
+                    res,
+                    global_exprs,
+                ) {
+                    Ok(n) => n,
+                    Err(e) => {
+                        errors.add_error(e);
+                        continue;
+                    }
+                };
 
                 // Creates a synthetic call.
                 let new_call = Expression::Stmt(Statement::Call(Box::new(FuncCall::new(
@@ -374,7 +394,14 @@ fn interpret_associate(
     for (_, (res, _)) in potential_resources.iter().filter(|(_, (_, seen))| !seen) {
         match types.get(&res.to_string()) {
             Some(class) => {
-                match create_synthetic_resource(types, dom_info, class, res, global_exprs) {
+                match create_synthetic_resource(
+                    types,
+                    dom_info,
+                    associated_parent,
+                    class,
+                    res,
+                    global_exprs,
+                ) {
                     Ok(_) => {}
                     Err(e) => errors.add_error(e),
                 }
@@ -397,6 +424,12 @@ fn interpret_associate(
 // domain -> related expressions
 type AssociateExprs = HashMap<HLLString, HashSet<Expression>>;
 
+#[derive(Clone)]
+struct InheritedAnnotation<'a> {
+    annotation: &'a AnnotationInfo,
+    parent: Option<&'a TypeInfo>,
+}
+
 fn interpret_annotations<'a, T>(
     global_exprs: &mut HashSet<Expression>,
     associate_exprs: &mut AssociateExprs,
@@ -406,7 +439,7 @@ fn interpret_annotations<'a, T>(
     extra_annotations: T,
 ) -> Result<(), HLLErrors>
 where
-    T: Iterator<Item = &'a AnnotationInfo>,
+    T: Iterator<Item = InheritedAnnotation<'a>>,
 {
     let mut errors = HLLErrors::new();
 
@@ -415,14 +448,23 @@ where
         Entry::Occupied(_) => return Ok(()),
         vacant => vacant.or_default(),
     };
-    for annotation in dom_info.annotations.iter().chain(extra_annotations) {
-        if let AnnotationInfo::Associate(ref associate) = annotation {
+    for inherited in dom_info
+        .annotations
+        .iter()
+        .map(|a| InheritedAnnotation {
+            annotation: a,
+            parent: None,
+        })
+        .chain(extra_annotations)
+    {
+        if let AnnotationInfo::Associate(ref associate) = inherited.annotation {
             match interpret_associate(
                 global_exprs,
                 local_exprs,
                 funcs,
                 types,
                 associate,
+                inherited.parent,
                 &dom_info,
             ) {
                 Ok(()) => {}
@@ -434,13 +476,13 @@ where
     errors.into_result(())
 }
 
-fn inherit_annotations(
+fn inherit_annotations<'a>(
     global_exprs: &mut HashSet<Expression>,
     associate_exprs: &mut AssociateExprs,
     funcs: &HashMap<String, FunctionInfo>,
-    types: &HashMap<String, TypeInfo>,
-    dom_info: &TypeInfo,
-) -> Result<Vec<AnnotationInfo>, HLLErrors> {
+    types: &'a HashMap<String, TypeInfo>,
+    dom_info: &'a TypeInfo,
+) -> Result<Vec<InheritedAnnotation<'a>>, HLLErrors> {
     let mut errors = HLLErrors::new();
 
     let inherited_annotations = {
@@ -471,7 +513,7 @@ fn inherit_annotations(
         funcs,
         types,
         dom_info,
-        inherited_annotations.iter(),
+        inherited_annotations.iter().cloned(),
     ) {
         Ok(()) => {}
         Err(e) => errors.append(e),
@@ -481,8 +523,14 @@ fn inherit_annotations(
         dom_info
             .annotations
             .iter()
-            .cloned()
-            .chain(inherited_annotations)
+            .map(|a| InheritedAnnotation {
+                annotation: a,
+                parent: Some(&dom_info),
+            })
+            .chain(inherited_annotations.into_iter().map(|mut a| {
+                a.parent = Some(&dom_info);
+                a
+            }))
             .collect()
     })
 }
