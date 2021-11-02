@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
 use sexp::{atom_s, list, Atom, Sexp};
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryFrom;
 use std::fmt;
 use std::ops::Range;
@@ -546,13 +546,13 @@ impl<'a> Class<'a> {
 }
 
 pub struct ClassList<'a> {
-    pub classes: HashMap<&'a str, Class<'a>>,
+    pub classes: BTreeMap<&'a str, Class<'a>>,
 }
 
 impl<'a> ClassList<'a> {
     pub fn new() -> Self {
         ClassList {
-            classes: HashMap::new(),
+            classes: BTreeMap::new(),
         }
     }
 
