@@ -1,5 +1,5 @@
 [package]
-name = "selinuxhll"
+name = "selinux-cascade"
 version = "0.0.1"
 authors = ["Daniel Burgener <Daniel.Burgener@microsoft.com>"]
 edition = "2018"

@@ -1,14 +1,14 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
-use selinuxhll::compile_system_policy;
-use selinuxhll::error::HLLErrorItem;
+use selinux_cascade::compile_system_policy;
+use selinux_cascade::error::HLLErrorItem;
 
 use std::env;
 use std::fs::File;
 use std::io::{Error, ErrorKind, Write};
 
 fn usage() {
-    println!("hllc policy.hll");
+    println!("casc policy.cas");
 }
 
 fn main() -> std::io::Result<()> {
