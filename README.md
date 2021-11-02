@@ -1,4 +1,4 @@
-# Introduction 
+# Introduction
 HLL is a project to build a new high level language for defining SELinux policy.
 
 The overall structure of the language is essentially object oriented, with types
@@ -46,7 +46,7 @@ developer in making intelligent decisions about handling denials rather than
 simply adding raw allow rules.
 
 # Writing hll policy
-For details on writing HLL policy, see doc/TE.md
+For details on writing HLL policy, see [Type Enforcement](doc/TE.md).
 
 # Contribute
 TODO
