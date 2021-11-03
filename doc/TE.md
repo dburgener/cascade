@@ -148,15 +148,13 @@ TODO: Which of these can be in a standard library instead of the compiler?
 
 ### Associating resources with a domain
 
-Resources may be "associated" with a domain using the `associate` built in
-function, which takes a single list of resources to associate:
+Resources may be "associated" with a domain using the `@associate` annotation,
+which takes a single list of resources to associate:
 
-    domain foo {
-        associate([
-            bar
-            baz
-         ]);
-    }
+```
+@associate([bar baz])
+domain foo {}
+```
 
 Associating a resource with a domain does three things:
 
@@ -164,10 +162,13 @@ Associating a resource with a domain does three things:
 domain is included in a module or full system policy
 2. It calls the resource's __assoc__() function (if present) with the domain  
 as the first argument.
-3. If the domain is inherited from, a child resource (TODO: named?)  
-is automatically created and is associated with the child class
+3. If the domain is inherited from, a child resource is automatically created  
+and is associated with the child class.  This resource is named  
+`[child name]-[resource name]`.
 
 See the specific resource association document for more information.
+
+For more details and examples, see resource_association.md
 
 ## AV Rules
 
