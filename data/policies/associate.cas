@@ -1,4 +1,4 @@
-resource tmp {
+virtual resource tmp {
 	@associated_call
 	fn associated_call_from_tmp(domain source) {
 		allow(source, tmp, file, [read]);
@@ -9,14 +9,14 @@ resource tmp {
 	}
 }
 
-resource var {
+virtual resource var {
 	@associated_call
 	fn associated_call_from_var(domain source) {
 		allow(source, var, file, [read]);
 	}
 }
 
-resource bin {
+virtual resource bin {
 	// no @associated_call
 	fn not_an_associated_call_from_bin(domain source) {
 		allow(source, bin, file, [read]);
