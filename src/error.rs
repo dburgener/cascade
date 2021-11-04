@@ -139,9 +139,9 @@ impl HLLParseError {
             file: SimpleFile::new(file_name, policy),
             diagnostic: match msg.range {
                 None => diagnostic,
-                Some(range) => diagnostic.with_labels(vec![
-                    Label::primary((), range.clone()).with_message(msg.help)
-                ]),
+                Some(range) => {
+                    diagnostic.with_labels(vec![Label::primary((), range).with_message(msg.help)])
+                }
             }
             .into(),
         }
