@@ -55,3 +55,10 @@ domain baz inherits bar {
 	// baz-tmp inherits bar-tmp
 	// baz-var inherits bar-var
 }
+
+domain qux {
+	// Calls synthetic functions.
+	foo-tmp.associated_call_from_tmp(this);
+	bar-tmp.associated_call_from_tmp(this);
+	baz-tmp.associated_call_from_tmp(this);
+}

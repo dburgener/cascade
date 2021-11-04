@@ -234,6 +234,22 @@ mod tests {
     }
 
     #[test]
+    fn name_decl_test() {
+        for name in &["a", "a_a", "a_a_a", "a_aa_a", "a0", "a_0", "a0_00"] {
+            let _: ast::HLLString = parser::NameDeclParser::new()
+                .parse(name)
+                .expect(&format!("failed to validate `{}`", name));
+        }
+        for name in &[
+            "0", "0a", "_", "_a", "a_", "a_a_", "a__a", "a__a_a", "a_a___a", "-", "a-a",
+        ] {
+            let _: ParseError<_, _, _> = parser::NameDeclParser::new()
+                .parse(name)
+                .expect_err(&format!("successfully validated invalid `{}`", name));
+        }
+    }
+
+    #[test]
     fn basic_policy_parse_test() {
         let policy_file = [POLICIES_DIR, "tmp_file.cas"].concat();
         let policy = fs::read_to_string(policy_file).unwrap();
@@ -497,6 +513,9 @@ mod tests {
         valid_policy_test(
             "associate.cas",
             &[
+                "call foo-tmp-associated_call_from_tmp (foo-tmp qux)",
+                "call bar-tmp-associated_call_from_tmp (bar-tmp qux)",
+                "call baz-tmp-associated_call_from_tmp (baz-tmp qux)",
                 "call bar-tmp-associated_call_from_tmp (bar-tmp bar)",
                 "call bar-var-associated_call_from_var (bar-var bar)",
                 "call baz-tmp-associated_call_from_tmp (baz-tmp baz)",
@@ -520,6 +539,9 @@ mod tests {
                 "macro tmp-associated_call_from_tmp ((type this) (type source)) (allow source tmp (file (read)))",
                 "macro tmp-not_an_associated_call ((type this) (type source)) (allow source tmp (file (write)))",
                 "macro var-associated_call_from_var ((type this) (type source)) (allow source var (file (read)))",
+                "type qux",
+                "roletype system_r qux",
+                "typeattributeset domain (qux)",
                 "typeattribute tmp",
                 "typeattributeset resource (tmp)",
                 "typeattribute bin",
