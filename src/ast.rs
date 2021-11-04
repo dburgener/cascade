@@ -151,9 +151,8 @@ pub enum Expression {
 
 impl Expression {
     pub fn set_class_name_if_decl(&mut self, name: HLLString) {
-        match self {
-            Expression::Decl(Declaration::Func(d)) => d.class_name = Some(name),
-            _ => (),
+        if let Expression::Decl(Declaration::Func(d)) = self {
+            d.class_name = Some(name)
         }
     }
 
@@ -287,9 +286,8 @@ impl FuncCall {
     }
 
     pub fn check_builtin(&self) -> Option<BuiltIns> {
-        match self.class_name {
-            Some(_) => return None,
-            None => (),
+        if let Some(_) = self.class_name {
+            return None;
         }
         if constants::AV_RULES.iter().any(|i| *i == &self.name) {
             return Some(BuiltIns::AvRule);
