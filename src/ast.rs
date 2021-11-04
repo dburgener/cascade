@@ -289,13 +289,13 @@ impl FuncCall {
         if let Some(_) = self.class_name {
             return None;
         }
-        if constants::AV_RULES.iter().any(|i| *i == &self.name) {
+        if constants::AV_RULES.iter().any(|i| *i == self.name) {
             return Some(BuiltIns::AvRule);
         }
-        if &self.name == constants::FILE_CONTEXT_FUNCTION_NAME {
+        if self.name == constants::FILE_CONTEXT_FUNCTION_NAME {
             return Some(BuiltIns::FileContext);
         }
-        if &self.name == constants::DOMTRANS_FUNCTION_NAME {
+        if self.name == constants::DOMTRANS_FUNCTION_NAME {
             return Some(BuiltIns::DomainTransition);
         }
         None
