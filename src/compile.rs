@@ -613,7 +613,7 @@ fn check_non_virtual_inheritance(types: &TypeMap) -> Result<(), HLLErrors> {
 // 1. All types have at least one parent
 // 2. All listed parents are themselves types (or "domain" or "resource")
 // 3. No cycles exist
-fn organize_type_map<'a>(types: &'a TypeMap) -> Result<Vec<&'a TypeInfo>, HLLErrors> {
+fn organize_type_map(types: &TypeMap) -> Result<Vec<&TypeInfo>, HLLErrors> {
     let mut tmp_types: BTreeMap<&String, &TypeInfo> = types.iter().collect();
 
     let mut out: Vec<&TypeInfo> = Vec::new();
