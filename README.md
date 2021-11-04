@@ -25,7 +25,7 @@ $ cargo test
 Cargo will automatically download all Rust crate dependencies.  The tests depend
 on the secilc package.
 
-## hllc
+## casc
 The Cascade compiler is named casc, and will be located at target/debug/casc after a
 successful build.  It takes one argument, the name of a policy file to be built:
 
