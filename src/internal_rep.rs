@@ -263,7 +263,7 @@ fn get_type_annotations(
 
 // strings may be paths or strings
 pub fn type_name_from_string(string: &str) -> String {
-    if string.contains("/") {
+    if string.contains('/') {
         "path".to_string()
     } else {
         "string".to_string()
@@ -458,7 +458,7 @@ impl From<Context<'_>> for sexp::Sexp {
 impl<'a> TryFrom<&'a str> for Context<'a> {
     type Error = ();
     fn try_from(s: &'a str) -> Result<Context<'a>, ()> {
-        let mut split_string = s.split(":");
+        let mut split_string = s.split(':');
         let first_field = split_string.next().ok_or(())?;
         let second_field = split_string.next();
 
