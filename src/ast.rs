@@ -23,7 +23,7 @@ impl fmt::Display for HLLString {
 impl HLLString {
     pub fn new(string: String, range: Range<usize>) -> Self {
         HLLString {
-            string: string,
+            string,
             range: Some(range),
         }
     }
@@ -128,10 +128,7 @@ pub struct PolicyFile {
 
 impl PolicyFile {
     pub fn new(policy: Policy, file: SimpleFile<String, String>) -> Self {
-        PolicyFile {
-            policy: policy,
-            file: file,
-        }
+        PolicyFile { policy, file }
     }
 }
 
@@ -142,7 +139,7 @@ pub struct Policy {
 
 impl Policy {
     pub fn new(exprs: Vec<Expression>) -> Policy {
-        Policy { exprs: exprs }
+        Policy { exprs }
     }
 }
 
@@ -208,8 +205,8 @@ pub struct TypeDecl {
 impl TypeDecl {
     pub fn new(name: HLLString, inherits: Vec<HLLString>, exprs: Vec<Expression>) -> TypeDecl {
         TypeDecl {
-            name: name,
-            inherits: inherits,
+            name,
+            inherits,
             is_virtual: false,
             expressions: exprs,
             annotations: Annotations::new(),
@@ -344,7 +341,7 @@ pub struct Annotation {
 impl Annotation {
     pub fn new(name: HLLString) -> Self {
         Annotation {
-            name: name,
+            name,
             arguments: Vec::new(),
         }
     }
