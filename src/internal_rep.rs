@@ -185,16 +185,13 @@ fn get_associate(
         }
     };
 
-    match args.next() {
-        Some(a) => {
-            return Err(HLLCompileError::new(
-                "Superfluous argument",
-                file,
-                a.get_range(),
-                "There must be only one argument.",
-            ))
-        }
-        None => {}
+    if let Some(a) = args.next() {
+        return Err(HLLCompileError::new(
+            "Superfluous argument",
+            file,
+            a.get_range(),
+            "There must be only one argument.",
+        ));
     }
 
     Ok(AnnotationInfo::Associate(Associated {
@@ -622,15 +619,12 @@ impl<'a> ClassList<'a> {
                 _ => None,
             };
 
-            match other_str {
-                Some(s) => {
-                    let hll_string = match class.get_range() {
-                        Some(range) => HLLString::new(s.to_string(), range),
-                        None => HLLString::from(s.to_string()),
-                    };
-                    return self.verify_permission(&hll_string, permission, file);
-                }
-                None => (),
+            if let Some(s) = other_str {
+                let hll_string = match class.get_range() {
+                    Some(range) => HLLString::new(s.to_string(), range),
+                    None => HLLString::from(s.to_string()),
+                };
+                return self.verify_permission(&hll_string, permission, file);
             }
 
             return Err(HLLCompileError::new(
@@ -997,16 +991,13 @@ fn check_associated_call(
     // Checks that annotation arguments match the expected signature.
     let mut annotation_args = annotation.arguments.iter();
 
-    match annotation_args.next() {
-        Some(a) => {
-            return Err(HLLCompileError::new(
-                "Superfluous argument",
-                file,
-                a.get_range(),
-                "@associated_call doesn't take argument.",
-            ))
-        }
-        None => {}
+    if let Some(a) = annotation_args.next() {
+        return Err(HLLCompileError::new(
+            "Superfluous argument",
+            file,
+            a.get_range(),
+            "@associated_call doesn't take argument.",
+        ));
     }
 
     // Checks that annotated functions match the expected signature.
@@ -1035,16 +1026,13 @@ fn check_associated_call(
             }
         }
     }
-    match func_args.next() {
-        Some(a) => {
-            return Err(HLLCompileError::new(
-                "Invalid method signature for @associated_call annotation: too much arguments",
-                file,
-                a.param_type.get_range(),
-                "Only one argument of type 'domain' is accepted.",
-            ));
-        }
-        None => {}
+    if let Some(a) = func_args.next() {
+        return Err(HLLCompileError::new(
+            "Invalid method signature for @associated_call annotation: too much arguments",
+            file,
+            a.param_type.get_range(),
+            "Only one argument of type 'domain' is accepted.",
+        ));
     }
 
     Ok(true)
@@ -1075,9 +1063,8 @@ impl<'a> FunctionInfo<'a> {
         let mut errors = HLLErrors::new();
 
         // All member functions automatically have "this" available as a reference to their type
-        match parent_type {
-            Some(parent_type) => args.push(FunctionArgument::new_this_argument(parent_type)),
-            None => (),
+        if let Some(parent_type) = parent_type {
+            args.push(FunctionArgument::new_this_argument(parent_type));
         }
 
         for a in &funcdecl.args {
