@@ -286,7 +286,7 @@ impl FuncCall {
     }
 
     pub fn check_builtin(&self) -> Option<BuiltIns> {
-        if let Some(_) = self.class_name {
+        if self.class_name.is_some() {
             return None;
         }
         if constants::AV_RULES.iter().any(|i| *i == self.name) {
