@@ -537,6 +537,30 @@ pub fn apply_annotations<'a>(
     }
 }
 
+// Temporary check for non-virtual inheritance
+// TODO: remove when adding support for non-virtual inheritance
+fn check_non_virtual_inheritance(types: &TypeMap) -> Result<(), HLLErrors> {
+    for t in types.values() {
+        for parent in &t.inherits {
+            match types.get(&parent.to_string()) {
+                Some(p) => {
+                    if !p.is_virtual {
+                        return Err(HLLErrorItem::make_compile_or_internal_error(
+                            "Inheriting from a non-virtual type is not yet supported",
+                            t.declaration_file.as_ref(),
+                            parent.get_range(),
+                            "This type is not virtual",
+                        )
+                        .into());
+                    }
+                }
+                None => (),
+            };
+        }
+    }
+    Ok(())
+}
+
 // This function validates that the relationships in the HashMap are valid, and organizes a Vector
 // of type declarations in a reasonable order to be output into CIL.
 // In order to be valid, the types must meet the following properties:
@@ -547,6 +571,10 @@ fn organize_type_map<'a>(types: &'a TypeMap) -> Result<Vec<&'a TypeInfo>, HLLErr
     let mut tmp_types: HashMap<&String, &TypeInfo> = types.iter().collect();
 
     let mut out: Vec<&TypeInfo> = Vec::new();
+
+    // TODO: This should be allowed, but isn't yet supported.  Remove this check once support for
+    // non-virtual inheritance is added
+    check_non_virtual_inheritance(types)?;
 
     while !tmp_types.is_empty() {
         let mut current_pass_types: Vec<&TypeInfo> = Vec::new();
@@ -750,7 +778,7 @@ mod tests {
     #[test]
     fn organize_type_map_test() {
         let mut types = get_built_in_types_map();
-        let foo_type = TypeInfo::new(
+        let mut foo_type = TypeInfo::new(
             TypeDecl::new(
                 HLLString::from("foo"),
                 vec![HLLString::from("domain")],
@@ -759,8 +787,9 @@ mod tests {
             &SimpleFile::new(String::new(), String::new()),
         )
         .unwrap();
+        foo_type.is_virtual = true;
 
-        let bar_type = TypeInfo::new(
+        let mut bar_type = TypeInfo::new(
             TypeDecl::new(
                 HLLString::from("bar"),
                 vec![HLLString::from("domain"), HLLString::from("foo")],
@@ -769,6 +798,7 @@ mod tests {
             &SimpleFile::new(String::new(), String::new()),
         )
         .unwrap();
+        bar_type.is_virtual = true;
 
         let baz_type = TypeInfo::new(
             TypeDecl::new(

@@ -380,6 +380,21 @@ mod tests {
     }
 
     #[test]
+    fn non_virtual_inherit_test() {
+        let policy_file = [ERROR_POLICIES_DIR, "non_virtual_inherit.cas"].concat();
+
+        match compile_system_policy(vec![&policy_file]) {
+            Ok(_) => panic!("Non virtual inheritance compiled successfully"),
+            Err(e) => {
+                assert_eq!(e.error_count(), 1);
+                for error in e {
+                    assert!(matches!(error, HLLErrorItem::Compile(_)));
+                }
+            }
+        }
+    }
+
+    #[test]
     fn parsing_unrecognized_token() {
         let policy_file = [ERROR_POLICIES_DIR, "parse_unrecognized_token.cas"].concat();
 

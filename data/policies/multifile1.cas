@@ -1,4 +1,4 @@
-resource foo {
+virtual resource foo {
 	fn read(domain source) {
 		allow(source, this, file, read);
 	}
