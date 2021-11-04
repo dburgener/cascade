@@ -23,14 +23,14 @@ pub fn compile_rules_one_file<'a>(
     type_map: &'a TypeMap,
     func_map: &'a FunctionMap<'a>,
 ) -> Result<BTreeSet<ValidatedStatement<'a>>, HLLErrors> {
-    Ok(do_rules_pass(
+    do_rules_pass(
         &p.policy.exprs,
         &type_map,
         &func_map,
         &classlist,
         None,
         &p.file,
-    )?)
+    )
 }
 
 pub fn generate_sexp(
