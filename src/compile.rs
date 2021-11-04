@@ -25,9 +25,9 @@ pub fn compile_rules_one_file<'a>(
 ) -> Result<BTreeSet<ValidatedStatement<'a>>, HLLErrors> {
     do_rules_pass(
         &p.policy.exprs,
-        &type_map,
-        &func_map,
-        &classlist,
+        type_map,
+        func_map,
+        classlist,
         None,
         &p.file,
     )
@@ -42,7 +42,7 @@ pub fn generate_sexp(
     let type_decl_list = organize_type_map(type_map)?;
     // TODO: The rest of compilation
     let cil_types = type_list_to_sexp(type_decl_list, type_map);
-    let headers = generate_cil_headers(&classlist);
+    let headers = generate_cil_headers(classlist);
     let cil_rules = rules_list_to_sexp(policy_rules);
     let cil_macros = func_map_to_sexp(func_map)?;
     let sid_statements =
@@ -206,7 +206,7 @@ pub fn validate_functions<'a, 'b>(
     let mut errors = HLLErrors::new();
     for function in functions.values_mut() {
         match function.validate_body(
-            &functions_copy,
+            functions_copy,
             types,
             class_perms,
             function.declaration_file,
@@ -259,7 +259,7 @@ fn find_cycles_or_bad_types(
         let mut new_visited_types = visited_types.clone();
         new_visited_types.insert(type_to_check.name.as_ref());
 
-        match find_cycles_or_bad_types(&parent_ti, types, new_visited_types) {
+        match find_cycles_or_bad_types(parent_ti, types, new_visited_types) {
             Ok(()) => (),
             Err(e) => ret.append(e),
         }
@@ -271,7 +271,7 @@ fn find_cycles_or_bad_types(
 fn generate_type_no_parent_errors(missed_types: Vec<&TypeInfo>, types: &TypeMap) -> HLLErrors {
     let mut ret = HLLErrors::new();
     for t in &missed_types {
-        match find_cycles_or_bad_types(&t, types, HashSet::new()) {
+        match find_cycles_or_bad_types(t, types, HashSet::new()) {
             Ok(()) => {
                 ret.add_error(HLLInternalError {});
                 return ret;
@@ -465,7 +465,7 @@ where
                 types,
                 associate,
                 inherited.parent,
-                &dom_info,
+                dom_info,
             ) {
                 Ok(()) => {}
                 Err(e) => errors.append(e),
@@ -525,10 +525,10 @@ fn inherit_annotations<'a>(
             .iter()
             .map(|a| InheritedAnnotation {
                 annotation: a,
-                parent: Some(&dom_info),
+                parent: Some(dom_info),
             })
             .chain(inherited_annotations.into_iter().map(|mut a| {
-                a.parent = Some(&dom_info);
+                a.parent = Some(dom_info);
                 a
             }))
             .collect()
@@ -738,7 +738,7 @@ fn get_rules_vec_for_type(ti: &TypeInfo, s: sexp::Sexp, type_map: &TypeMap) -> V
         ret.push(list(&[
             atom_s("roletype"),
             atom_s(role_assoc),
-            atom_s(&ti.name.as_ref()),
+            atom_s(ti.name.as_ref()),
         ]));
     }
 
@@ -746,7 +746,7 @@ fn get_rules_vec_for_type(ti: &TypeInfo, s: sexp::Sexp, type_map: &TypeMap) -> V
         ret.push(list(&[
             atom_s("typeattributeset"),
             atom_s(i.as_ref()),
-            list(&[atom_s(&ti.name.as_ref())]),
+            list(&[atom_s(ti.name.as_ref())]),
         ]));
     }
 
