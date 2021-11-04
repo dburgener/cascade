@@ -500,10 +500,7 @@ pub struct Sid<'a> {
 
 impl<'a> Sid<'a> {
     pub fn new(name: &'a str, context: Context<'a>) -> Self {
-        Sid {
-            name: name,
-            context: context,
-        }
+        Sid { name, context }
     }
 
     fn get_sid_statement(&self) -> Sexp {
@@ -552,10 +549,7 @@ impl From<&Class<'_>> for sexp::Sexp {
 
 impl<'a> Class<'a> {
     pub fn new(name: &'a str, perms: Vec<&'a str>) -> Self {
-        Class {
-            name: name,
-            perms: perms,
-        }
+        Class { name, perms }
     }
 
     pub fn contains_perm(&self, perm: &str) -> bool {
@@ -751,10 +745,10 @@ fn call_to_av_rule<'a>(
 
     Ok(AvRule {
         av_rule_flavor: flavor,
-        source: source,
-        target: target,
-        class: class,
-        perms: perms,
+        source,
+        target,
+        class,
+        perms,
     })
 }
 
@@ -904,8 +898,8 @@ fn call_to_fc_rules<'a>(
 
         ret.push(FileContextRule {
             regex_string: regex_string.clone(),
-            file_type: file_type,
-            context: context,
+            file_type,
+            context,
         });
     }
 
@@ -989,9 +983,9 @@ fn call_to_domain_transition<'a>(
     }
 
     Ok(DomtransRule {
-        source: source,
-        target: target,
-        executable: executable,
+        source,
+        target,
+        executable,
     })
 }
 
@@ -1128,11 +1122,11 @@ impl<'a> FunctionInfo<'a> {
         errors.into_result(FunctionInfo {
             name: funcdecl.name.to_string(),
             class: parent_type,
-            args: args,
+            args,
             original_body: &funcdecl.body,
             body: None,
-            declaration_file: declaration_file,
-            is_associated_call: is_associated_call,
+            declaration_file,
+            is_associated_call,
             decl: &funcdecl,
         })
     }
@@ -1224,7 +1218,7 @@ impl<'a> FunctionArgument<'a> {
         // TODO list parameters
 
         Ok(FunctionArgument {
-            param_type: param_type,
+            param_type,
             name: declared_arg.name.to_string(),
             is_list_param: declared_arg.is_list_param,
         })
@@ -1395,10 +1389,7 @@ impl ValidatedCall {
             args.push(arg.get_name_or_string()?.to_string()); // TODO: Handle lists
         }
 
-        Ok(ValidatedCall {
-            cil_name: cil_name,
-            args: args,
-        })
+        Ok(ValidatedCall { cil_name, args })
     }
 }
 
@@ -1478,9 +1469,9 @@ impl<'a> TypeInstance<'a> {
         };
 
         TypeInstance {
-            instance_value: instance_value,
+            instance_value,
             type_info: &ti,
-            file: file,
+            file,
         }
     }
 }
