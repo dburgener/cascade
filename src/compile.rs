@@ -158,7 +158,7 @@ pub fn get_built_in_types_map() -> TypeMap {
 }
 
 pub fn build_func_map<'a>(
-    exprs: &'a Vec<Expression>,
+    exprs: &'a [Expression],
     types: &'a TypeMap,
     parent_type: Option<&'a TypeInfo>,
     file: &'a SimpleFile<String, String>,
@@ -660,7 +660,7 @@ fn organize_type_map<'a>(types: &'a TypeMap) -> Result<Vec<&'a TypeInfo>, HLLErr
 }
 
 fn do_rules_pass<'a>(
-    exprs: &'a Vec<Expression>,
+    exprs: &'a [Expression],
     types: &'a TypeMap,
     funcs: &'a FunctionMap<'a>,
     class_perms: &ClassList<'a>,
