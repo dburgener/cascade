@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 use sexp::{atom_s, list, Sexp};
 use std::collections::hash_map::Entry;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::TryFrom;
 
 use crate::ast::{
@@ -12,7 +12,7 @@ use crate::constants;
 use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
 use crate::internal_rep::{
     generate_sid_rules, AnnotationInfo, Associated, ClassList, Context, FunctionArgument,
-    FunctionInfo, Sid, TypeInfo, TypeMap, ValidatedStatement,
+    FunctionInfo, FunctionMap, Sid, TypeInfo, TypeMap, ValidatedStatement,
 };
 
 use codespan_reporting::files::SimpleFile;
@@ -20,9 +20,9 @@ use codespan_reporting::files::SimpleFile;
 pub fn compile_rules_one_file<'a>(
     p: &'a PolicyFile,
     classlist: &'a ClassList<'a>,
-    type_map: &'a HashMap<String, TypeInfo>,
-    func_map: &'a HashMap<String, FunctionInfo<'a>>,
-) -> Result<Vec<ValidatedStatement<'a>>, HLLErrors> {
+    type_map: &'a TypeMap,
+    func_map: &'a FunctionMap<'a>,
+) -> Result<BTreeSet<ValidatedStatement<'a>>, HLLErrors> {
     Ok(do_rules_pass(
         &p.policy.exprs,
         &type_map,
@@ -36,8 +36,8 @@ pub fn compile_rules_one_file<'a>(
 pub fn generate_sexp(
     type_map: &TypeMap,
     classlist: &ClassList,
-    policy_rules: Vec<ValidatedStatement>,
-    func_map: &HashMap<String, FunctionInfo>,
+    policy_rules: BTreeSet<ValidatedStatement>,
+    func_map: &FunctionMap<'_>,
 ) -> Result<Vec<sexp::Sexp>, HLLErrors> {
     let type_decl_list = organize_type_map(type_map)?;
     // TODO: The rest of compilation
@@ -108,7 +108,7 @@ pub fn extend_type_map(p: &PolicyFile, type_map: &mut TypeMap) -> Result<(), HLL
 }
 
 pub fn get_built_in_types_map() -> TypeMap {
-    let mut built_in_types = HashMap::new();
+    let mut built_in_types = TypeMap::new();
     let list_coercions = constants::BUILT_IN_TYPES.iter().map(|t| *t == "perm");
 
     for (built_in, list_coercion) in constants::BUILT_IN_TYPES.iter().zip(list_coercions) {
@@ -162,8 +162,8 @@ pub fn build_func_map<'a>(
     types: &'a TypeMap,
     parent_type: Option<&'a TypeInfo>,
     file: &'a SimpleFile<String, String>,
-) -> Result<HashMap<String, FunctionInfo<'a>>, HLLErrors> {
-    let mut decl_map = HashMap::new();
+) -> Result<FunctionMap<'a>, HLLErrors> {
+    let mut decl_map = FunctionMap::new();
     // TODO: This only allows declarations at the top level.
     for e in exprs {
         let d = match e {
@@ -198,10 +198,10 @@ pub fn build_func_map<'a>(
 
 // Mutate hash map to set the validated body
 pub fn validate_functions<'a, 'b>(
-    functions: &'a mut HashMap<String, FunctionInfo<'b>>,
+    functions: &'a mut FunctionMap<'b>,
     types: &'b TypeMap,
     class_perms: &'b ClassList,
-    functions_copy: &'b HashMap<String, FunctionInfo<'b>>,
+    functions_copy: &'b FunctionMap<'b>,
 ) -> Result<(), HLLErrors> {
     let mut errors = HLLErrors::new();
     for function in functions.values_mut() {
@@ -288,7 +288,7 @@ fn get_synthetic_resource_name(dom_info: &TypeInfo, associated_resource: &HLLStr
 }
 
 fn create_synthetic_resource(
-    types: &HashMap<String, TypeInfo>,
+    types: &TypeMap,
     dom_info: &TypeInfo,
     associated_parent: Option<&TypeInfo>,
     class: &TypeInfo,
@@ -331,8 +331,8 @@ fn create_synthetic_resource(
 fn interpret_associate(
     global_exprs: &mut HashSet<Expression>,
     local_exprs: &mut HashSet<Expression>,
-    funcs: &HashMap<String, FunctionInfo>,
-    types: &HashMap<String, TypeInfo>,
+    funcs: &FunctionMap<'_>,
+    types: &TypeMap,
     associate: &Associated,
     associated_parent: Option<&TypeInfo>,
     dom_info: &TypeInfo,
@@ -341,7 +341,7 @@ fn interpret_associate(
     // TODO: Add tests to verify these checks.
 
     let mut errors = HLLErrors::new();
-    let mut potential_resources: HashMap<_, _> = associate
+    let mut potential_resources: BTreeMap<_, _> = associate
         .resources
         .iter()
         .map(|r| (r.as_ref(), (r, false)))
@@ -433,8 +433,8 @@ struct InheritedAnnotation<'a> {
 fn interpret_annotations<'a, T>(
     global_exprs: &mut HashSet<Expression>,
     associate_exprs: &mut AssociateExprs,
-    funcs: &HashMap<String, FunctionInfo>,
-    types: &HashMap<String, TypeInfo>,
+    funcs: &FunctionMap<'_>,
+    types: &TypeMap,
     dom_info: &'a TypeInfo,
     extra_annotations: T,
 ) -> Result<(), HLLErrors>
@@ -479,8 +479,8 @@ where
 fn inherit_annotations<'a>(
     global_exprs: &mut HashSet<Expression>,
     associate_exprs: &mut AssociateExprs,
-    funcs: &HashMap<String, FunctionInfo>,
-    types: &'a HashMap<String, TypeInfo>,
+    funcs: &FunctionMap<'_>,
+    types: &'a TypeMap,
     dom_info: &'a TypeInfo,
 ) -> Result<Vec<InheritedAnnotation<'a>>, HLLErrors> {
     let mut errors = HLLErrors::new();
@@ -537,7 +537,7 @@ fn inherit_annotations<'a>(
 
 pub fn apply_annotations<'a>(
     types: &'a TypeMap,
-    funcs: &HashMap<String, FunctionInfo>,
+    funcs: &FunctionMap<'_>,
 ) -> Result<Vec<Expression>, HLLErrors> {
     let mut errors = HLLErrors::new();
 
@@ -609,14 +609,14 @@ fn check_non_virtual_inheritance(types: &TypeMap) -> Result<(), HLLErrors> {
     Ok(())
 }
 
-// This function validates that the relationships in the HashMap are valid, and organizes a Vector
+// This function validates that the relationships in the map are valid, and organizes a Vector
 // of type declarations in a reasonable order to be output into CIL.
 // In order to be valid, the types must meet the following properties:
 // 1. All types have at least one parent
 // 2. All listed parents are themselves types (or "domain" or "resource")
 // 3. No cycles exist
 fn organize_type_map<'a>(types: &'a TypeMap) -> Result<Vec<&'a TypeInfo>, HLLErrors> {
-    let mut tmp_types: HashMap<&String, &TypeInfo> = types.iter().collect();
+    let mut tmp_types: BTreeMap<&String, &TypeInfo> = types.iter().collect();
 
     let mut out: Vec<&TypeInfo> = Vec::new();
 
@@ -662,12 +662,12 @@ fn organize_type_map<'a>(types: &'a TypeMap) -> Result<Vec<&'a TypeInfo>, HLLErr
 fn do_rules_pass<'a>(
     exprs: &'a Vec<Expression>,
     types: &'a TypeMap,
-    funcs: &'a HashMap<String, FunctionInfo>,
+    funcs: &'a FunctionMap<'a>,
     class_perms: &ClassList<'a>,
     parent_type: Option<&'a TypeInfo>,
     file: &'a SimpleFile<String, String>,
-) -> Result<Vec<ValidatedStatement<'a>>, HLLErrors> {
-    let mut ret = Vec::new();
+) -> Result<BTreeSet<ValidatedStatement<'a>>, HLLErrors> {
+    let mut ret = BTreeSet::new();
     let mut errors = HLLErrors::new();
     for e in exprs {
         match e {
@@ -702,7 +702,7 @@ fn do_rules_pass<'a>(
                     Some(type_being_parsed),
                     file,
                 ) {
-                    Ok(r) => ret.extend(r),
+                    Ok(mut r) => ret.append(&mut r),
                     Err(e) => errors.append(e),
                 }
             }
@@ -781,7 +781,7 @@ fn generate_sids<'a>(
     ]
 }
 
-fn func_map_to_sexp(funcs: &HashMap<String, FunctionInfo>) -> Result<Vec<sexp::Sexp>, HLLErrors> {
+fn func_map_to_sexp(funcs: &FunctionMap<'_>) -> Result<Vec<sexp::Sexp>, HLLErrors> {
     let mut ret = Vec::new();
     let mut errors = HLLErrors::new();
     for f in funcs.values() {

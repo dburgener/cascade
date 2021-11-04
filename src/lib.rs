@@ -14,9 +14,10 @@ mod internal_rep;
 mod obj_class;
 mod sexp_internal;
 
-use std::collections::HashMap;
+use std::collections::BTreeSet;
 
 use ast::{Policy, PolicyFile};
+use internal_rep::FunctionMap;
 
 use codespan_reporting::files::SimpleFile;
 use error::HLLErrors;
@@ -62,8 +63,8 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
     // Generic initialization
     let classlist = obj_class::make_classlist();
     let mut type_map = compile::get_built_in_types_map();
-    let mut func_map = HashMap::new();
-    let mut policy_rules = Vec::new();
+    let mut func_map = FunctionMap::new();
+    let mut policy_rules = BTreeSet::new();
 
     // Collect all type declarations
     for p in &policies {
@@ -80,19 +81,18 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
 
     // Applies annotations
     {
-        let mut tmp_func_map = HashMap::new();
+        let mut tmp_func_map = FunctionMap::new();
 
         // Collect all function declarations
         for p in &policies {
-            tmp_func_map.extend(
-                match compile::build_func_map(&p.policy.exprs, &type_map, None, &p.file) {
-                    Ok(m) => m.into_iter(),
-                    Err(e) => {
-                        errors.append(e);
-                        continue;
-                    }
-                },
-            );
+            let mut m = match compile::build_func_map(&p.policy.exprs, &type_map, None, &p.file) {
+                Ok(m) => m,
+                Err(e) => {
+                    errors.append(e);
+                    continue;
+                }
+            };
+            tmp_func_map.append(&mut m);
         }
 
         // TODO: Validate original functions before adding synthetic ones to avoid confusing errors for users.
@@ -116,15 +116,14 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
 
     // Collect all function declarations
     for p in &policies {
-        func_map.extend(
-            match compile::build_func_map(&p.policy.exprs, &type_map, None, &p.file) {
-                Ok(m) => m.into_iter(),
-                Err(e) => {
-                    errors.append(e);
-                    continue;
-                }
-            },
-        );
+        let mut m = match compile::build_func_map(&p.policy.exprs, &type_map, None, &p.file) {
+            Ok(m) => m,
+            Err(e) => {
+                errors.append(e);
+                continue;
+            }
+        };
+        func_map.append(&mut m);
     }
     // Stops if something went wrong for this major step.
     errors = errors.into_result_self()?;
@@ -134,15 +133,14 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
     compile::validate_functions(&mut func_map, &type_map, &classlist, &func_map_copy)?;
 
     for p in &policies {
-        policy_rules.extend(
-            match compile::compile_rules_one_file(&p, &classlist, &type_map, &func_map) {
-                Ok(r) => r.into_iter(),
-                Err(e) => {
-                    errors.append(e);
-                    continue;
-                }
-            },
-        );
+        let mut r = match compile::compile_rules_one_file(&p, &classlist, &type_map, &func_map) {
+            Ok(r) => r,
+            Err(e) => {
+                errors.append(e);
+                continue;
+            }
+        };
+        policy_rules.append(&mut r);
     }
     // Stops if something went wrong for this major step.
     errors = errors.into_result_self()?;
@@ -182,6 +180,60 @@ mod tests {
 
     const POLICIES_DIR: &str = "data/policies/";
     const ERROR_POLICIES_DIR: &str = "data/error_policies/";
+    const EXPECTED_CIL_DIR: &str = "data/expected_cil/";
+
+    #[test]
+    fn characterization_tests() {
+        let mut count = 0;
+
+        for f in fs::read_dir(POLICIES_DIR).unwrap() {
+            count += 1;
+            let policy_path = f.unwrap().path();
+            let cil_path = match policy_path.extension() {
+                Some(e) if e == "cas" => std::path::Path::new(EXPECTED_CIL_DIR).join(
+                    policy_path
+                        .with_extension("cil")
+                        .file_name()
+                        .expect(&format!(
+                            "failed to extract file name from `{}`",
+                            policy_path.to_string_lossy()
+                        )),
+                ),
+                _ => continue,
+            };
+
+            // TODO: Make compile_system_policy() take an iterator of AsRef<Path>.
+            let cil_gen = match compile_system_policy(vec![&policy_path.to_string_lossy()]) {
+                Ok(c) => c,
+                Err(e) => match fs::read_to_string(&cil_path) {
+                    Ok(_) => panic!(
+                        "Failed to compile '{}' whereas there is a reference CIL file: {}",
+                        policy_path.to_string_lossy(),
+                        e
+                    ),
+                    Err(_) => continue,
+                },
+            };
+            let cil_ref = fs::read_to_string(&cil_path).unwrap_or_else(|e| {
+                panic!(
+                    "Failed to read file '{}': {}. \
+                    You may want to create it with tools/update-expected-cil.sh",
+                    cil_path.to_string_lossy(),
+                    e
+                )
+            });
+            if cil_gen != cil_ref {
+                panic!(
+                    "CIL generation doesn't match the recorded one for '{}'. \
+                    You may want to update it with tools/update-expected-cil.sh",
+                    policy_path.to_string_lossy()
+                )
+            }
+        }
+
+        // Make sure we don't check an empty directory.
+        assert!(count > 9);
+    }
 
     fn valid_policy_test(filename: &str, expected_contents: &[&str]) {
         let policy_file = [POLICIES_DIR, filename].concat();

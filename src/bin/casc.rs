@@ -33,9 +33,8 @@ fn main() -> std::io::Result<()> {
                     eprintln!("{}", e);
                 }
             }
+            Err(Error::new(ErrorKind::InvalidData, "Invalid policy"))
         }
-        Ok(s) => out_file.write_all(s.as_bytes())?,
+        Ok(s) => out_file.write_all(s.as_bytes()),
     }
-
-    Ok(())
 }
