@@ -562,7 +562,7 @@ pub fn apply_annotations<'a>(
 
     match associate_exprs
         .into_iter()
-        .filter(|(_, v)| v.len() != 0)
+        .filter(|(_, v)| !v.is_empty())
         .map(|(k, v)| {
             // TODO: Avoid cloning all expressions.
             let mut new_domain = types
@@ -575,7 +575,7 @@ pub fn apply_annotations<'a>(
             new_domain.expressions = v.into_iter().collect();
             Ok(Expression::Decl(Declaration::Type(Box::new(new_domain))))
         })
-        .chain(global_exprs.into_iter().map(|e| Ok(e)))
+        .chain(global_exprs.into_iter().map(Ok))
         .collect::<Result<_, HLLErrors>>()
     {
         Ok(r) => errors.into_result(r),
@@ -648,7 +648,7 @@ fn organize_type_map<'a>(types: &'a TypeMap) -> Result<Vec<&'a TypeInfo>, HLLErr
         if current_pass_types.is_empty() && !tmp_types.is_empty() {
             // We can't satify the parents for all types
             return Err(generate_type_no_parent_errors(
-                tmp_types.values().map(|t| *t).collect(),
+                tmp_types.values().copied().collect(),
                 types,
             ));
         }
