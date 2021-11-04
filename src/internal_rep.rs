@@ -667,7 +667,7 @@ fn call_to_av_rule<'a>(
         constants::DONTAUDIT_FUNCTION_NAME => AvRuleFlavor::Dontaudit,
         constants::AUDITALLOW_FUNCTION_NAME => AvRuleFlavor::Auditallow,
         constants::NEVERALLOW_FUNCTION_NAME => AvRuleFlavor::Neverallow,
-        _ => Err(HLLErrorItem::Internal(HLLInternalError {}))?,
+        _ => return Err(HLLErrorItem::Internal(HLLInternalError {}).into()),
     };
 
     let target_args = vec![
@@ -730,7 +730,7 @@ fn call_to_av_rule<'a>(
         .get_list()?;
 
     if args_iter.next().is_some() {
-        Err(HLLErrorItem::Internal(HLLInternalError {}))?;
+        return Err(HLLErrorItem::Internal(HLLInternalError {}).into());
     }
 
     for p in &perms {
@@ -973,7 +973,7 @@ fn call_to_domain_transition<'a>(
         .type_info;
 
     if args_iter.next().is_some() {
-        Err(HLLErrorItem::Internal(HLLInternalError {}))?;
+        return Err(HLLErrorItem::Internal(HLLInternalError {}).into());
     }
 
     Ok(DomtransRule {
@@ -1161,7 +1161,7 @@ impl TryFrom<&FunctionInfo<'_>> for sexp::Sexp {
             Sexp::List(f.args.iter().map(Sexp::from).collect()),
         ];
         match &f.body {
-            None => Err(HLLInternalError {})?,
+            None => return Err(HLLInternalError {}.into()),
             Some(statements) => {
                 for statement in statements {
                     match statement {
@@ -1571,7 +1571,7 @@ fn validate_argument<'a>(
             }
             let target_ti = match types.get(&target_argument.param_type.name.to_string()) {
                 Some(t) => t,
-                None => Err(HLLInternalError {})?,
+                None => return Err(HLLInternalError {}.into()),
             };
             let arg_typeinfo_vec = argument_to_typeinfo_vec(v, types, class_perms, args, file)?;
 
