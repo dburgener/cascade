@@ -575,7 +575,7 @@ impl<'a> ClassList<'a> {
     }
 
     pub fn generate_class_perm_cil(&self) -> Vec<Sexp> {
-        let mut ret: Vec<Sexp> = self.classes.values().map(|c| Sexp::from(c)).collect();
+        let mut ret: Vec<Sexp> = self.classes.values().map(Sexp::from).collect();
 
         let classorder = list(&[
             atom_s("classorder"),
@@ -1158,7 +1158,7 @@ impl TryFrom<&FunctionInfo<'_>> for sexp::Sexp {
         let mut macro_cil = vec![
             atom_s("macro"),
             atom_s(&f.get_cil_name()),
-            Sexp::List(f.args.iter().map(|a| Sexp::from(a)).collect()),
+            Sexp::List(f.args.iter().map(Sexp::from).collect()),
         ];
         match &f.body {
             None => Err(HLLInternalError {})?,
@@ -1270,7 +1270,7 @@ impl<'a> ValidatedStatement<'a> {
                         if in_resource {
                             Ok(call_to_fc_rules(c, types, class_perms, Some(args), file)?
                                 .into_iter()
-                                .map(|f| ValidatedStatement::FcRule(f))
+                                .map(ValidatedStatement::FcRule)
                                 .collect())
                         } else {
                             Err(HLLErrors::from(HLLErrorItem::Compile(
@@ -1689,8 +1689,8 @@ mod tests {
             "(sidorder (foo bar))",
         ];
         assert_eq!(rules.len(), cil_expected.len());
-        let mut iter = rules.iter().zip(cil_expected.iter());
-        while let Some(i) = iter.next() {
+        let iter = rules.iter().zip(cil_expected.iter());
+        for i in iter {
             assert_eq!(i.0.to_string(), i.1.to_string());
         }
     }
