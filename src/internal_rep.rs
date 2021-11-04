@@ -154,7 +154,7 @@ impl From<&TypeInfo> for Option<sexp::Sexp> {
             Some(f) => f,
             None => return None,
         };
-        Some(list(&[atom_s(flavor), atom_s(&typeinfo.name.as_ref())]))
+        Some(list(&[atom_s(flavor), atom_s(typeinfo.name.as_ref())]))
     }
 }
 
@@ -740,7 +740,7 @@ fn call_to_av_rule<'a>(
     }
 
     for p in &perms {
-        class_perms.verify_permission(&class, &p, file)?;
+        class_perms.verify_permission(class, p, file)?;
     }
 
     Ok(AvRule {
@@ -1081,7 +1081,7 @@ impl<'a> FunctionInfo<'a> {
         }
 
         for a in &funcdecl.args {
-            match FunctionArgument::new(&a, types, Some(declaration_file)) {
+            match FunctionArgument::new(a, types, Some(declaration_file)) {
                 Ok(a) => args.push(a),
                 Err(e) => errors.add_error(e),
             }
@@ -1127,7 +1127,7 @@ impl<'a> FunctionInfo<'a> {
             body: None,
             declaration_file,
             is_associated_call,
-            decl: &funcdecl,
+            decl: funcdecl,
         })
     }
 
@@ -1446,7 +1446,7 @@ impl<'a> TypeInstance<'a> {
     fn get_range(&self) -> Option<Range<usize>> {
         match &self.instance_value {
             TypeValue::Str(s) => s.get_range(),
-            TypeValue::Vector(v) => HLLString::vec_to_range(&v),
+            TypeValue::Vector(v) => HLLString::vec_to_range(v),
             TypeValue::SEType(r) => r.clone(),
         }
     }
@@ -1470,7 +1470,7 @@ impl<'a> TypeInstance<'a> {
 
         TypeInstance {
             instance_value,
-            type_info: &ti,
+            type_info: ti,
             file,
         }
     }
@@ -1558,7 +1558,7 @@ impl<'a> ArgForValidation<'a> {
     fn get_range(&self) -> Option<Range<usize>> {
         match self {
             ArgForValidation::Var(s) => s.get_range(),
-            ArgForValidation::List(v) => HLLString::vec_to_range(&v),
+            ArgForValidation::List(v) => HLLString::vec_to_range(v),
             ArgForValidation::Quote(s) => s.get_range(),
         }
     }
@@ -1586,7 +1586,7 @@ fn validate_argument<'a>(
                 Some(t) => t,
                 None => Err(HLLInternalError {})?,
             };
-            let arg_typeinfo_vec = argument_to_typeinfo_vec(&v, types, class_perms, args, file)?;
+            let arg_typeinfo_vec = argument_to_typeinfo_vec(v, types, class_perms, args, file)?;
 
             for arg in arg_typeinfo_vec {
                 if !arg.is_child_or_actual_type(target_argument.param_type, types) {
@@ -1598,7 +1598,7 @@ fn validate_argument<'a>(
                     )));
                 }
             }
-            Ok(TypeInstance::new(&arg, &target_ti, file))
+            Ok(TypeInstance::new(&arg, target_ti, file))
         }
         _ => {
             let arg_typeinfo = argument_to_typeinfo(&arg, types, class_perms, args, file)?;
@@ -1622,7 +1622,7 @@ fn validate_argument<'a>(
             }
 
             if arg_typeinfo.is_child_or_actual_type(target_argument.param_type, types) {
-                Ok(TypeInstance::new(&arg, &arg_typeinfo, file))
+                Ok(TypeInstance::new(&arg, arg_typeinfo, file))
             } else {
                 Err(HLLErrorItem::Compile(HLLCompileError::new(
                     &format!("Expected type inheriting {}", arg_typeinfo.name.to_string()),
