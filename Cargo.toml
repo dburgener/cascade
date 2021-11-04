@@ -1,8 +1,13 @@
 [package]
 name = "selinux-cascade"
 version = "0.0.1"
-authors = ["Daniel Burgener <Daniel.Burgener@microsoft.com>"]
+description = "A High Level Language for specifying SELinux policy"
+authors = ["Daniel Burgener <dburgener@linux.microsoft.com>", "Mickael Salaun <mic@linux.microsoft.com>"]
 edition = "2018"
+license = "MIT"
+repository = "https://github.com/dburgener/cascade"
+readme = "README.md"
+keywords = [ "selinux" ]
 
 [build-dependencies]
 lalrpop = "0.19"
