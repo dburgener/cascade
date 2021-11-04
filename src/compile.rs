@@ -591,20 +591,17 @@ pub fn apply_annotations<'a>(
 fn check_non_virtual_inheritance(types: &TypeMap) -> Result<(), HLLErrors> {
     for t in types.values() {
         for parent in &t.inherits {
-            match types.get(&parent.to_string()) {
-                Some(p) => {
-                    if !p.is_virtual {
-                        return Err(HLLErrorItem::make_compile_or_internal_error(
-                            "Inheriting from a non-virtual type is not yet supported",
-                            t.declaration_file.as_ref(),
-                            parent.get_range(),
-                            "This type is not virtual",
-                        )
-                        .into());
-                    }
+            if let Some(p) = types.get(&parent.to_string()) {
+                if !p.is_virtual {
+                    return Err(HLLErrorItem::make_compile_or_internal_error(
+                        "Inheriting from a non-virtual type is not yet supported",
+                        t.declaration_file.as_ref(),
+                        parent.get_range(),
+                        "This type is not virtual",
+                    )
+                    .into());
                 }
-                None => (),
-            };
+            }
         }
     }
     Ok(())
@@ -717,11 +714,8 @@ fn do_rules_pass<'a>(
 fn type_list_to_sexp(type_list: Vec<&TypeInfo>, type_map: &TypeMap) -> Vec<sexp::Sexp> {
     let mut ret = Vec::new();
     for t in type_list {
-        match Option::<sexp::Sexp>::from(t) {
-            Some(s) => {
-                ret.extend(get_rules_vec_for_type(t, s, type_map));
-            }
-            None => (),
+        if let Some(s) = Option::<sexp::Sexp>::from(t) {
+            ret.extend(get_rules_vec_for_type(t, s, type_map));
         }
     }
     ret
