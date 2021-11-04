@@ -44,7 +44,7 @@ Decl: Declaration = {
 }
 
 TypeDecl: Box<TypeDecl> = {
-	<dr:BuiltInType> <n:Symbol> <i:InheritList?> "{" <mut v:Expr*> "}" => {
+	<dr:BuiltInType> <n:NameDecl> <i:InheritList?> "{" <mut v:Expr*> "}" => {
 		let inherits = match i {
 			None => vec![dr],
 			Some(mut i) => {
@@ -67,12 +67,12 @@ BuiltInType: HLLString = {
 }
 
 FuncDecl: Box<FuncDecl> = {
-	"fn" <n: Symbol> "(" <a: Comma<FuncDeclArg>> ")" "{" <b: Stmt+> "}" => Box::new(FuncDecl { class_name: None, name: n, args: a, body: b, annotations: Annotations::new() }),
+	"fn" <n: NameDecl> "(" <a: Comma<FuncDeclArg>> ")" "{" <b: Stmt+> "}" => Box::new(FuncDecl { class_name: None, name: n, args: a, body: b, annotations: Annotations::new() }),
 }
 
 FuncDeclArg: DeclaredArgument = {
-	<t: Symbol> <n: Symbol> => DeclaredArgument { param_type: t, is_list_param: false, name: n },
-	"[" <t: Symbol> "]" <n: Symbol> => DeclaredArgument { param_type: t, is_list_param: true, name: n },
+	<t: Symbol> <n: NameDecl> => DeclaredArgument { param_type: t, is_list_param: false, name: n },
+	"[" <t: Symbol> "]" <n: NameDecl> => DeclaredArgument { param_type: t, is_list_param: true, name: n },
 }
 
 Stmt: Statement = {
@@ -81,12 +81,23 @@ Stmt: Statement = {
 }
 
 Ann: Annotation = {
-	"@" <s:Symbol> "(" <a:Comma<Arg>> ")" => Annotation::new(s).set_arguments(a),
-	"@" <s:Symbol> => Annotation::new(s),
+	"@" <s:NameDecl> "(" <a:Comma<Arg>> ")" => Annotation::new(s).set_arguments(a),
+	"@" <s:NameDecl> => Annotation::new(s),
+}
+
+pub NameDecl: HLLString = {
+	// Naming rules:
+	// * must start with a letter
+	// * must not end with an underscore
+	// * must not contain consecutive underscores
+	// * can contain letters, digits and underscores
+	<start: @L> <s: r"[a-zA-Z](_?([0-9a-zA-Z]+_)*[0-9a-zA-Z]+)?"> <end: @R>  => HLLString::new(s.to_string(), start..end),
 }
 
 Symbol: HLLString = {
-	<start: @L> <s: r"[a-zA-Z_]+"> <end: @R>  => HLLString::new(s.to_string(), start..end),
+	// Less constrained than NameDecl and accepts '-', which enables to use synthetic resources.
+	<start: @L> <s: r"[a-zA-Z]+-[0-9a-zA-Z_-]*[0-9a-zA-Z]"> <end: @R>  => HLLString::new(s.to_string(), start..end),
+	NameDecl,
 	BuiltInType
 }
 

@@ -234,6 +234,22 @@ mod tests {
     }
 
     #[test]
+    fn name_decl_test() {
+        for name in &["a", "a_a", "a_a_a", "a_aa_a", "a0", "a_0", "a0_00"] {
+            let _: ast::HLLString = parser::NameDeclParser::new()
+                .parse(name)
+                .expect(&format!("failed to validate `{}`", name));
+        }
+        for name in &[
+            "0", "0a", "_", "_a", "a_", "a_a_", "a__a", "a__a_a", "a_a___a", "-", "a-a",
+        ] {
+            let _: ParseError<_, _, _> = parser::NameDeclParser::new()
+                .parse(name)
+                .expect_err(&format!("successfully validated invalid `{}`", name));
+        }
+    }
+
+    #[test]
     fn basic_policy_parse_test() {
         let policy_file = [POLICIES_DIR, "tmp_file.cas"].concat();
         let policy = fs::read_to_string(policy_file).unwrap();
@@ -497,6 +513,9 @@ mod tests {
         valid_policy_test(
             "associate.cas",
             &[
+                "call foo-tmp-associated_call_from_tmp (foo-tmp qux)",
+                "call bar-tmp-associated_call_from_tmp (bar-tmp qux)",
+                "call baz-tmp-associated_call_from_tmp (baz-tmp qux)",
                 "call bar-tmp-associated_call_from_tmp (bar-tmp bar)",
                 "call bar-var-associated_call_from_var (bar-var bar)",
                 "call baz-tmp-associated_call_from_tmp (baz-tmp baz)",
@@ -505,45 +524,66 @@ mod tests {
                 "call foo-var-associated_call_from_var (foo-var foo)",
                 "call tmp-associated_call_from_tmp (tmp foo)",
                 "call tmp-not_an_associated_call (tmp foo)",
-                "macro bar-bin-not_an_associated_call_from_bin ((type this) (type source)) (allow source tmp (file (read)))",
+                "macro bar-bin-not_an_associated_call_from_bin ((type this) (type source)) (allow source bin (file (read)))",
                 "macro bar-tmp-associated_call_from_tmp ((type this) (type source)) (allow source tmp (file (read)))",
-                "macro bar-tmp-not_an_associated_call ((type this) (type source)) (allow source tmp (file (read)))",
-                "macro bar-var-associated_call_from_var ((type this) (type source)) (allow source tmp (file (read)))",
-                "macro baz-bin-not_an_associated_call_from_bin ((type this) (type source)) (allow source tmp (file (read)))",
+                "macro bar-tmp-not_an_associated_call ((type this) (type source)) (allow source tmp (file (write)))",
+                "macro bar-var-associated_call_from_var ((type this) (type source)) (allow source var (file (read)))",
+                "macro baz-bin-not_an_associated_call_from_bin ((type this) (type source)) (allow source bin (file (read)))",
                 "macro baz-tmp-associated_call_from_tmp ((type this) (type source)) (allow source tmp (file (read)))",
-                "macro baz-tmp-not_an_associated_call ((type this) (type source)) (allow source tmp (file (read)))",
-                "macro baz-var-associated_call_from_var ((type this) (type source)) (allow source tmp (file (read)))",
-                "macro bin-not_an_associated_call_from_bin ((type this) (type source)) (allow source tmp (file (read)))",
+                "macro baz-tmp-not_an_associated_call ((type this) (type source)) (allow source tmp (file (write)))",
+                "macro baz-var-associated_call_from_var ((type this) (type source)) (allow source var (file (read)))",
+                "macro bin-not_an_associated_call_from_bin ((type this) (type source)) (allow source bin (file (read)))",
                 "macro foo-tmp-associated_call_from_tmp ((type this) (type source)) (allow source tmp (file (read)))",
-                "macro foo-tmp-not_an_associated_call ((type this) (type source)) (allow source tmp (file (read)))",
-                "macro foo-var-associated_call_from_var ((type this) (type source)) (allow source tmp (file (read)))",
+                "macro foo-tmp-not_an_associated_call ((type this) (type source)) (allow source tmp (file (write)))",
+                "macro foo-var-associated_call_from_var ((type this) (type source)) (allow source var (file (read)))",
                 "macro tmp-associated_call_from_tmp ((type this) (type source)) (allow source tmp (file (read)))",
-                "macro tmp-not_an_associated_call ((type this) (type source)) (allow source tmp (file (read)))",
-                "macro var-associated_call_from_var ((type this) (type source)) (allow source tmp (file (read)))",
-                "roletype object_r bar-bin",
-                "roletype object_r bar-tmp",
-                "roletype object_r bar-var",
-                "roletype object_r baz-bin",
-                "roletype object_r baz-tmp",
-                "roletype object_r baz-var",
-                "roletype object_r foo-tmp",
-                "roletype object_r foo-var",
-                "type bar-bin",
-                "type bar-tmp",
-                "type bar-var",
-                "type baz-bin",
-                "type baz-tmp",
-                "type baz-var",
-                "type foo-tmp",
-                "type foo-var",
-                "typeattributeset resource (bar-bin)",
-                "typeattributeset resource (bar-tmp)",
-                "typeattributeset resource (bar-var)",
-                "typeattributeset resource (baz-bin)",
-                "typeattributeset resource (baz-tmp)",
-                "typeattributeset resource (baz-var)",
-                "typeattributeset resource (foo-tmp)",
+                "macro tmp-not_an_associated_call ((type this) (type source)) (allow source tmp (file (write)))",
+                "macro var-associated_call_from_var ((type this) (type source)) (allow source var (file (read)))",
+                "type qux",
+                "roletype system_r qux",
+                "typeattributeset domain (qux)",
+                "typeattribute tmp",
+                "typeattributeset resource (tmp)",
+                "typeattribute bin",
+                "typeattributeset resource (bin)",
+                "typeattribute foo",
+                "typeattributeset domain (foo)",
+                "typeattribute var",
+                "typeattributeset resource (var)",
+                "typeattribute bar",
+                "typeattributeset foo (bar)",
+                "typeattributeset domain (bar)",
+                "typeattribute foo-var",
+                "typeattributeset var (foo-var)",
                 "typeattributeset resource (foo-var)",
+                "typeattribute bar-bin",
+                "typeattributeset bin (bar-bin)",
+                "typeattributeset resource (bar-bin)",
+                "typeattribute foo-tmp",
+                "typeattributeset tmp (foo-tmp)",
+                "typeattributeset resource (foo-tmp)",
+                "typeattribute bar-tmp",
+                "typeattributeset foo-tmp (bar-tmp)",
+                "typeattributeset resource (bar-tmp)",
+                "typeattribute bar-var",
+                "typeattributeset foo-var (bar-var)",
+                "typeattributeset resource (bar-var)",
+                "typeattribute baz-var",
+                // baz-var must inherit bar-var, not foo-var
+                "typeattributeset bar-var (baz-var)",
+                "typeattributeset resource (baz-var)",
+                "typeattribute baz-bin",
+                // baz-bin must inherit bar-var, not foo-bin
+                "typeattributeset bar-bin (baz-bin)",
+                "typeattributeset resource (baz-bin)",
+                "typeattribute baz-tmp",
+                // baz-tmp must inherit bar-tmp, not foo-tmp
+                "typeattributeset bar-tmp (baz-tmp)",
+                "typeattributeset resource (baz-tmp)",
+                "type baz",
+                "roletype system_r baz",
+                "typeattributeset bar (baz)",
+                "typeattributeset domain (baz)",
             ],
         );
     }
