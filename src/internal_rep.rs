@@ -109,7 +109,7 @@ impl TypeInfo {
                 return true;
             }
         }
-        return false;
+        false
     }
 
     // Get the type that cil is aware of that this ti falls into
