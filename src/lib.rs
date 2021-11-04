@@ -133,7 +133,7 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
     compile::validate_functions(&mut func_map, &type_map, &classlist, &func_map_copy)?;
 
     for p in &policies {
-        let mut r = match compile::compile_rules_one_file(&p, &classlist, &type_map, &func_map) {
+        let mut r = match compile::compile_rules_one_file(p, &classlist, &type_map, &func_map) {
             Ok(r) => r,
             Err(e) => {
                 errors.append(e);
@@ -377,7 +377,6 @@ mod tests {
                 //assert!(p.contains(
                 //    "(call foo.foo_func"
                 //));
-                ()
             }
             Err(e) => panic!("Makelist compilation failed with {}", e),
         }
@@ -481,7 +480,7 @@ mod tests {
                                     },
                                     ..
                                 })
-                                if msg == "Unexpected character \".\"".to_string()));
+                                if msg == *"Unexpected character \".\""));
                 }
             }
         }
@@ -506,7 +505,7 @@ mod tests {
                                     },
                                     ..
                                 })
-                                if msg == "Unknown character".to_string()));
+                                if msg == *"Unknown character"));
                 }
             }
         }
@@ -531,7 +530,7 @@ mod tests {
                                     },
                                     ..
                                 })
-                                if msg == "Unexpected end of file".to_string()));
+                                if msg == *"Unexpected end of file"));
                 }
             }
         }
