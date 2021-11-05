@@ -160,7 +160,7 @@ fn parse_policy<'a>(
 
 fn generate_cil(v: Vec<sexp::Sexp>) -> String {
     v.iter()
-        .map(|s| sexp_internal::display_cil(s))
+        .map(sexp_internal::display_cil)
         .collect::<Vec<String>>()
         .join("\n")
 }
