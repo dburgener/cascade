@@ -50,4 +50,16 @@ than simply adding raw allow rules.
 For details on writing Cascade policy, see [Type Enforcement](doc/TE.md).
 
 # Contribute
-TODO
+Thank you for your interest in contributing!  There are several ways you can
+contribute to this project.
+
+## Reporting bugs and suggesting enhancements
+If you see something wrong or have a suggestion for improvement, feel free to
+create an issue in the [Issue tracker](https://github.com/dburgener/cascade/issues)
+
+## Contributing code
+We'd welcome your code contributions via GitHub PR.  If you're planning on
+adding a major feature, it would probably be good to discuss it in the issue
+tracker prior to doing too much work so that we can all come to a consensus on
+how it should work.  No advanced discussion is needed for smaller tweaks and
+bug fixes.
