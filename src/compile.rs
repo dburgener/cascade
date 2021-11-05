@@ -23,14 +23,14 @@ pub fn compile_rules_one_file<'a>(
     type_map: &'a TypeMap,
     func_map: &'a FunctionMap<'a>,
 ) -> Result<BTreeSet<ValidatedStatement<'a>>, HLLErrors> {
-    Ok(do_rules_pass(
+    do_rules_pass(
         &p.policy.exprs,
-        &type_map,
-        &func_map,
-        &classlist,
+        type_map,
+        func_map,
+        classlist,
         None,
         &p.file,
-    )?)
+    )
 }
 
 pub fn generate_sexp(
@@ -42,7 +42,7 @@ pub fn generate_sexp(
     let type_decl_list = organize_type_map(type_map)?;
     // TODO: The rest of compilation
     let cil_types = type_list_to_sexp(type_decl_list, type_map);
-    let headers = generate_cil_headers(&classlist);
+    let headers = generate_cil_headers(classlist);
     let cil_rules = rules_list_to_sexp(policy_rules);
     let cil_macros = func_map_to_sexp(func_map)?;
     let sid_statements =
@@ -158,7 +158,7 @@ pub fn get_built_in_types_map() -> TypeMap {
 }
 
 pub fn build_func_map<'a>(
-    exprs: &'a Vec<Expression>,
+    exprs: &'a [Expression],
     types: &'a TypeMap,
     parent_type: Option<&'a TypeInfo>,
     file: &'a SimpleFile<String, String>,
@@ -174,7 +174,7 @@ pub fn build_func_map<'a>(
             Declaration::Type(t) => {
                 let type_being_parsed = match types.get(&t.name.to_string()) {
                     Some(t) => t,
-                    None => Err(HLLErrorItem::Internal(HLLInternalError {}))?,
+                    None => return Err(HLLErrorItem::Internal(HLLInternalError {}).into()),
                 };
                 decl_map.extend(build_func_map(
                     &t.expressions,
@@ -206,7 +206,7 @@ pub fn validate_functions<'a, 'b>(
     let mut errors = HLLErrors::new();
     for function in functions.values_mut() {
         match function.validate_body(
-            &functions_copy,
+            functions_copy,
             types,
             class_perms,
             function.declaration_file,
@@ -259,7 +259,7 @@ fn find_cycles_or_bad_types(
         let mut new_visited_types = visited_types.clone();
         new_visited_types.insert(type_to_check.name.as_ref());
 
-        match find_cycles_or_bad_types(&parent_ti, types, new_visited_types) {
+        match find_cycles_or_bad_types(parent_ti, types, new_visited_types) {
             Ok(()) => (),
             Err(e) => ret.append(e),
         }
@@ -271,7 +271,7 @@ fn find_cycles_or_bad_types(
 fn generate_type_no_parent_errors(missed_types: Vec<&TypeInfo>, types: &TypeMap) -> HLLErrors {
     let mut ret = HLLErrors::new();
     for t in &missed_types {
-        match find_cycles_or_bad_types(&t, types, HashSet::new()) {
+        match find_cycles_or_bad_types(t, types, HashSet::new()) {
             Ok(()) => {
                 ret.add_error(HLLInternalError {});
                 return ret;
@@ -296,7 +296,7 @@ fn create_synthetic_resource(
     global_exprs: &mut HashSet<Expression>,
 ) -> Result<HLLString, HLLErrorItem> {
     if !class.is_resource(types) {
-        Err(HLLCompileError::new(
+        return Err(HLLCompileError::new(
             "not a resource",
             dom_info
                 .declaration_file
@@ -304,7 +304,8 @@ fn create_synthetic_resource(
                 .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?,
             class_string.get_range(),
             "This should not be a domain but a resource.",
-        ))?;
+        )
+        .into());
     }
 
     // Creates a synthetic resource declaration.
@@ -323,7 +324,7 @@ fn create_synthetic_resource(
         .iter_mut()
         .for_each(|e| e.set_class_name_if_decl(res_name.clone()));
     if !global_exprs.insert(Expression::Decl(Declaration::Type(Box::new(dup_res_decl)))) {
-        Err(HLLInternalError {})?;
+        return Err(HLLInternalError {}.into());
     }
     Ok(res_name)
 }
@@ -385,7 +386,7 @@ fn interpret_associate(
                     vec![Argument::Var("this".into())],
                 ))));
                 if !local_exprs.insert(new_call) {
-                    Err(HLLErrorItem::Internal(HLLInternalError {}))?;
+                    return Err(HLLErrorItem::Internal(HLLInternalError {}).into());
                 }
             }
         }
@@ -465,7 +466,7 @@ where
                 types,
                 associate,
                 inherited.parent,
-                &dom_info,
+                dom_info,
             ) {
                 Ok(()) => {}
                 Err(e) => errors.append(e),
@@ -525,10 +526,10 @@ fn inherit_annotations<'a>(
             .iter()
             .map(|a| InheritedAnnotation {
                 annotation: a,
-                parent: Some(&dom_info),
+                parent: Some(dom_info),
             })
             .chain(inherited_annotations.into_iter().map(|mut a| {
-                a.parent = Some(&dom_info);
+                a.parent = Some(dom_info);
                 a
             }))
             .collect()
@@ -561,7 +562,7 @@ pub fn apply_annotations<'a>(
 
     match associate_exprs
         .into_iter()
-        .filter(|(_, v)| v.len() != 0)
+        .filter(|(_, v)| !v.is_empty())
         .map(|(k, v)| {
             // TODO: Avoid cloning all expressions.
             let mut new_domain = types
@@ -574,7 +575,7 @@ pub fn apply_annotations<'a>(
             new_domain.expressions = v.into_iter().collect();
             Ok(Expression::Decl(Declaration::Type(Box::new(new_domain))))
         })
-        .chain(global_exprs.into_iter().map(|e| Ok(e)))
+        .chain(global_exprs.into_iter().map(Ok))
         .collect::<Result<_, HLLErrors>>()
     {
         Ok(r) => errors.into_result(r),
@@ -590,20 +591,17 @@ pub fn apply_annotations<'a>(
 fn check_non_virtual_inheritance(types: &TypeMap) -> Result<(), HLLErrors> {
     for t in types.values() {
         for parent in &t.inherits {
-            match types.get(&parent.to_string()) {
-                Some(p) => {
-                    if !p.is_virtual {
-                        return Err(HLLErrorItem::make_compile_or_internal_error(
-                            "Inheriting from a non-virtual type is not yet supported",
-                            t.declaration_file.as_ref(),
-                            parent.get_range(),
-                            "This type is not virtual",
-                        )
-                        .into());
-                    }
+            if let Some(p) = types.get(&parent.to_string()) {
+                if !p.is_virtual {
+                    return Err(HLLErrorItem::make_compile_or_internal_error(
+                        "Inheriting from a non-virtual type is not yet supported",
+                        t.declaration_file.as_ref(),
+                        parent.get_range(),
+                        "This type is not virtual",
+                    )
+                    .into());
                 }
-                None => (),
-            };
+            }
         }
     }
     Ok(())
@@ -615,7 +613,7 @@ fn check_non_virtual_inheritance(types: &TypeMap) -> Result<(), HLLErrors> {
 // 1. All types have at least one parent
 // 2. All listed parents are themselves types (or "domain" or "resource")
 // 3. No cycles exist
-fn organize_type_map<'a>(types: &'a TypeMap) -> Result<Vec<&'a TypeInfo>, HLLErrors> {
+fn organize_type_map(types: &TypeMap) -> Result<Vec<&TypeInfo>, HLLErrors> {
     let mut tmp_types: BTreeMap<&String, &TypeInfo> = types.iter().collect();
 
     let mut out: Vec<&TypeInfo> = Vec::new();
@@ -647,7 +645,7 @@ fn organize_type_map<'a>(types: &'a TypeMap) -> Result<Vec<&'a TypeInfo>, HLLErr
         if current_pass_types.is_empty() && !tmp_types.is_empty() {
             // We can't satify the parents for all types
             return Err(generate_type_no_parent_errors(
-                tmp_types.values().map(|t| *t).collect(),
+                tmp_types.values().copied().collect(),
                 types,
             ));
         }
@@ -660,7 +658,7 @@ fn organize_type_map<'a>(types: &'a TypeMap) -> Result<Vec<&'a TypeInfo>, HLLErr
 }
 
 fn do_rules_pass<'a>(
-    exprs: &'a Vec<Expression>,
+    exprs: &'a [Expression],
     types: &'a TypeMap,
     funcs: &'a FunctionMap<'a>,
     class_perms: &ClassList<'a>,
@@ -692,7 +690,7 @@ fn do_rules_pass<'a>(
             Expression::Decl(Declaration::Type(t)) => {
                 let type_being_parsed = match types.get(&t.name.to_string()) {
                     Some(t) => t,
-                    None => Err(HLLErrorItem::Internal(HLLInternalError {}))?,
+                    None => return Err(HLLErrorItem::Internal(HLLInternalError {}).into()),
                 };
                 match do_rules_pass(
                     &t.expressions,
@@ -716,11 +714,8 @@ fn do_rules_pass<'a>(
 fn type_list_to_sexp(type_list: Vec<&TypeInfo>, type_map: &TypeMap) -> Vec<sexp::Sexp> {
     let mut ret = Vec::new();
     for t in type_list {
-        match Option::<sexp::Sexp>::from(t) {
-            Some(s) => {
-                ret.extend(get_rules_vec_for_type(t, s, type_map));
-            }
-            None => (),
+        if let Some(s) = Option::<sexp::Sexp>::from(t) {
+            ret.extend(get_rules_vec_for_type(t, s, type_map));
         }
     }
     ret
@@ -738,7 +733,7 @@ fn get_rules_vec_for_type(ti: &TypeInfo, s: sexp::Sexp, type_map: &TypeMap) -> V
         ret.push(list(&[
             atom_s("roletype"),
             atom_s(role_assoc),
-            atom_s(&ti.name.as_ref()),
+            atom_s(ti.name.as_ref()),
         ]));
     }
 
@@ -746,7 +741,7 @@ fn get_rules_vec_for_type(ti: &TypeInfo, s: sexp::Sexp, type_map: &TypeMap) -> V
         ret.push(list(&[
             atom_s("typeattributeset"),
             atom_s(i.as_ref()),
-            list(&[atom_s(&ti.name.as_ref())]),
+            list(&[atom_s(ti.name.as_ref())]),
         ]));
     }
 

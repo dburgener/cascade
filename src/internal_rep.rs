@@ -109,7 +109,7 @@ impl TypeInfo {
                 return true;
             }
         }
-        return false;
+        false
     }
 
     // Get the type that cil is aware of that this ti falls into
@@ -154,7 +154,7 @@ impl From<&TypeInfo> for Option<sexp::Sexp> {
             Some(f) => f,
             None => return None,
         };
-        Some(list(&[atom_s(flavor), atom_s(&typeinfo.name.as_ref())]))
+        Some(list(&[atom_s(flavor), atom_s(typeinfo.name.as_ref())]))
     }
 }
 
@@ -185,16 +185,13 @@ fn get_associate(
         }
     };
 
-    match args.next() {
-        Some(a) => {
-            return Err(HLLCompileError::new(
-                "Superfluous argument",
-                file,
-                a.get_range(),
-                "There must be only one argument.",
-            ))
-        }
-        None => {}
+    if let Some(a) = args.next() {
+        return Err(HLLCompileError::new(
+            "Superfluous argument",
+            file,
+            a.get_range(),
+            "There must be only one argument.",
+        ));
     }
 
     Ok(AnnotationInfo::Associate(Associated {
@@ -266,7 +263,7 @@ fn get_type_annotations(
 
 // strings may be paths or strings
 pub fn type_name_from_string(string: &str) -> String {
-    if string.contains("/") {
+    if string.contains('/') {
         "path".to_string()
     } else {
         "string".to_string()
@@ -461,7 +458,7 @@ impl From<Context<'_>> for sexp::Sexp {
 impl<'a> TryFrom<&'a str> for Context<'a> {
     type Error = ();
     fn try_from(s: &'a str) -> Result<Context<'a>, ()> {
-        let mut split_string = s.split(":");
+        let mut split_string = s.split(':');
         let first_field = split_string.next().ok_or(())?;
         let second_field = split_string.next();
 
@@ -500,10 +497,7 @@ pub struct Sid<'a> {
 
 impl<'a> Sid<'a> {
     pub fn new(name: &'a str, context: Context<'a>) -> Self {
-        Sid {
-            name: name,
-            context: context,
-        }
+        Sid { name, context }
     }
 
     fn get_sid_statement(&self) -> Sexp {
@@ -552,10 +546,7 @@ impl From<&Class<'_>> for sexp::Sexp {
 
 impl<'a> Class<'a> {
     pub fn new(name: &'a str, perms: Vec<&'a str>) -> Self {
-        Class {
-            name: name,
-            perms: perms,
-        }
+        Class { name, perms }
     }
 
     pub fn contains_perm(&self, perm: &str) -> bool {
@@ -584,7 +575,7 @@ impl<'a> ClassList<'a> {
     }
 
     pub fn generate_class_perm_cil(&self) -> Vec<Sexp> {
-        let mut ret: Vec<Sexp> = self.classes.values().map(|c| Sexp::from(c)).collect();
+        let mut ret: Vec<Sexp> = self.classes.values().map(Sexp::from).collect();
 
         let classorder = list(&[
             atom_s("classorder"),
@@ -619,7 +610,7 @@ impl<'a> ClassList<'a> {
         };
 
         if class_struct.perms.contains(&permission.as_ref()) {
-            return Ok(());
+            Ok(())
         } else {
             let other_str = match class.as_ref() {
                 "capability" => Some("capability2"),
@@ -628,15 +619,12 @@ impl<'a> ClassList<'a> {
                 _ => None,
             };
 
-            match other_str {
-                Some(s) => {
-                    let hll_string = match class.get_range() {
-                        Some(range) => HLLString::new(s.to_string(), range),
-                        None => HLLString::from(s.to_string()),
-                    };
-                    return self.verify_permission(&hll_string, permission, file);
-                }
-                None => (),
+            if let Some(s) = other_str {
+                let hll_string = match class.get_range() {
+                    Some(range) => HLLString::new(s.to_string(), range),
+                    None => HLLString::from(s.to_string()),
+                };
+                return self.verify_permission(&hll_string, permission, file);
             }
 
             return Err(HLLCompileError::new(
@@ -679,7 +667,7 @@ fn call_to_av_rule<'a>(
         constants::DONTAUDIT_FUNCTION_NAME => AvRuleFlavor::Dontaudit,
         constants::AUDITALLOW_FUNCTION_NAME => AvRuleFlavor::Auditallow,
         constants::NEVERALLOW_FUNCTION_NAME => AvRuleFlavor::Neverallow,
-        _ => Err(HLLErrorItem::Internal(HLLInternalError {}))?,
+        _ => return Err(HLLErrorItem::Internal(HLLInternalError {}).into()),
     };
 
     let target_args = vec![
@@ -742,19 +730,19 @@ fn call_to_av_rule<'a>(
         .get_list()?;
 
     if args_iter.next().is_some() {
-        Err(HLLErrorItem::Internal(HLLInternalError {}))?;
+        return Err(HLLErrorItem::Internal(HLLInternalError {}).into());
     }
 
     for p in &perms {
-        class_perms.verify_permission(&class, &p, file)?;
+        class_perms.verify_permission(class, p, file)?;
     }
 
     Ok(AvRule {
         av_rule_flavor: flavor,
-        source: source,
-        target: target,
-        class: class,
-        perms: perms,
+        source,
+        target,
+        class,
+        perms,
     })
 }
 
@@ -904,8 +892,8 @@ fn call_to_fc_rules<'a>(
 
         ret.push(FileContextRule {
             regex_string: regex_string.clone(),
-            file_type: file_type,
-            context: context,
+            file_type,
+            context,
         });
     }
 
@@ -985,13 +973,13 @@ fn call_to_domain_transition<'a>(
         .type_info;
 
     if args_iter.next().is_some() {
-        Err(HLLErrorItem::Internal(HLLInternalError {}))?;
+        return Err(HLLErrorItem::Internal(HLLInternalError {}).into());
     }
 
     Ok(DomtransRule {
-        source: source,
-        target: target,
-        executable: executable,
+        source,
+        target,
+        executable,
     })
 }
 
@@ -1003,16 +991,13 @@ fn check_associated_call(
     // Checks that annotation arguments match the expected signature.
     let mut annotation_args = annotation.arguments.iter();
 
-    match annotation_args.next() {
-        Some(a) => {
-            return Err(HLLCompileError::new(
-                "Superfluous argument",
-                file,
-                a.get_range(),
-                "@associated_call doesn't take argument.",
-            ))
-        }
-        None => {}
+    if let Some(a) = annotation_args.next() {
+        return Err(HLLCompileError::new(
+            "Superfluous argument",
+            file,
+            a.get_range(),
+            "@associated_call doesn't take argument.",
+        ));
     }
 
     // Checks that annotated functions match the expected signature.
@@ -1041,16 +1026,13 @@ fn check_associated_call(
             }
         }
     }
-    match func_args.next() {
-        Some(a) => {
-            return Err(HLLCompileError::new(
-                "Invalid method signature for @associated_call annotation: too much arguments",
-                file,
-                a.param_type.get_range(),
-                "Only one argument of type 'domain' is accepted.",
-            ));
-        }
-        None => {}
+    if let Some(a) = func_args.next() {
+        return Err(HLLCompileError::new(
+            "Invalid method signature for @associated_call annotation: too much arguments",
+            file,
+            a.param_type.get_range(),
+            "Only one argument of type 'domain' is accepted.",
+        ));
     }
 
     Ok(true)
@@ -1081,13 +1063,12 @@ impl<'a> FunctionInfo<'a> {
         let mut errors = HLLErrors::new();
 
         // All member functions automatically have "this" available as a reference to their type
-        match parent_type {
-            Some(parent_type) => args.push(FunctionArgument::new_this_argument(parent_type)),
-            None => (),
+        if let Some(parent_type) = parent_type {
+            args.push(FunctionArgument::new_this_argument(parent_type));
         }
 
         for a in &funcdecl.args {
-            match FunctionArgument::new(&a, types, Some(declaration_file)) {
+            match FunctionArgument::new(a, types, Some(declaration_file)) {
                 Ok(a) => args.push(a),
                 Err(e) => errors.add_error(e),
             }
@@ -1128,12 +1109,12 @@ impl<'a> FunctionInfo<'a> {
         errors.into_result(FunctionInfo {
             name: funcdecl.name.to_string(),
             class: parent_type,
-            args: args,
+            args,
             original_body: &funcdecl.body,
             body: None,
-            declaration_file: declaration_file,
-            is_associated_call: is_associated_call,
-            decl: &funcdecl,
+            declaration_file,
+            is_associated_call,
+            decl: funcdecl,
         })
     }
 
@@ -1177,10 +1158,10 @@ impl TryFrom<&FunctionInfo<'_>> for sexp::Sexp {
         let mut macro_cil = vec![
             atom_s("macro"),
             atom_s(&f.get_cil_name()),
-            Sexp::List(f.args.iter().map(|a| Sexp::from(a)).collect()),
+            Sexp::List(f.args.iter().map(Sexp::from).collect()),
         ];
         match &f.body {
-            None => Err(HLLInternalError {})?,
+            None => return Err(HLLInternalError {}.into()),
             Some(statements) => {
                 for statement in statements {
                     match statement {
@@ -1224,7 +1205,7 @@ impl<'a> FunctionArgument<'a> {
         // TODO list parameters
 
         Ok(FunctionArgument {
-            param_type: param_type,
+            param_type,
             name: declared_arg.name.to_string(),
             is_list_param: declared_arg.is_list_param,
         })
@@ -1289,7 +1270,7 @@ impl<'a> ValidatedStatement<'a> {
                         if in_resource {
                             Ok(call_to_fc_rules(c, types, class_perms, Some(args), file)?
                                 .into_iter()
-                                .map(|f| ValidatedStatement::FcRule(f))
+                                .map(ValidatedStatement::FcRule)
                                 .collect())
                         } else {
                             Err(HLLErrors::from(HLLErrorItem::Compile(
@@ -1395,10 +1376,7 @@ impl ValidatedCall {
             args.push(arg.get_name_or_string()?.to_string()); // TODO: Handle lists
         }
 
-        Ok(ValidatedCall {
-            cil_name: cil_name,
-            args: args,
-        })
+        Ok(ValidatedCall { cil_name, args })
     }
 }
 
@@ -1455,7 +1433,7 @@ impl<'a> TypeInstance<'a> {
     fn get_range(&self) -> Option<Range<usize>> {
         match &self.instance_value {
             TypeValue::Str(s) => s.get_range(),
-            TypeValue::Vector(v) => HLLString::vec_to_range(&v),
+            TypeValue::Vector(v) => HLLString::vec_to_range(v),
             TypeValue::SEType(r) => r.clone(),
         }
     }
@@ -1478,9 +1456,9 @@ impl<'a> TypeInstance<'a> {
         };
 
         TypeInstance {
-            instance_value: instance_value,
-            type_info: &ti,
-            file: file,
+            instance_value,
+            type_info: ti,
+            file,
         }
     }
 }
@@ -1567,7 +1545,7 @@ impl<'a> ArgForValidation<'a> {
     fn get_range(&self) -> Option<Range<usize>> {
         match self {
             ArgForValidation::Var(s) => s.get_range(),
-            ArgForValidation::List(v) => HLLString::vec_to_range(&v),
+            ArgForValidation::List(v) => HLLString::vec_to_range(v),
             ArgForValidation::Quote(s) => s.get_range(),
         }
     }
@@ -1593,9 +1571,9 @@ fn validate_argument<'a>(
             }
             let target_ti = match types.get(&target_argument.param_type.name.to_string()) {
                 Some(t) => t,
-                None => Err(HLLInternalError {})?,
+                None => return Err(HLLInternalError {}.into()),
             };
-            let arg_typeinfo_vec = argument_to_typeinfo_vec(&v, types, class_perms, args, file)?;
+            let arg_typeinfo_vec = argument_to_typeinfo_vec(v, types, class_perms, args, file)?;
 
             for arg in arg_typeinfo_vec {
                 if !arg.is_child_or_actual_type(target_argument.param_type, types) {
@@ -1607,7 +1585,7 @@ fn validate_argument<'a>(
                     )));
                 }
             }
-            Ok(TypeInstance::new(&arg, &target_ti, file))
+            Ok(TypeInstance::new(&arg, target_ti, file))
         }
         _ => {
             let arg_typeinfo = argument_to_typeinfo(&arg, types, class_perms, args, file)?;
@@ -1631,7 +1609,7 @@ fn validate_argument<'a>(
             }
 
             if arg_typeinfo.is_child_or_actual_type(target_argument.param_type, types) {
-                Ok(TypeInstance::new(&arg, &arg_typeinfo, file))
+                Ok(TypeInstance::new(&arg, arg_typeinfo, file))
             } else {
                 Err(HLLErrorItem::Compile(HLLCompileError::new(
                     &format!("Expected type inheriting {}", arg_typeinfo.name.to_string()),
@@ -1711,8 +1689,8 @@ mod tests {
             "(sidorder (foo bar))",
         ];
         assert_eq!(rules.len(), cil_expected.len());
-        let mut iter = rules.iter().zip(cil_expected.iter());
-        while let Some(i) = iter.next() {
+        let iter = rules.iter().zip(cil_expected.iter());
+        for i in iter {
             assert_eq!(i.0.to_string(), i.1.to_string());
         }
     }

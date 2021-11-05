@@ -23,7 +23,7 @@ impl fmt::Display for HLLString {
 impl HLLString {
     pub fn new(string: String, range: Range<usize>) -> Self {
         HLLString {
-            string: string,
+            string,
             range: Some(range),
         }
     }
@@ -128,10 +128,7 @@ pub struct PolicyFile {
 
 impl PolicyFile {
     pub fn new(policy: Policy, file: SimpleFile<String, String>) -> Self {
-        PolicyFile {
-            policy: policy,
-            file: file,
-        }
+        PolicyFile { policy, file }
     }
 }
 
@@ -142,7 +139,7 @@ pub struct Policy {
 
 impl Policy {
     pub fn new(exprs: Vec<Expression>) -> Policy {
-        Policy { exprs: exprs }
+        Policy { exprs }
     }
 }
 
@@ -154,9 +151,8 @@ pub enum Expression {
 
 impl Expression {
     pub fn set_class_name_if_decl(&mut self, name: HLLString) {
-        match self {
-            Expression::Decl(Declaration::Func(d)) => d.class_name = Some(name),
-            _ => (),
+        if let Expression::Decl(Declaration::Func(d)) = self {
+            d.class_name = Some(name)
         }
     }
 
@@ -208,8 +204,8 @@ pub struct TypeDecl {
 impl TypeDecl {
     pub fn new(name: HLLString, inherits: Vec<HLLString>, exprs: Vec<Expression>) -> TypeDecl {
         TypeDecl {
-            name: name,
-            inherits: inherits,
+            name,
+            inherits,
             is_virtual: false,
             expressions: exprs,
             annotations: Annotations::new(),
@@ -290,17 +286,16 @@ impl FuncCall {
     }
 
     pub fn check_builtin(&self) -> Option<BuiltIns> {
-        match self.class_name {
-            Some(_) => return None,
-            None => (),
+        if self.class_name.is_some() {
+            return None;
         }
-        if constants::AV_RULES.iter().any(|i| *i == &self.name) {
+        if constants::AV_RULES.iter().any(|i| *i == self.name) {
             return Some(BuiltIns::AvRule);
         }
-        if &self.name == constants::FILE_CONTEXT_FUNCTION_NAME {
+        if self.name == constants::FILE_CONTEXT_FUNCTION_NAME {
             return Some(BuiltIns::FileContext);
         }
-        if &self.name == constants::DOMTRANS_FUNCTION_NAME {
+        if self.name == constants::DOMTRANS_FUNCTION_NAME {
             return Some(BuiltIns::DomainTransition);
         }
         None
@@ -344,7 +339,7 @@ pub struct Annotation {
 impl Annotation {
     pub fn new(name: HLLString) -> Self {
         Annotation {
-            name: name,
+            name,
             arguments: Vec::new(),
         }
     }

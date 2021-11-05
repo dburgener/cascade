@@ -4,7 +4,7 @@
 // Object class and permissions declarations live here
 use crate::internal_rep::ClassList;
 
-const COMMON_FILE_SOCK_PERMS: &'static [&'static str] = &[
+const COMMON_FILE_SOCK_PERMS: &[&str] = &[
     "ioctl",
     "read",
     "write",
@@ -18,7 +18,7 @@ const COMMON_FILE_SOCK_PERMS: &'static [&'static str] = &[
     "map",
 ];
 
-const COMMON_FILE_PERMS: &'static [&'static str] = &[
+const COMMON_FILE_PERMS: &[&str] = &[
     "unlink",
     "link",
     "rename",
@@ -35,7 +35,7 @@ const COMMON_FILE_PERMS: &'static [&'static str] = &[
     "watch_reads",
 ];
 
-const COMMON_SOCK_PERMS: &'static [&'static str] = &[
+const COMMON_SOCK_PERMS: &[&str] = &[
     "bind",
     "connect",
     "listen",
@@ -48,7 +48,7 @@ const COMMON_SOCK_PERMS: &'static [&'static str] = &[
     "name_bind",
 ];
 
-const COMMON_IPC_PERMS: &'static [&'static str] = &[
+const COMMON_IPC_PERMS: &[&str] = &[
     "create",
     "destroy",
     "getattr",
@@ -60,7 +60,7 @@ const COMMON_IPC_PERMS: &'static [&'static str] = &[
     "unix_write",
 ];
 
-const COMMON_CAP_PERMS: &'static [&'static str] = &[
+const COMMON_CAP_PERMS: &[&str] = &[
     "chown",
     "dac_override",
     "dac_read_search",
@@ -95,7 +95,7 @@ const COMMON_CAP_PERMS: &'static [&'static str] = &[
     "setfcap",
 ];
 
-const COMMON_CAP2_PERMS: &'static [&'static str] = &[
+const COMMON_CAP2_PERMS: &[&str] = &[
     "mac_override",
     "mac_admin",
     "syslog",
