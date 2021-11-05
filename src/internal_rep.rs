@@ -314,12 +314,14 @@ fn argument_to_typeinfo<'a>(
         ArgForValidation::List(_) => None,
     };
 
-    t.ok_or(HLLErrorItem::Compile(HLLCompileError::new(
-        "Not a valid type",
-        file,
-        a.get_range(),
-        "",
-    )))
+    t.ok_or_else(|| {
+        HLLErrorItem::Compile(HLLCompileError::new(
+            "Not a valid type",
+            file,
+            a.get_range(),
+            "",
+        ))
+    })
 }
 
 fn argument_to_typeinfo_vec<'a>(
