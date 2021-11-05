@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: MIT
 use std::cmp::Ordering;
 use std::fmt;
+use std::hash::{Hash, Hasher};
 use std::ops::Range;
 
 use codespan_reporting::files::SimpleFile;
 
 use crate::constants;
 
-#[derive(Clone, Debug, Eq, Hash)]
+#[derive(Clone, Debug, Eq)]
 pub struct HLLString {
     string: String,
     range: Option<Range<usize>>,
@@ -69,6 +70,12 @@ impl From<&str> for HLLString {
             string: s.to_string(),
             range: None,
         }
+    }
+}
+
+impl Hash for HLLString {
+    fn hash<H: Hasher>(&self, h: &mut H) {
+        self.string.hash(h);
     }
 }
 
@@ -192,7 +199,7 @@ impl Declaration {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash)]
+#[derive(Clone, Debug, Eq)]
 pub struct TypeDecl {
     pub name: HLLString,
     pub inherits: Vec<HLLString>,
@@ -210,6 +217,12 @@ impl TypeDecl {
             expressions: exprs,
             annotations: Annotations::new(),
         }
+    }
+}
+
+impl Hash for TypeDecl {
+    fn hash<H: Hasher>(&self, h: &mut H) {
+        self.name.hash(h);
     }
 }
 
