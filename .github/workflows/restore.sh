@@ -9,8 +9,4 @@ echo "##vso[task.setvariable variable=PATH;]${PATH}"
 
 rustup toolchain install nightly
 
-# secilc is in EPEL
-yum -y install epel-release
-
-# gcc needed for rust linking
-yum -y install gcc secilc
+sudo apt-get -y install secilc

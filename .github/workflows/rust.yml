@@ -17,12 +17,14 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Setup
-      run: |
-              sudo apt-get update -q
-              sudo apt-get -y install secilc
+      run: .github/workflows/restore.sh
     - name: Build
-      run: cargo build --verbose
+      run: .github/workflows/build.sh
     - name: Run tests
-      run: cargo test --verbose
+      run: .github/workflows/test.sh
     - name: Check format
-      run: cargo fmt --all -- --check
+      run: .github/workflows/format.sh
+    - name: Check docs
+      run: .github/workflows/doc.sh
+    - name: Nightly
+      run: .github/workflows/nightly.sh
