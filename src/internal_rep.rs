@@ -1612,10 +1612,10 @@ fn validate_argument<'a>(
                 Ok(TypeInstance::new(&arg, arg_typeinfo, file))
             } else {
                 Err(HLLErrorItem::Compile(HLLCompileError::new(
-                    &format!("Expected type inheriting {}", arg_typeinfo.name.to_string()),
+                    &format!("Expected type inheriting {}", arg_typeinfo.name),
                     file,
                     arg.get_range(),
-                    &format!("This type should inherit {}", arg_typeinfo.name.to_string()),
+                    &format!("This type should inherit {}", arg_typeinfo.name),
                 )))
             }
         }
