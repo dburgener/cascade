@@ -35,7 +35,7 @@ impl HLLString {
 
     // TODO: This doesn't include the brackets at the end, but we haven't saved enough info from
     // the AST for that
-    pub fn vec_to_range(v: &Vec<&HLLString>) -> Option<Range<usize>> {
+    pub fn to_range(v: &[&HLLString]) -> Option<Range<usize>> {
         let start = v.first();
         let end = v.last();
 
@@ -400,7 +400,7 @@ impl Argument {
     pub fn get_range(&self) -> Option<Range<usize>> {
         match self {
             Argument::Var(a) => a.get_range(),
-            Argument::List(l) => HLLString::vec_to_range(&l.iter().collect()),
+            Argument::List(l) => HLLString::to_range(&l.iter().collect::<Vec<_>>()),
             Argument::Quote(a) => a.get_range(),
         }
     }
