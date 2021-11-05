@@ -270,10 +270,7 @@ pub fn type_name_from_string(string: &str) -> String {
     }
 }
 
-fn arg_in_context<'a>(
-    arg: &str,
-    context: Option<&Vec<FunctionArgument<'a>>>,
-) -> Option<&'a TypeInfo> {
+fn arg_in_context<'a>(arg: &str, context: Option<&[FunctionArgument<'a>]>) -> Option<&'a TypeInfo> {
     match context {
         Some(context) => {
             for context_arg in context {
@@ -305,7 +302,7 @@ fn argument_to_typeinfo<'a>(
     a: &ArgForValidation<'_>,
     types: &'a TypeMap,
     class_perms: &ClassList,
-    context: Option<&Vec<FunctionArgument<'a>>>,
+    context: Option<&[FunctionArgument<'a>]>,
     file: &SimpleFile<String, String>,
 ) -> Result<&'a TypeInfo, HLLErrorItem> {
     let t: Option<&TypeInfo> = match a {
@@ -326,10 +323,10 @@ fn argument_to_typeinfo<'a>(
 }
 
 fn argument_to_typeinfo_vec<'a>(
-    arg: &Vec<&HLLString>,
+    arg: &[&HLLString],
     types: &'a TypeMap,
     class_perms: &ClassList,
-    context: Option<&Vec<FunctionArgument<'a>>>,
+    context: Option<&[FunctionArgument<'a>]>,
     file: &SimpleFile<String, String>,
 ) -> Result<Vec<&'a TypeInfo>, HLLErrorItem> {
     let mut ret = Vec::new();
@@ -659,7 +656,7 @@ fn call_to_av_rule<'a>(
     c: &'a FuncCall,
     types: &'a TypeMap,
     class_perms: &ClassList,
-    args: Option<&Vec<FunctionArgument<'a>>>,
+    args: Option<&[FunctionArgument<'a>]>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<AvRule<'a>, HLLErrors> {
     let flavor = match c.name.as_ref() {
@@ -816,7 +813,7 @@ fn call_to_fc_rules<'a>(
     c: &'a FuncCall,
     types: &'a TypeMap,
     class_perms: &ClassList,
-    args: Option<&Vec<FunctionArgument<'a>>>,
+    args: Option<&[FunctionArgument<'a>]>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<Vec<FileContextRule<'a>>, HLLErrors> {
     let target_args = vec![
@@ -923,7 +920,7 @@ fn call_to_domain_transition<'a>(
     c: &'a FuncCall,
     types: &'a TypeMap,
     class_perms: &ClassList,
-    args: Option<&Vec<FunctionArgument<'a>>>,
+    args: Option<&[FunctionArgument<'a>]>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<DomtransRule<'a>, HLLErrors> {
     let target_args = vec![
@@ -1249,7 +1246,7 @@ impl<'a> ValidatedStatement<'a> {
         functions: &FunctionMap<'a>,
         types: &'a TypeMap,
         class_perms: &ClassList<'a>,
-        args: &Vec<FunctionArgument<'a>>,
+        args: &[FunctionArgument<'a>],
         parent_type: Option<&TypeInfo>,
         file: &'a SimpleFile<String, String>,
     ) -> Result<BTreeSet<ValidatedStatement<'a>>, HLLErrors> {
@@ -1346,7 +1343,7 @@ impl ValidatedCall {
         functions: &FunctionMap<'_>,
         types: &TypeMap,
         class_perms: &ClassList,
-        parent_args: Option<&Vec<FunctionArgument>>,
+        parent_args: Option<&[FunctionArgument]>,
         file: &SimpleFile<String, String>,
     ) -> Result<ValidatedCall, HLLErrors> {
         let cil_name = call.get_cil_name();
@@ -1465,10 +1462,10 @@ impl<'a> TypeInstance<'a> {
 
 fn validate_arguments<'a>(
     call: &'a FuncCall,
-    function_args: &Vec<FunctionArgument>,
+    function_args: &[FunctionArgument],
     types: &'a TypeMap,
     class_perms: &ClassList,
-    parent_args: Option<&Vec<FunctionArgument<'a>>>,
+    parent_args: Option<&[FunctionArgument<'a>]>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<Vec<TypeInstance<'a>>, HLLErrors> {
     // Some functions start with an implicit "this" argument.  If it does, skip it
@@ -1556,7 +1553,7 @@ fn validate_argument<'a>(
     target_argument: &FunctionArgument,
     types: &'a TypeMap,
     class_perms: &ClassList,
-    args: Option<&Vec<FunctionArgument<'a>>>,
+    args: Option<&[FunctionArgument<'a>]>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<TypeInstance<'a>, HLLErrorItem> {
     match &arg {
