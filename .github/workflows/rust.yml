@@ -1,0 +1,30 @@
+name: Rust
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup
+      run: .github/workflows/restore.sh
+    - name: Build
+      run: .github/workflows/build.sh
+    - name: Run tests
+      run: .github/workflows/test.sh
+    - name: Check format
+      run: .github/workflows/format.sh
+    - name: Check docs
+      run: .github/workflows/doc.sh
+    - name: Nightly
+      run: .github/workflows/nightly.sh
