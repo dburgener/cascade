@@ -13,10 +13,7 @@ pub fn display_cil(expr: &sexp::Sexp) -> String {
         Sexp::List(l) => {
             format!(
                 "({})",
-                l.iter()
-                    .map(|s| display_cil(s))
-                    .collect::<Vec<String>>()
-                    .join(" ")
+                l.iter().map(display_cil).collect::<Vec<String>>().join(" ")
             )
         }
         Sexp::Atom(a) => match a {
