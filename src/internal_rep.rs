@@ -1783,9 +1783,8 @@ mod tests {
         assert_eq!(context.mls_low, DEFAULT_MLS);
         assert_eq!(context.mls_high, DEFAULT_MLS);
         let context = Context::try_from("foo:bar");
-        match context {
-            Ok(_) => panic!("Bad context compiled successfully"),
-            Err(_) => (),
+        if context.is_ok() {
+            panic!("Bad context compiled successfully");
         }
     }
 
