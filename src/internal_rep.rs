@@ -610,7 +610,7 @@ impl<'a> ClassList<'a> {
         };
 
         if class_struct.perms.contains(&permission.as_ref()) {
-            return Ok(());
+            Ok(())
         } else {
             let other_str = match class.as_ref() {
                 "capability" => Some("capability2"),
