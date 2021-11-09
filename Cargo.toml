@@ -13,6 +13,7 @@ keywords = [ "selinux" ]
 lalrpop = "0.19"
 
 [dependencies]
+clap = "2"
 codespan-reporting = "0.11"
 lalrpop-util = "0.19"
 regex = "1"

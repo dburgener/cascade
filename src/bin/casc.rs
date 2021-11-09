@@ -3,23 +3,25 @@
 use selinux_cascade::compile_system_policy;
 use selinux_cascade::error::HLLErrorItem;
 
-use std::env;
+use clap::{App, Arg};
 use std::fs::File;
 use std::io::{Error, ErrorKind, Write};
 
-fn usage() {
-    println!("casc policy.cas");
-}
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn main() -> std::io::Result<()> {
-    // TODO: Move all this to a parse args function
-    let args: Vec<String> = env::args().collect();
-    if args.len() != 2 {
-        usage();
-        return Err(Error::new(ErrorKind::InvalidInput, "Missing policy file"));
-    }
+    let matches = App::new("casc")
+        .version(VERSION)
+        .author("Daniel Burgener <dburgener@linux.microsoft.com>")
+        .arg(
+            Arg::with_name("INPUT_FILE")
+                .help("Cascade policy files to parse")
+                .required(true)
+                .multiple(true),
+        )
+        .get_matches();
 
-    let policies: Vec<&str> = vec![&args[1]];
+    let policies: Vec<&str> = matches.values_of("INPUT_FILE").unwrap().collect();
     let mut out_file = File::create("out.cil")?;
     let res = compile_system_policy(policies);
     match res {
