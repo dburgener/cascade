@@ -264,12 +264,14 @@ impl FuncDecl {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Statement {
     Call(Box<FuncCall>),
+    LetBinding(Box<LetBinding>),
 }
 
 impl Statement {
     pub fn add_annotation(&mut self, annotation: Annotation) {
         match self {
             Statement::Call(c) => c.add_annotation(annotation),
+            Statement::LetBinding(l) => l.add_annotation(annotation),
         }
     }
 }
@@ -340,6 +342,27 @@ impl FuncCall {
             },
             None => self.name.get_range(),
         }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct LetBinding {
+    pub name: HLLString,
+    pub value: Argument,
+    pub annotations: Annotations,
+}
+
+impl LetBinding {
+    pub fn new(name: HLLString, value: Argument) -> LetBinding {
+        LetBinding {
+            name,
+            value,
+            annotations: Annotations::new(),
+        }
+    }
+
+    pub fn add_annotation(&mut self, annotation: Annotation) {
+        self.annotations.push(annotation);
     }
 }
 

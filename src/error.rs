@@ -270,6 +270,12 @@ impl From<HLLCompileError> for HLLErrors {
     }
 }
 
+impl From<HLLInternalError> for HLLErrors {
+    fn from(error: HLLInternalError) -> Self {
+        HLLErrors::from(HLLErrorItem::from(error))
+    }
+}
+
 impl Iterator for HLLErrors {
     type Item = HLLErrorItem;
     fn next(&mut self) -> Option<Self::Item> {

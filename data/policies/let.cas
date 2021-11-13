@@ -1,0 +1,15 @@
+let read_file_perms = [ read open getattr ];
+
+@makelist
+let binding_with_annotation = read;
+
+// TODO: We could use some array concatenation syntactic sugar like '+'
+let rw_file_perms = [ read_file_perms write ];
+
+resource bar {}
+
+domain foo {
+	allow(foo, bar, file, read_file_perms);
+	auditallow(foo, bar, file, read_file_perms);
+	allow(foo, bar, file, binding_with_annotation);
+}

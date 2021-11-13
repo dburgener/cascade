@@ -11,8 +11,9 @@ use crate::ast::{
 use crate::constants;
 use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
 use crate::internal_rep::{
-    generate_sid_rules, AnnotationInfo, Associated, ClassList, Context, FunctionArgument,
-    FunctionInfo, FunctionMap, Sid, TypeInfo, TypeMap, ValidatedStatement,
+    argument_to_typeinfo, argument_to_typeinfo_vec, generate_sid_rules, type_slice_to_variant,
+    AnnotationInfo, ArgForValidation, Associated, BoundTypeInfo, ClassList, Context,
+    FunctionArgument, FunctionInfo, FunctionMap, Sid, TypeInfo, TypeMap, ValidatedStatement,
 };
 
 use codespan_reporting::files::SimpleFile;
@@ -122,32 +123,35 @@ pub fn get_built_in_types_map() -> TypeMap {
     //Special handling for sids.  These are temporary built in types that are handled differently
     let kernel_sid = TypeInfo {
         name: HLLString::from("kernel_sid"),
-        inherits: vec![HLLString::from("domain")],
+        inherits: vec![HLLString::from(constants::DOMAIN)],
         is_virtual: false,
         list_coercion: false,
         declaration_file: None,
         annotations: BTreeSet::new(),
         decl: None,
+        bound_type: BoundTypeInfo::Unbound,
     };
 
     let security_sid = TypeInfo {
         name: HLLString::from("security_sid"),
-        inherits: vec![HLLString::from("resource")],
+        inherits: vec![HLLString::from(constants::RESOURCE)],
         is_virtual: false,
         list_coercion: false,
         declaration_file: None,
         annotations: BTreeSet::new(),
         decl: None,
+        bound_type: BoundTypeInfo::Unbound,
     };
 
     let unlabeled_sid = TypeInfo {
         name: HLLString::from("unlabeled_sid"),
-        inherits: vec![HLLString::from("resource")],
+        inherits: vec![HLLString::from(constants::RESOURCE)],
         is_virtual: false,
         list_coercion: false,
         declaration_file: None,
         annotations: BTreeSet::new(),
         decl: None,
+        bound_type: BoundTypeInfo::Unbound,
     };
 
     for sid in [kernel_sid, security_sid, unlabeled_sid] {
@@ -155,6 +159,59 @@ pub fn get_built_in_types_map() -> TypeMap {
     }
 
     built_in_types
+}
+
+pub fn get_global_bindings(
+    p: &PolicyFile,
+    types: &mut TypeMap,
+    classlist: &mut ClassList,
+    file: &SimpleFile<String, String>,
+) -> Result<(), HLLErrors> {
+    for e in &p.policy.exprs {
+        if let Expression::Stmt(Statement::LetBinding(l)) = e {
+            let let_rvalue = ArgForValidation::from(&l.value);
+            let (variant, bound_type) = match let_rvalue {
+                ArgForValidation::List(v) => {
+                    let ti_vec = argument_to_typeinfo_vec(&v, types, classlist, None, file)?;
+                    let variant = type_slice_to_variant(&ti_vec, types)?;
+                    (
+                        variant.name.as_ref(),
+                        BoundTypeInfo::List(v.iter().map(|s| s.to_string()).collect()),
+                    )
+                }
+                a => {
+                    let ti = argument_to_typeinfo(&a, types, classlist, None, file)?;
+                    if ti.name.as_ref() == "perm" {
+                        (
+                            "perm",
+                            match a {
+                                ArgForValidation::Var(s) => BoundTypeInfo::Single(s.to_string()),
+                                _ => return Err(HLLInternalError {}.into()),
+                            },
+                        )
+                    } else {
+                        (
+                            ti.name.as_ref(),
+                            BoundTypeInfo::Single(ti.name.to_string().clone()),
+                        )
+                    }
+                }
+            };
+            if variant == "perm" {
+                classlist.insert_perm_set(&l.name.to_string(), bound_type.get_contents_as_vec())
+            } else {
+                let new_type = TypeInfo::new_bound_type(
+                    l.name.clone(),
+                    variant,
+                    file,
+                    bound_type,
+                    &l.annotations,
+                )?;
+                types.insert(l.name.to_string(), new_type);
+            }
+        }
+    }
+    Ok(())
 }
 
 pub fn build_func_map<'a>(
@@ -317,7 +374,7 @@ fn create_synthetic_resource(
         None => class.name.clone(),
         Some(parent) => get_synthetic_resource_name(parent, &class.name),
     };
-    dup_res_decl.inherits = vec![parent_name, "resource".into()];
+    dup_res_decl.inherits = vec![parent_name, constants::RESOURCE.into()];
     dup_res_decl.annotations = Annotations::new();
     dup_res_decl
         .expressions
@@ -800,7 +857,7 @@ mod tests {
         exprs.push(Expression::Decl(Declaration::Type(Box::new(
             TypeDecl::new(
                 HLLString::from("foo"),
-                vec![HLLString::from("domain")],
+                vec![HLLString::from(constants::DOMAIN)],
                 Vec::new(),
             ),
         ))));
@@ -812,7 +869,7 @@ mod tests {
             Some(foo) => assert_eq!(foo.name, "foo"),
             None => panic!("Foo is not in hash map"),
         }
-        match types.get("domain") {
+        match types.get(constants::DOMAIN) {
             Some(foo) => assert_eq!(foo.name, "domain"),
             None => panic!("Domain is not in hash map"),
         }
@@ -824,7 +881,7 @@ mod tests {
         let mut foo_type = TypeInfo::new(
             TypeDecl::new(
                 HLLString::from("foo"),
-                vec![HLLString::from("domain")],
+                vec![HLLString::from(constants::DOMAIN)],
                 Vec::new(),
             ),
             &SimpleFile::new(String::new(), String::new()),
@@ -835,7 +892,7 @@ mod tests {
         let mut bar_type = TypeInfo::new(
             TypeDecl::new(
                 HLLString::from("bar"),
-                vec![HLLString::from("domain"), HLLString::from("foo")],
+                vec![HLLString::from(constants::DOMAIN), HLLString::from("foo")],
                 Vec::new(),
             ),
             &SimpleFile::new(String::new(), String::new()),
@@ -847,7 +904,7 @@ mod tests {
             TypeDecl::new(
                 HLLString::from("baz"),
                 vec![
-                    HLLString::from("domain"),
+                    HLLString::from(constants::DOMAIN),
                     HLLString::from("foo"),
                     HLLString::from("bar"),
                 ],

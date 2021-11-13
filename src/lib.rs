@@ -61,7 +61,7 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
     errors = errors.into_result_self()?;
 
     // Generic initialization
-    let classlist = obj_class::make_classlist();
+    let mut classlist = obj_class::make_classlist();
     let mut type_map = compile::get_built_in_types_map();
     let mut func_map = FunctionMap::new();
     let mut policy_rules = BTreeSet::new();
@@ -77,6 +77,18 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
         }
     }
     // Stops if something went wrong for this major step.
+    errors = errors.into_result_self()?;
+
+    for p in &policies {
+        match compile::get_global_bindings(p, &mut type_map, &mut classlist, &p.file) {
+            Ok(()) => {}
+            Err(e) => {
+                errors.append(e);
+                continue;
+            }
+        }
+    }
+
     errors = errors.into_result_self()?;
 
     // Applies annotations
@@ -365,6 +377,11 @@ mod tests {
     #[test]
     fn domtrans_test() {
         valid_policy_test("domtrans.cas", &["typetransition bar foo_exec process foo"]);
+    }
+
+    #[test]
+    fn symbol_binding_test() {
+        valid_policy_test("let.cas", &["(allow foo bar (file (read open getattr)))"]);
     }
 
     #[test]
