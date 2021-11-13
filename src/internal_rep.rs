@@ -37,6 +37,23 @@ pub enum AnnotationInfo {
 }
 
 #[derive(Clone, Debug)]
+pub enum BoundTypeInfo {
+    Single(String),
+    List(Vec<String>),
+    Unbound,
+}
+
+impl BoundTypeInfo {
+    pub fn get_contents_as_vec(&self) -> Vec<String> {
+        match self {
+            BoundTypeInfo::Single(s) => vec![s.clone()],
+            BoundTypeInfo::List(v) => v.clone(),
+            BoundTypeInfo::Unbound => Vec::new(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct TypeInfo {
     pub name: HLLString,
     pub inherits: Vec<HLLString>,
@@ -46,6 +63,7 @@ pub struct TypeInfo {
     pub annotations: BTreeSet<AnnotationInfo>,
     // TODO: replace with Option<&TypeDecl>
     pub decl: Option<TypeDecl>,
+    pub bound_type: BoundTypeInfo,
 }
 
 impl PartialEq for TypeInfo {
@@ -80,6 +98,26 @@ impl TypeInfo {
             declaration_file: Some(file.clone()), // TODO: Turn into reference
             annotations: get_type_annotations(file, &td.annotations)?,
             decl: Some(td),
+            bound_type: BoundTypeInfo::Unbound,
+        })
+    }
+
+    pub fn new_bound_type(
+        name: HLLString,
+        variant: &str,
+        file: &SimpleFile<String, String>,
+        bound_type: BoundTypeInfo,
+        annotations: &Annotations,
+    ) -> Result<TypeInfo, HLLErrors> {
+        Ok(TypeInfo {
+            name,
+            inherits: vec![variant.into()], // Does this need to somehow grab the bound parents? Does this work for the single case?
+            is_virtual: true,               // Maybe?
+            list_coercion: annotations.has_annotation("makelist"),
+            declaration_file: Some(file.clone()),
+            annotations: get_type_annotations(file, annotations)?,
+            decl: None, // TODO: Where is this used?
+            bound_type,
         })
     }
 
@@ -92,6 +130,7 @@ impl TypeInfo {
             declaration_file: None,
             annotations: BTreeSet::new(),
             decl: None,
+            bound_type: BoundTypeInfo::Unbound,
         }
     }
 
@@ -124,7 +163,7 @@ impl TypeInfo {
 
     fn get_cil_declaration_type(&self) -> Option<&str> {
         for built_in_type in constants::BUILT_IN_TYPES {
-            if *built_in_type == "domain" || *built_in_type == "resource" {
+            if *built_in_type == constants::DOMAIN || *built_in_type == constants::RESOURCE {
                 continue;
             }
             if self.name == *built_in_type {
@@ -138,12 +177,30 @@ impl TypeInfo {
         }
     }
 
-    pub fn is_resource(&self, types: &TypeMap) -> bool {
-        let resource_ti = match types.get(&"resource".to_string()) {
+    pub fn is_type_by_name(&self, types: &TypeMap, name: &str) -> bool {
+        let ti = match types.get(&name.to_string()) {
             Some(ti) => ti,
             None => return false,
         };
-        self.is_child_or_actual_type(resource_ti, types)
+        self.is_child_or_actual_type(ti, types)
+    }
+
+    pub fn is_resource(&self, types: &TypeMap) -> bool {
+        self.is_type_by_name(types, constants::RESOURCE)
+    }
+
+    // All types must inherit from some built in.  Get one for this type.
+    // It's possible to inherit from multiple built-ins, so order matters here.  We return the
+    // first type in order of preference.
+    pub fn get_built_in_variant(&self, types: &TypeMap) -> Option<&str> {
+        for t in constants::BUILT_IN_TYPES {
+            if self.is_type_by_name(types, t) {
+                return Some(t);
+            }
+        }
+
+        // I don't think this should be logically possible
+        None
     }
 }
 
@@ -155,6 +212,39 @@ impl From<&TypeInfo> for Option<sexp::Sexp> {
             None => return None,
         };
         Some(list(&[atom_s(flavor), atom_s(typeinfo.name.as_ref())]))
+    }
+}
+
+// Determine what sort of types are in a slice.
+// Returns a &TypeInfo representing the inferred type which is a shared parent of all types.
+// For now, we infer a "top level" built in type.
+// It may be possible in some situations to infer the type more specifically, and we may also want
+// to allow the user to specify a type for the bound type in the declaration.
+// Returns an error if no common parent exists.
+pub fn type_slice_to_variant<'a>(
+    type_slice: &[&TypeInfo],
+    types: &'a TypeMap,
+) -> Result<&'a TypeInfo, HLLErrors> {
+    let first_type_variant = match type_slice.first() {
+        Some(t) => match t.get_built_in_variant(types) {
+            Some(v) => v,
+            None => return Err(HLLErrorItem::Internal(HLLInternalError {}).into()),
+        },
+        None => todo!(), // TODO: Return error
+    };
+
+    for ti in type_slice {
+        let ti_variant = match ti.get_built_in_variant(types) {
+            Some(v) => v,
+            None => return Err(HLLErrorItem::Internal(HLLInternalError {}).into()),
+        };
+        if ti_variant != first_type_variant {
+            todo!() // TODO: Return error
+        }
+    }
+    match types.get(first_type_variant) {
+        Some(t) => Ok(t),
+        None => Err(HLLErrorItem::Internal(HLLInternalError {}).into()),
     }
 }
 
@@ -298,7 +388,7 @@ fn typeinfo_from_string<'a>(
     }
 }
 
-fn argument_to_typeinfo<'a>(
+pub fn argument_to_typeinfo<'a>(
     a: &ArgForValidation<'_>,
     types: &'a TypeMap,
     class_perms: &ClassList,
@@ -324,7 +414,7 @@ fn argument_to_typeinfo<'a>(
     })
 }
 
-fn argument_to_typeinfo_vec<'a>(
+pub fn argument_to_typeinfo_vec<'a>(
     arg: &[&HLLString],
     types: &'a TypeMap,
     class_perms: &ClassList,
@@ -358,7 +448,8 @@ pub struct AvRule<'a> {
     pub source: &'a HLLString,
     pub target: &'a HLLString,
     pub class: &'a HLLString,
-    pub perms: Vec<&'a HLLString>,
+    // Lifetimes get weird once permissions get expanded, so AV rules should just own their permissions
+    pub perms: Vec<HLLString>,
 }
 
 impl From<&AvRule<'_>> for sexp::Sexp {
@@ -560,12 +651,15 @@ impl<'a> Class<'a> {
 
 pub struct ClassList<'a> {
     pub classes: BTreeMap<&'a str, Class<'a>>,
+    // It might be nice to just reference the strings in the policy, but the lifetimes get *really* messy, so it should simplify everything just to own these types
+    pub perm_sets: BTreeMap<String, Vec<String>>,
 }
 
 impl<'a> ClassList<'a> {
     pub fn new() -> Self {
         ClassList {
             classes: BTreeMap::new(),
+            perm_sets: BTreeMap::new(),
         }
     }
 
@@ -608,6 +702,13 @@ impl<'a> ClassList<'a> {
             }
         };
 
+        if let Some(perm_vec) = self.perm_sets.get(&permission.to_string()) {
+            for p in perm_vec {
+                self.verify_permission(class, &p.as_str().into(), file)?;
+            }
+            return Ok(());
+        }
+
         if class_struct.perms.contains(&permission.as_ref()) {
             Ok(())
         } else {
@@ -626,7 +727,7 @@ impl<'a> ClassList<'a> {
                 return self.verify_permission(&hll_string, permission, file);
             }
 
-            return Err(HLLCompileError::new(
+            Err(HLLCompileError::new(
                 &format!(
                     "Permission {} is not defined for object class {}",
                     permission.as_ref(),
@@ -635,7 +736,7 @@ impl<'a> ClassList<'a> {
                 file,
                 permission.get_range(),
                 "Invalid permission",
-            ));
+            ))
         }
     }
 
@@ -644,12 +745,33 @@ impl<'a> ClassList<'a> {
     }
 
     pub fn is_perm(&self, perm: &str) -> bool {
+        if self.perm_sets.get(perm).is_some() {
+            return true;
+        }
         for class in self.classes.values() {
             if class.contains_perm(perm) {
                 return true;
             }
         }
         false
+    }
+
+    pub fn insert_perm_set(&mut self, set_name: &str, perms: Vec<String>) {
+        self.perm_sets.insert(set_name.to_string(), perms);
+    }
+
+    pub fn expand_perm_list(&self, perms: Vec<&HLLString>) -> Vec<HLLString> {
+        let mut ret = Vec::new();
+        for p in perms {
+            if let Some(pset) = self.perm_sets.get(&p.to_string()) {
+                let pset_strings: Vec<HLLString> =
+                    pset.iter().map(|s| HLLString::from(s.as_str())).collect();
+                ret.append(&mut self.expand_perm_list(pset_strings.iter().collect()));
+            } else {
+                ret.push(p.clone());
+            }
+        }
+        ret
     }
 }
 
@@ -672,7 +794,7 @@ fn call_to_av_rule<'a>(
     let target_args = vec![
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: HLLString::from("domain"),
+                param_type: HLLString::from(constants::DOMAIN),
                 is_list_param: false,
                 name: HLLString::from("source"),
             },
@@ -681,7 +803,7 @@ fn call_to_av_rule<'a>(
         )?,
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: HLLString::from("resource"),
+                param_type: HLLString::from(constants::RESOURCE),
                 is_list_param: false,
                 name: HLLString::from("target"),
             },
@@ -735,6 +857,8 @@ fn call_to_av_rule<'a>(
     for p in &perms {
         class_perms.verify_permission(class, p, file)?;
     }
+
+    let perms = class_perms.expand_perm_list(perms);
 
     Ok(AvRule {
         av_rule_flavor: flavor,
@@ -839,7 +963,7 @@ fn call_to_fc_rules<'a>(
         )?,
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: HLLString::from("resource"),
+                param_type: HLLString::from(constants::RESOURCE),
                 is_list_param: false,
                 name: HLLString::from("file_context"),
             },
@@ -928,7 +1052,7 @@ fn call_to_domain_transition<'a>(
     let target_args = vec![
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: HLLString::from("domain"),
+                param_type: HLLString::from(constants::DOMAIN),
                 is_list_param: false,
                 name: HLLString::from("source"),
             },
@@ -937,7 +1061,7 @@ fn call_to_domain_transition<'a>(
         )?,
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: HLLString::from("resource"),
+                param_type: HLLString::from(constants::RESOURCE),
                 is_list_param: false,
                 name: HLLString::from("executable"),
             },
@@ -946,7 +1070,7 @@ fn call_to_domain_transition<'a>(
         )?,
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: HLLString::from("domain"),
+                param_type: HLLString::from(constants::DOMAIN),
                 is_list_param: false,
                 name: HLLString::from("target"),
             },
@@ -1015,7 +1139,7 @@ fn check_associated_call(
             is_list_param,
             name: _,
         }) => {
-            if param_type.as_ref() != "domain" || *is_list_param {
+            if param_type.as_ref() != constants::DOMAIN || *is_list_param {
                 return Err(HLLCompileError::new(
                     "Invalid method signature for @associated_call annotation: invalid firth argument",
                     file,
@@ -1318,6 +1442,21 @@ impl<'a> ValidatedStatement<'a> {
                     .collect()),
                 }
             }
+            Statement::LetBinding(_l) => {
+                // Global scope let bindings were handled by get_global_bindings() in a previous
+                // pass
+
+                // The if half is a TODO.  They'll be different once implemented.  I'd rather leave
+                // the switch in for clear code and future reference than make clippy happy for the
+                // sake of making clippy happy
+                #[allow(clippy::if_same_then_else)]
+                if parent_type.is_some() {
+                    Ok(BTreeSet::default()) // TODO: This is where local scope let bindings should happen
+                } else {
+                    // Global scope, nothing to do here
+                    Ok(BTreeSet::default())
+                }
+            }
         }
     }
 }
@@ -1505,7 +1644,7 @@ fn validate_arguments<'a>(
 
 // The ast Argument owns the data, this struct is similar, but has references to the owned data in
 // the ast, so we can make copies and manipulate
-enum ArgForValidation<'a> {
+pub enum ArgForValidation<'a> {
     Var(&'a HLLString),
     List(Vec<&'a HLLString>),
     Quote(&'a HLLString),
@@ -1589,7 +1728,9 @@ fn validate_argument<'a>(
         _ => {
             let arg_typeinfo = argument_to_typeinfo(&arg, types, class_perms, args, file)?;
             if target_argument.is_list_param {
-                if arg_typeinfo.list_coercion {
+                if arg_typeinfo.list_coercion
+                    || matches!(arg_typeinfo.bound_type, BoundTypeInfo::List(_))
+                {
                     return validate_argument(
                         ArgForValidation::coerce_list(arg),
                         target_argument,
@@ -1598,6 +1739,7 @@ fn validate_argument<'a>(
                         args,
                         file,
                     );
+                    // TODO: Do we handle bound lists here?
                 }
                 return Err(HLLErrorItem::Compile(HLLCompileError::new(
                     "Expected list",
@@ -1645,7 +1787,7 @@ mod tests {
             source: &"foo".into(),
             target: &"bar".into(),
             class: &"file".into(),
-            perms: vec![&"read".into(), &"getattr".into()],
+            perms: vec!["read".into(), "getattr".into()],
         });
 
         let cil_expected = "(allow foo bar (file (read getattr)))";
@@ -1717,6 +1859,14 @@ mod tests {
             cil.contains("(classorder (capability file))")
                 || cil.contains("(classorder (file capability))")
         );
+    }
+
+    #[test]
+    fn perm_set_test() {
+        let mut classlist = ClassList::new();
+        classlist.insert_perm_set("read_file_perms", vec!["read".into(), "getattr".into()]);
+        assert!(classlist.is_perm("read_file_perms"));
+        assert!(!classlist.is_perm("read"));
     }
 
     #[test]

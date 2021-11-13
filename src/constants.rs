@@ -14,9 +14,12 @@ pub const AV_RULES: &[&str] = &[
     NEVERALLOW_FUNCTION_NAME,
 ];
 
+pub const DOMAIN: &str = "domain";
+pub const RESOURCE: &str = "resource";
+
 pub const BUILT_IN_TYPES: &[&str] = &[
-    "domain",
-    "resource",
+    DOMAIN,
+    RESOURCE,
     "path",
     "string",
     "obj_class",

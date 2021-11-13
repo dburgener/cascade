@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
-use crate::ast::{HLLString, Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, Annotations, Virtualable, FuncCall, DeclaredArgument};
+use crate::ast::{HLLString, Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, Annotations, LetBinding, Virtualable, FuncCall, DeclaredArgument};
 
 grammar;
 
@@ -39,7 +39,7 @@ BaseExpr: Expression = {
 		}
 		Expression::Decl(d)
 	},
-	Stmt => Expression::Stmt(<>),
+	<Stmt> => Expression::Stmt(<>),
 };
 
 Decl: Declaration = {
@@ -84,6 +84,7 @@ Stmt: Statement = <StmtBody> ";";
 StmtBody: Statement = {
 	<c:Symbol> "." <n:Symbol> "(" <a:Comma<Arg>> ")" => Statement::Call(Box::new(FuncCall::new(Some(c), n, a))),
 	<n:Symbol> "(" <a:Comma<Arg>> ")" => Statement::Call(Box::new(FuncCall::new(None, n, a))),
+	"let" <n:Symbol> "=" <a:Arg> => Statement::LetBinding(Box::new(LetBinding::new(n, a))),
 }
 
 Ann: Annotation = {
