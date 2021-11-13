@@ -79,9 +79,11 @@ FuncDeclArg: DeclaredArgument = {
 	"[" <t: Symbol> "]" <n: NameDecl> => DeclaredArgument { param_type: t, is_list_param: true, name: n },
 }
 
-Stmt: Statement = {
-	<c:Symbol> "." <n:Symbol> "(" <a:Comma<Arg>> ")" ";" => Statement::Call(Box::new(FuncCall::new(Some(c), n, a))),
-	<n:Symbol> "(" <a:Comma<Arg>> ")" ";" => Statement::Call(Box::new(FuncCall::new(None, n, a))),
+Stmt: Statement = <StmtBody> ";";
+
+StmtBody: Statement = {
+	<c:Symbol> "." <n:Symbol> "(" <a:Comma<Arg>> ")" => Statement::Call(Box::new(FuncCall::new(Some(c), n, a))),
+	<n:Symbol> "(" <a:Comma<Arg>> ")" => Statement::Call(Box::new(FuncCall::new(None, n, a))),
 }
 
 Ann: Annotation = {
