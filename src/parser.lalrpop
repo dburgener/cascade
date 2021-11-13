@@ -19,12 +19,16 @@ pub Policy: Box<Policy> = {
 	Expr+ => Box::new(Policy::new(<>)),
 }
 
-pub Expr: Expression = {
-	<a:Ann> <mut e:Expr> => {
-		e.add_annotation(a);
-		e
+Annotated<T>: T = {
+	<a:Ann> <mut t:Annotated<T>> => {
+		t.add_annotation(a);
+		t
 	},
-	<BaseExpr>
+	T
+}
+
+pub Expr: Expression = {
+	Annotated<BaseExpr>
 }
 
 BaseExpr: Expression = {
