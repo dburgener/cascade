@@ -3,7 +3,7 @@
 use selinux_cascade::compile_system_policy;
 use selinux_cascade::error::HLLErrorItem;
 
-use clap::{App, Arg, crate_authors};
+use clap::{crate_authors, App, Arg};
 use std::fs::File;
 use std::io::{Error, ErrorKind, Write};
 
