@@ -3,15 +3,13 @@
 use selinux_cascade::compile_system_policy;
 use selinux_cascade::error::HLLErrorItem;
 
-use clap::{crate_authors, App, Arg};
+use clap::{crate_authors, crate_version, App, Arg};
 use std::fs::File;
 use std::io::{Error, ErrorKind, Write};
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-
 fn main() -> std::io::Result<()> {
     let matches = App::new("casc")
-        .version(VERSION)
+        .version(crate_version!())
         .author(crate_authors!("\n"))
         .arg(
             Arg::with_name("INPUT_FILE")
