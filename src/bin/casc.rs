@@ -12,7 +12,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 fn main() -> std::io::Result<()> {
     let matches = App::new("casc")
         .version(VERSION)
-        .author(crate_authors!())
+        .author(crate_authors!("\n"))
         .arg(
             Arg::with_name("INPUT_FILE")
                 .help("Cascade policy files to parse")
