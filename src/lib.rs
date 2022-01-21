@@ -26,7 +26,7 @@ use lalrpop_util::ParseError;
 #[cfg(test)]
 use error::HLLErrorItem;
 
-lalrpop_mod!(pub parser);
+lalrpop_mod!(#[allow(clippy::all)] pub parser);
 
 /// Compile a complete system policy
 /// The list of input files list should contain filenames of files containing policy to be
