@@ -24,6 +24,8 @@ jobs:
       run: .github/workflows/test.sh
     - name: Check format
       run: .github/workflows/format.sh
+    - name: Check clippy
+      run: .github/workflows/clippy.sh
     - name: Check docs
       run: .github/workflows/doc.sh
     - name: Nightly

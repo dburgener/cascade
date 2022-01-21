@@ -1432,7 +1432,7 @@ impl<'a> TypeInstance<'a> {
     fn get_range(&self) -> Option<Range<usize>> {
         match &self.instance_value {
             TypeValue::Str(s) => s.get_range(),
-            TypeValue::Vector(v) => HLLString::to_range(v),
+            TypeValue::Vector(v) => HLLString::slice_to_range(v),
             TypeValue::SEType(r) => r.clone(),
         }
     }
@@ -1544,7 +1544,7 @@ impl<'a> ArgForValidation<'a> {
     fn get_range(&self) -> Option<Range<usize>> {
         match self {
             ArgForValidation::Var(s) => s.get_range(),
-            ArgForValidation::List(v) => HLLString::to_range(v),
+            ArgForValidation::List(v) => HLLString::slice_to_range(v),
             ArgForValidation::Quote(s) => s.get_range(),
         }
     }
@@ -1564,7 +1564,7 @@ fn validate_argument<'a>(
                 return Err(HLLErrorItem::Compile(HLLCompileError::new(
                     "Unexpected list",
                     file,
-                    HLLString::to_range(v),
+                    HLLString::slice_to_range(v),
                     "This function requires a non-list value here",
                 )));
             }
