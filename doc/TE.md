@@ -116,6 +116,25 @@ either explicitely or via a derive (if some parent implementation exists). This
 is used to define an expected interface that children are guaranteed to
 implement.
 
+### Collections
+
+For the purpose of grouping related functions and using them as a group in a
+compiled system policy, the collection keyword creates a collection of related
+functions.  These functions behave similar to member functions except that they
+do *not* create any types or operate on a particular type.  The `this` keyword
+is invalid inside a collection.
+
+```
+collection foo {
+	fn my_func (...) {
+		// context
+	}
+}
+
+//elsewhere
+foo.my_func(some_args)
+```
+
 ### Type inheritance
 Child types inherit the following from their parents:
 1. Any rules refering to the parent

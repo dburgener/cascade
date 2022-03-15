@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
-use crate::ast::{CascadeString, Policy, Declaration, DeclarationModifier, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, LetBinding, Virtualable, FuncCall, DeclaredArgument, Module, Machine, MachineBody, Port, IpAddr as AstIpAddr, IfBlock, OptionalBlock};
+use crate::ast::{CascadeString, Policy, Declaration, DeclarationModifier, Expression, Statement, TypeDecl, CollectionDecl, FuncDecl, Argument, Annotation, LetBinding, Virtualable, FuncCall, DeclaredArgument, Module, Machine, MachineBody, Port, IpAddr as AstIpAddr, IfBlock, OptionalBlock};
 use lalrpop_util::ErrorRecovery;
 use lalrpop_util::ParseError;
 use crate::error::ParseErrorMsg;
@@ -71,6 +71,7 @@ DeclModifier: DeclarationModifier = {
 
 Decl: Declaration = {
 	TypeDecl => Declaration::Type(<>),
+	CollectionDecl => Declaration::Collection(<>),
 	FuncDecl => Declaration::Func(<>),
 	ModuleDecl => Declaration::Mod(<>),
 	MachineDecl => Declaration::Machine(<>),
@@ -103,6 +104,13 @@ TypeDecl: Box<TypeDecl> = {
 BuiltInOrExtend: Option<CascadeString> = {
 	BuiltInType => Some(<>),
 	"extend" => None,
+}
+
+CollectionDecl: Box<CollectionDecl> = {
+	"collection" <n:NameDecl> "{" <mut v:Annotated<FuncDecl>*> "}" => {
+		v.iter_mut().for_each(|f| f.class_name = Some(n.clone()));
+		Box::new(CollectionDecl::new(n, v))
+	},
 }
 
 InheritList: Vec<CascadeString> = {

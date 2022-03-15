@@ -324,6 +324,9 @@ pub fn build_func_map<'a>(
                     file,
                 )?)?;
             }
+            Declaration::Collection(_a) => {
+                todo!()
+            }
             Declaration::Func(f) => {
                 decl_map.insert(
                     f.get_cil_name(),
