@@ -178,6 +178,7 @@ pub trait Virtualable {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Declaration {
     Type(Box<TypeDecl>),
+    Api(Box<ApiDecl>),
     Func(Box<FuncDecl>),
 }
 
@@ -185,6 +186,7 @@ impl Virtualable for Declaration {
     fn set_virtual(&mut self) {
         match self {
             Declaration::Type(t) => t.set_virtual(),
+            Declaration::Api(_) => {}   // no-op
             Declaration::Func(_f) => {} // TODO
         }
     }
@@ -194,6 +196,7 @@ impl Declaration {
     pub fn add_annotation(&mut self, annotation: Annotation) {
         match self {
             Declaration::Type(t) => t.annotations.push(annotation),
+            Declaration::Api(a) => a.annotations.push(annotation),
             Declaration::Func(f) => f.annotations.push(annotation),
         }
     }
@@ -236,6 +239,25 @@ impl PartialEq for TypeDecl {
 impl Virtualable for TypeDecl {
     fn set_virtual(&mut self) {
         self.is_virtual = true;
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ApiDecl {
+    pub name: HLLString,
+    #[allow(clippy::vec_box)]
+    pub functions: Vec<Box<FuncDecl>>,
+    pub annotations: Annotations,
+}
+
+impl ApiDecl {
+    #[allow(clippy::vec_box)]
+    pub fn new(name: HLLString, functions: Vec<Box<FuncDecl>>) -> Self {
+        ApiDecl {
+            name,
+            functions,
+            annotations: Annotations::new(),
+        }
     }
 }
 

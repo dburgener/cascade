@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
-use crate::ast::{HLLString, Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, Annotations, LetBinding, Virtualable, FuncCall, DeclaredArgument};
+use crate::ast::{HLLString, Policy, Declaration, Expression, Statement, TypeDecl, ApiDecl, FuncDecl, Argument, Annotation, Annotations, LetBinding, Virtualable, FuncCall, DeclaredArgument};
 
 grammar;
 
@@ -44,6 +44,7 @@ BaseExpr: Expression = {
 
 Decl: Declaration = {
 	TypeDecl => Declaration::Type(<>),
+	ApiDecl => Declaration::Api(<>),
 	FuncDecl => Declaration::Func(<>),
 }
 
@@ -58,6 +59,13 @@ TypeDecl: Box<TypeDecl> = {
 		};
 		v.iter_mut().for_each(|e| e.set_class_name_if_decl(n.clone()));
 		Box::new(TypeDecl::new(n, inherits, v))
+	},
+}
+
+ApiDecl: Box<ApiDecl> = {
+	"api" <n:NameDecl> "{" <mut v:Annotated<FuncDecl>*> "}" => {
+		v.iter_mut().for_each(|f| f.class_name = Some(n.clone()));
+		Box::new(ApiDecl::new(n, v))
 	},
 }
 

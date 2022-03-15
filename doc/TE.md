@@ -91,6 +91,16 @@ domain iptables {
 }
 ```
 
+### APIs
+
+For the purpose of grouping related function and using them as a group in a
+compiled system policy, the api keyword creates a collection of related
+functions.  These functions behave similar to member functions except that they
+do *not* create any types or operate on a particular type.  The `this` keyword
+is invalid inside an api.
+
+TODO: Include code example
+
 ### Type inheritance
 Child types inherit the following from their parents:
 1. Any rules refering to the parent

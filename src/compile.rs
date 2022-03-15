@@ -107,6 +107,7 @@ pub fn extend_type_map(p: &PolicyFile, type_map: &mut TypeMap) -> Result<(), HLL
                     None
                 }
             },
+            Declaration::Api(_) => continue,
             Declaration::Func(_) => continue,
         };
     }
@@ -244,6 +245,9 @@ pub fn build_func_map<'a>(
                     Some(type_being_parsed),
                     file,
                 )?);
+            }
+            Declaration::Api(_a) => {
+                todo!()
             }
             Declaration::Func(f) => {
                 // FIXME: error out for duplicate entries
