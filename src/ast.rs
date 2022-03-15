@@ -231,6 +231,7 @@ pub trait Virtualable {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Declaration {
     Type(Box<TypeDecl>),
+    Collection(Box<CollectionDecl>),
     Func(Box<FuncDecl>),
     Mod(Module),
     Machine(Machine),
@@ -240,6 +241,7 @@ impl Virtualable for Declaration {
     fn set_virtual(&mut self, range: Range<usize>) -> Result<(), ParseErrorMsg> {
         match self {
             Declaration::Type(t) => t.set_virtual(range),
+            Declaration::Collection(_) => Ok(()), // no-op
             Declaration::Func(f) => f.set_virtual(range),
             Declaration::Mod(m) => m.set_virtual(range),
             Declaration::Machine(s) => s.set_virtual(range),
@@ -252,6 +254,9 @@ impl Virtualable for Declaration {
             Declaration::Type(t) => {
                 t.set_trait(range.clone())?;
                 t.set_virtual(range)
+            }
+            Declaration::Collection(_) => {
+                todo!()
             }
             Declaration::Func(f) => {
                 f.set_trait(range.clone())?;
@@ -273,6 +278,7 @@ impl Declaration {
     pub fn add_annotation(&mut self, annotation: Annotation) {
         match self {
             Declaration::Type(t) => t.annotations.push(annotation),
+            Declaration::Collection(a) => a.annotations.push(annotation),
             Declaration::Func(f) => f.annotations.push(annotation),
             Declaration::Mod(m) => m.annotations.push(annotation),
             Declaration::Machine(s) => s.annotations.push(annotation),
@@ -342,6 +348,25 @@ pub fn get_cil_name(class_name: Option<&CascadeString>, func_name: &CascadeStrin
     match &class_name {
         Some(class) => format!("{}-{}", class.get_cil_name(), func_name),
         None => func_name.to_string(),
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct CollectionDecl {
+    pub name: CascadeString,
+    #[allow(clippy::vec_box)]
+    pub functions: Vec<Box<FuncDecl>>,
+    pub annotations: Annotations,
+}
+
+impl CollectionDecl {
+    #[allow(clippy::vec_box)]
+    pub fn new(name: CascadeString, functions: Vec<Box<FuncDecl>>) -> Self {
+        CollectionDecl {
+            name,
+            functions,
+            annotations: Annotations::new(),
+        }
     }
 }
 
