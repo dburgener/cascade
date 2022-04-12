@@ -32,6 +32,7 @@ pub enum BlockType {
     Resource,
     Function,
     Annotation,
+    Collection,
     Global,
     Optional,
 }
