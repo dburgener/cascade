@@ -1163,10 +1163,17 @@ fn check_associated_call(
 
 pub type FunctionMap<'a> = BTreeMap<String, FunctionInfo<'a>>;
 
+#[derive(Debug, Clone, Copy)]
+pub enum FunctionClass<'a> {
+    Type(&'a TypeInfo),
+    Api(&'a HLLString),
+    Global,
+}
+
 #[derive(Debug, Clone)]
 pub struct FunctionInfo<'a> {
     pub name: String,
-    pub class: Option<&'a TypeInfo>,
+    pub class: FunctionClass<'a>,
     pub args: Vec<FunctionArgument<'a>>,
     pub original_body: &'a Vec<Statement>,
     pub body: Option<BTreeSet<ValidatedStatement<'a>>>,
@@ -1179,14 +1186,14 @@ impl<'a> FunctionInfo<'a> {
     pub fn new(
         funcdecl: &'a FuncDecl,
         types: &'a TypeMap,
-        parent_type: Option<&'a TypeInfo>,
+        parent_type: FunctionClass<'a>,
         declaration_file: &'a SimpleFile<String, String>,
     ) -> Result<FunctionInfo<'a>, HLLErrors> {
         let mut args = Vec::new();
         let mut errors = HLLErrors::new();
 
         // All member functions automatically have "this" available as a reference to their type
-        if let Some(parent_type) = parent_type {
+        if let FunctionClass::Type(parent_type) = parent_type {
             args.push(FunctionArgument::new_this_argument(parent_type));
         }
 
@@ -1373,12 +1380,13 @@ impl<'a> ValidatedStatement<'a> {
         types: &'a TypeMap,
         class_perms: &ClassList<'a>,
         args: &[FunctionArgument<'a>],
-        parent_type: Option<&TypeInfo>,
+        parent_type: FunctionClass<'a>,
         file: &'a SimpleFile<String, String>,
     ) -> Result<BTreeSet<ValidatedStatement<'a>>, HLLErrors> {
         let in_resource = match parent_type {
-            Some(t) => t.is_resource(types),
-            None => false,
+            FunctionClass::Type(t) => t.is_resource(types),
+            FunctionClass::Api(_) => false,
+            FunctionClass::Global => false,
         };
 
         match statement {
@@ -1446,15 +1454,17 @@ impl<'a> ValidatedStatement<'a> {
                 // Global scope let bindings were handled by get_global_bindings() in a previous
                 // pass
 
-                // The if half is a TODO.  They'll be different once implemented.  I'd rather leave
-                // the switch in for clear code and future reference than make clippy happy for the
-                // sake of making clippy happy
-                #[allow(clippy::if_same_then_else)]
-                if parent_type.is_some() {
-                    Ok(BTreeSet::default()) // TODO: This is where local scope let bindings should happen
-                } else {
-                    // Global scope, nothing to do here
-                    Ok(BTreeSet::default())
+                match parent_type {
+                    FunctionClass::Type(_) => {
+                        Ok(BTreeSet::default()) // TODO: This is where local scope let bindings should happen
+                    }
+                    FunctionClass::Api(_) => {
+                        Ok(BTreeSet::default()) // TODO: This is where local scope let bindings should happen
+                    }
+                    FunctionClass::Global => {
+                        // Global scope, nothing to do here
+                        Ok(BTreeSet::default())
+                    }
                 }
             }
         }

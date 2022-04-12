@@ -13,7 +13,8 @@ use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
 use crate::internal_rep::{
     argument_to_typeinfo, argument_to_typeinfo_vec, generate_sid_rules, type_slice_to_variant,
     AnnotationInfo, ArgForValidation, Associated, BoundTypeInfo, ClassList, Context,
-    FunctionArgument, FunctionInfo, FunctionMap, Sid, TypeInfo, TypeMap, ValidatedStatement,
+    FunctionArgument, FunctionClass, FunctionInfo, FunctionMap, Sid, TypeInfo, TypeMap,
+    ValidatedStatement,
 };
 
 use codespan_reporting::files::SimpleFile;
@@ -29,7 +30,7 @@ pub fn compile_rules_one_file<'a>(
         type_map,
         func_map,
         classlist,
-        None,
+        FunctionClass::Global,
         &p.file,
     )
 }
@@ -223,7 +224,7 @@ pub fn get_global_bindings(
 pub fn build_func_map<'a>(
     exprs: &'a [Expression],
     types: &'a TypeMap,
-    parent_type: Option<&'a TypeInfo>,
+    parent_type: FunctionClass<'a>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<FunctionMap<'a>, HLLErrors> {
     let mut decl_map = FunctionMap::new();
@@ -242,7 +243,7 @@ pub fn build_func_map<'a>(
                 decl_map.extend(build_func_map(
                     &t.expressions,
                     types,
-                    Some(type_being_parsed),
+                    FunctionClass::Type(type_being_parsed),
                     file,
                 )?);
             }
@@ -416,7 +417,7 @@ fn interpret_associate(
 
     // Finds the associated call.
     for func_info in funcs.values().filter(|f| f.is_associated_call) {
-        if let Some(class) = func_info.class {
+        if let FunctionClass::Type(class) = func_info.class {
             if let Some((res, seen)) = potential_resources.get_mut(class.name.as_ref()) {
                 *seen = if *seen {
                     errors.add_error(HLLErrorItem::Compile(HLLCompileError::new(
@@ -728,7 +729,7 @@ fn do_rules_pass<'a>(
     types: &'a TypeMap,
     funcs: &'a FunctionMap<'a>,
     class_perms: &ClassList<'a>,
-    parent_type: Option<&'a TypeInfo>,
+    parent_type: FunctionClass<'a>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<BTreeSet<ValidatedStatement<'a>>, HLLErrors> {
     let mut ret = BTreeSet::new();
@@ -737,8 +738,9 @@ fn do_rules_pass<'a>(
         match e {
             Expression::Stmt(s) => {
                 let func_args = match parent_type {
-                    Some(t) => vec![FunctionArgument::new_this_argument(t)],
-                    None => Vec::new(),
+                    FunctionClass::Type(t) => vec![FunctionArgument::new_this_argument(t)],
+                    FunctionClass::Api(_) => Vec::new(),
+                    FunctionClass::Global => Vec::new(),
                 };
                 match ValidatedStatement::new(
                     s,
@@ -763,7 +765,7 @@ fn do_rules_pass<'a>(
                     types,
                     funcs,
                     class_perms,
-                    Some(type_being_parsed),
+                    FunctionClass::Type(type_being_parsed),
                     file,
                 ) {
                     Ok(mut r) => ret.append(&mut r),

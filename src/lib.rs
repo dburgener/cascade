@@ -17,7 +17,7 @@ mod sexp_internal;
 use std::collections::BTreeSet;
 
 use ast::{Policy, PolicyFile};
-use internal_rep::FunctionMap;
+use internal_rep::{FunctionClass, FunctionMap};
 
 use codespan_reporting::files::SimpleFile;
 use error::HLLErrors;
@@ -97,7 +97,12 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
 
         // Collect all function declarations
         for p in &policies {
-            let mut m = match compile::build_func_map(&p.policy.exprs, &type_map, None, &p.file) {
+            let mut m = match compile::build_func_map(
+                &p.policy.exprs,
+                &type_map,
+                FunctionClass::Global,
+                &p.file,
+            ) {
                 Ok(m) => m,
                 Err(e) => {
                     errors.append(e);
@@ -128,7 +133,12 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
 
     // Collect all function declarations
     for p in &policies {
-        let mut m = match compile::build_func_map(&p.policy.exprs, &type_map, None, &p.file) {
+        let mut m = match compile::build_func_map(
+            &p.policy.exprs,
+            &type_map,
+            FunctionClass::Global,
+            &p.file,
+        ) {
             Ok(m) => m,
             Err(e) => {
                 errors.append(e);
