@@ -17,8 +17,8 @@ use crate::error::{
     add_or_create_compile_error, CascadeErrors, CompileError, ErrorItem, InternalError,
 };
 use crate::functions::{
-    ArgForValidation, FSContextType, FileSystemContextRule, FunctionArgument, FunctionInfo,
-    FunctionMap, ValidatedCall, ValidatedStatement,
+    ArgForValidation, FSContextType, FileSystemContextRule, FunctionArgument, FunctionClass,
+    FunctionInfo, FunctionMap, ValidatedCall, ValidatedStatement,
 };
 use crate::internal_rep::{
     generate_sid_rules, validate_derive_args, Annotated, AnnotationInfo, Associated, BoundTypeInfo,
@@ -41,7 +41,7 @@ pub fn compile_rules_one_file<'a>(
         type_map,
         func_map,
         classlist,
-        None,
+        FunctionClass::Global,
         Some(global_context),
         &p.file,
     )
@@ -299,7 +299,7 @@ pub fn get_global_bindings<'a>(
 pub fn build_func_map<'a>(
     exprs: &'a [Expression],
     types: &'a TypeMap,
-    parent_type: Option<&'a TypeInfo>,
+    parent_type: FunctionClass<'a>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<FunctionMap<'a>, CascadeErrors> {
     let mut decl_map = FunctionMap::new();
@@ -320,7 +320,7 @@ pub fn build_func_map<'a>(
                 decl_map.try_extend(build_func_map(
                     &t.expressions,
                     types,
-                    Some(type_being_parsed),
+                    FunctionClass::Type(type_being_parsed),
                     file,
                 )?)?;
             }
@@ -492,7 +492,7 @@ pub fn validate_functions<'a>(
     derive_functions(&mut functions, types, class_perms)?;
 
     for function in functions.values() {
-        if let Some(func_class) = function.class {
+        if let FunctionClass::Type(func_class) = function.class {
             if function.is_virtual || func_class.is_trait() {
                 classes_to_required_functions
                     .entry(&func_class.name)
@@ -1007,7 +1007,12 @@ pub fn get_funcs<'a>(
     let mut reduced_func_map = FunctionMap::new();
     // Collect all function declarations
     for p in policies {
-        let mut m = match build_func_map(&p.policy.exprs, reduced_type_map, None, &p.file) {
+        let mut m = match build_func_map(
+            &p.policy.exprs,
+            reduced_type_map,
+            FunctionClass::Global,
+            &p.file,
+        ) {
             Ok(m) => m,
             Err(e) => {
                 ret.append(e);
@@ -1059,13 +1064,14 @@ pub fn get_policy_rules<'a>(
     ret.into_result(WithWarnings::new(reduced_policy_rules, warnings))
 }
 
+// Gets all function names which are members of types in the type_names list
 fn get_all_function_names(
     type_names: &BTreeSet<&CascadeString>,
     functions: &FunctionMap,
 ) -> Vec<CascadeString> {
     let mut ret = Vec::new();
     for f in functions.values() {
-        if let Some(class) = f.class {
+        if let FunctionClass::Type(class) = f.class {
             if type_names.contains(&&class.name)
                 && !ret.contains(&CascadeString::from(&f.name as &str))
             {
@@ -1224,7 +1230,7 @@ fn interpret_associate(
 
     // Finds the associated call.
     for func_info in funcs.values().filter(|f| f.is_associated_call) {
-        if let Some(class) = func_info.class {
+        if let FunctionClass::Type(class) = func_info.class {
             if let Some((res, seen)) = potential_resources.get_mut(class.name.as_ref()) {
                 *seen = if *seen {
                     errors.add_error(ErrorItem::make_compile_or_internal_error(
@@ -1583,8 +1589,9 @@ pub fn call_derived_associated_calls<'a>(
                 for f in funcs.values() {
                     if f.is_derived && f.is_associated_call {
                         let resource_name = match f.class {
-                            Some(n) => n.name.clone(),
-                            None => {
+                            FunctionClass::Type(n) => n.name.clone(),
+                            _ => {
+                                // Can't derive from Global or API
                                 continue;
                             }
                         };
@@ -1630,7 +1637,7 @@ fn do_rules_pass<'a>(
     types: &'a TypeMap,
     funcs: &'a FunctionMap<'a>,
     class_perms: &ClassList<'a>,
-    parent_type: Option<&'a TypeInfo>,
+    parent_type: FunctionClass<'a>,
     parent_context: Option<&BlockContext<'_>>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<WithWarnings<BTreeSet<ValidatedStatement<'a>>>, CascadeErrors> {
@@ -1638,22 +1645,23 @@ fn do_rules_pass<'a>(
     let mut errors = CascadeErrors::new();
     let mut warnings = Warnings::new();
     let func_args = match parent_type {
-        Some(t) => vec![FunctionArgument::new_this_argument(t)],
-        None => Vec::new(),
+        FunctionClass::Type(t) => vec![FunctionArgument::new_this_argument(t)],
+        _ => Vec::new(),
     };
 
     let block_type = match parent_type {
-        Some(parent) => match parent.get_built_in_variant(types) {
+        FunctionClass::Type(parent) => match parent.get_built_in_variant(types) {
             Some("resource") => BlockType::Resource,
             Some("domain") => BlockType::Domain,
             _ => {
                 return Err(ErrorItem::Internal(InternalError::new()).into());
             }
         },
-        None => BlockType::Global,
+        FunctionClass::Collection(_) => BlockType::Collection,
+        FunctionClass::Global => BlockType::Global,
     };
 
-    let mut local_context = BlockContext::new(block_type, parent_type, parent_context);
+    let mut local_context = BlockContext::new(block_type, parent_type.into(), parent_context);
     local_context.insert_function_args(&func_args);
 
     for e in exprs {
@@ -1662,7 +1670,7 @@ fn do_rules_pass<'a>(
                 // Need to handle this special case here, otherwise ValidatedStatement::new()
                 // confuses the borrow checker because it might mutate local_context, or return
                 // data that references the context
-                if parent_type.is_some() {
+                if parent_type != FunctionClass::Global {
                     match local_context.insert_from_argument(
                         &l.name,
                         &l.value,
@@ -1692,7 +1700,7 @@ fn do_rules_pass<'a>(
                 }
             }
             Expression::Decl(Declaration::Type(t)) => {
-                let type_name = if let Some(p) = parent_type {
+                let type_name = if let Some(p) = parent_type.into() {
                     get_synthetic_resource_name(p, &t.name)
                 } else {
                     t.name.clone()
@@ -1707,14 +1715,14 @@ fn do_rules_pass<'a>(
                     types,
                     funcs,
                     class_perms,
-                    Some(type_being_parsed),
+                    FunctionClass::Type(type_being_parsed),
                     Some(&local_context),
                     file,
                 ) {
                     Ok(r) => ret.append(&mut r.inner(&mut warnings)),
                     Err(e) => errors.append(e),
                 }
-                if parent_type.is_some() {
+                if parent_type.is_type() {
                     // This is a nested declaration, create a local binding for it
                     local_context.insert_binding(
                         t.name.clone(),

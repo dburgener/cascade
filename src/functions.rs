@@ -1297,10 +1297,42 @@ fn check_associated_call(
 
 pub type FunctionMap<'a> = AliasMap<FunctionInfo<'a>>;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum FunctionClass<'a> {
+    Type(&'a TypeInfo),
+    Collection(&'a CascadeString),
+    Global,
+}
+
+// If we're in a type block, get the type, else None
+impl<'a> From<FunctionClass<'a>> for Option<&'a TypeInfo> {
+    fn from(class: FunctionClass<'a>) -> Option<&'a TypeInfo> {
+        if let FunctionClass::Type(t) = class {
+            Some(t)
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a> FunctionClass<'a> {
+    fn get_name(&self) -> Option<&'a CascadeString> {
+        match self {
+            FunctionClass::Type(t) => Some(&t.name),
+            FunctionClass::Collection(a) => Some(a),
+            FunctionClass::Global => None,
+        }
+    }
+
+    pub fn is_type(&self) -> bool {
+        matches!(self, FunctionClass::Type(_))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct FunctionInfo<'a> {
     pub name: String,
-    pub class: Option<&'a TypeInfo>,
+    pub class: FunctionClass<'a>,
     pub is_virtual: bool,
     pub args: Vec<FunctionArgument<'a>>,
     pub annotations: BTreeSet<AnnotationInfo>,
@@ -1330,7 +1362,7 @@ impl<'a> FunctionInfo<'a> {
     pub fn new(
         funcdecl: &'a FuncDecl,
         types: &'a TypeMap,
-        parent_type: Option<&'a TypeInfo>,
+        parent_type: FunctionClass<'a>,
         declaration_file: &'a SimpleFile<String, String>,
     ) -> Result<FunctionInfo<'a>, CascadeErrors> {
         let mut args = Vec::new();
@@ -1338,7 +1370,7 @@ impl<'a> FunctionInfo<'a> {
         let mut annotations = BTreeSet::new();
 
         // All member functions automatically have "this" available as a reference to their type
-        let parent_type_name = if let Some(parent_type) = parent_type {
+        let parent_type_name = if let FunctionClass::Type(parent_type) = parent_type {
             args.push(FunctionArgument::new_this_argument(parent_type));
             Some(&parent_type.name)
         } else {
@@ -1346,7 +1378,7 @@ impl<'a> FunctionInfo<'a> {
         };
 
         let class_aliases = match parent_type {
-            Some(ti) => {
+            FunctionClass::Type(ti) => {
                 let mut type_aliases = vec![Some(&ti.name)];
                 for ann in &ti.annotations {
                     if let AnnotationInfo::Alias(alias_name) = ann {
@@ -1355,7 +1387,8 @@ impl<'a> FunctionInfo<'a> {
                 }
                 type_aliases
             }
-            None => vec![None],
+            FunctionClass::Collection(_) => todo!(),
+            FunctionClass::Global => vec![None],
         };
 
         let mut func_aliases = vec![&funcdecl.name];
@@ -1592,7 +1625,7 @@ impl<'a> FunctionInfo<'a> {
 
         Ok(FunctionInfo {
             name: name.to_string(),
-            class: Some(deriving_type),
+            class: FunctionClass::Type(deriving_type),
             is_virtual: false, // TODO: Check documentation for correct behavior here
             args: derived_args,
             annotations: BTreeSet::new(),
@@ -1609,7 +1642,7 @@ impl<'a> FunctionInfo<'a> {
         match self.decl {
             Some(decl) => decl.get_cil_name(),
             None => get_cil_name(
-                self.class.map(|c| &c.name),
+                self.class.get_name(),
                 &CascadeString::from(&self.name as &str),
             ),
         }
@@ -1626,7 +1659,7 @@ impl<'a> FunctionInfo<'a> {
         let mut new_body = BTreeSet::new();
         let mut errors = CascadeErrors::new();
         let mut warnings = Warnings::new();
-        let local_context = BlockContext::new_from_args(&self.args, self.class, context);
+        let local_context = BlockContext::new_from_args(&self.args, self.class.into(), context);
 
         for statement in self.original_body {
             // TODO: This needs to become global in a bit
@@ -1876,12 +1909,13 @@ impl<'a> ValidatedStatement<'a> {
         types: &'a TypeMap,
         class_perms: &ClassList<'a>,
         context: &BlockContext<'_>,
-        parent_type: Option<&'a TypeInfo>,
+        parent_type: FunctionClass<'a>,
         file: &'a SimpleFile<String, String>,
     ) -> Result<WithWarnings<BTreeSet<ValidatedStatement<'a>>>, CascadeErrors> {
         let in_resource = match parent_type {
-            Some(t) => t.is_resource(types),
-            None => false,
+            FunctionClass::Type(t) => t.is_resource(types),
+            FunctionClass::Collection(_) => false,
+            FunctionClass::Global => false,
         };
 
         // check drop
@@ -1979,7 +2013,7 @@ impl<'a> ValidatedStatement<'a> {
                                 class_perms,
                                 context,
                                 file,
-                                parent_type.unwrap(),
+                                Option::from(parent_type).unwrap(),
                             )?),
                         ])))
                     } else {
@@ -2024,7 +2058,7 @@ impl<'a> ValidatedStatement<'a> {
                         functions,
                         types,
                         class_perms,
-                        parent_type,
+                        parent_type.into(),
                         context,
                         file,
                     )?)))
@@ -2061,7 +2095,7 @@ impl<'a> ValidatedStatement<'a> {
                         functions,
                         types,
                         class_perms,
-                        &BlockContext::new(BlockType::Optional, parent_type, Some(context)),
+                        &BlockContext::new(BlockType::Optional, parent_type.into(), Some(context)),
                         parent_type,
                         file,
                     )?;
@@ -2675,7 +2709,7 @@ mod tests {
         let some_file = SimpleFile::new("bar".to_string(), "bar".to_string());
         let mut fi = FunctionInfo {
             name: "foo".to_string(),
-            class: None,
+            class: FunctionClass::Global,
             is_virtual: false,
             args: Vec::new(),
             annotations: BTreeSet::new(),
@@ -2703,7 +2737,7 @@ mod tests {
         )
         .unwrap();
 
-        fi.class = Some(&ti);
+        fi.class = FunctionClass::Type(&ti);
 
         assert_eq!(&fi.get_cil_name(), "bar-foo");
     }

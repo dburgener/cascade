@@ -24,7 +24,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use crate::ast::{Argument, CascadeString, Declaration, Expression, Policy, PolicyFile};
 use crate::context::{BlockType, Context};
 use crate::error::{CascadeErrors, InternalError, InvalidMachineError, ParseErrorMsg};
-use crate::functions::FunctionMap;
+use crate::functions::{FunctionClass, FunctionMap};
 use crate::machine::{MachineMap, ModuleMap, ValidatedMachine, ValidatedModule};
 pub use crate::warning::Warnings;
 
@@ -152,7 +152,12 @@ fn compile_machine_policies_internal(
 
         // Collect all function declarations
         for p in &policies {
-            let mut m = match compile::build_func_map(&p.policy.exprs, &type_map, None, &p.file) {
+            let mut m = match compile::build_func_map(
+                &p.policy.exprs,
+                &type_map,
+                FunctionClass::Global,
+                &p.file,
+            ) {
                 Ok(m) => m,
                 Err(e) => {
                     errors.append(e);

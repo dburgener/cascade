@@ -19,7 +19,9 @@ use crate::ast::{
 use crate::constants;
 use crate::context::{BlockType, Context as BlockContext};
 use crate::error::{CascadeErrors, ErrorItem, InternalError};
-use crate::functions::{validate_arguments, ArgForValidation, FunctionArgument, FunctionMap};
+use crate::functions::{
+    validate_arguments, ArgForValidation, FunctionArgument, FunctionClass, FunctionMap,
+};
 
 const DEFAULT_USER: &str = "system_u";
 const DEFAULT_OBJECT_ROLE: &str = "object_r";
@@ -274,7 +276,7 @@ impl TypeInfo {
 
     pub fn defines_function(&self, virtual_function_name: &str, functions: &FunctionMap) -> bool {
         for f in functions.values() {
-            if f.class == Some(self) && f.name == virtual_function_name {
+            if f.class == FunctionClass::Type(self) && f.name == virtual_function_name {
                 return true;
             }
         }
