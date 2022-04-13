@@ -154,6 +154,10 @@ impl Policy {
 pub enum Expression {
     Decl(Declaration),
     Stmt(Statement),
+    // Needed for parser grammar.  If this is ever set, we should have bailed
+    // prior to using this. If possible encountering this should be an internal
+    // error, otherwise it is safe to ignore.
+    Error,
 }
 
 impl Expression {
@@ -167,6 +171,7 @@ impl Expression {
         match self {
             Expression::Decl(d) => d.add_annotation(annotation),
             Expression::Stmt(s) => s.add_annotation(annotation),
+            Expression::Error => (),
         }
     }
 }

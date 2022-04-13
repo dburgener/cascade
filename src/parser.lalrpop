@@ -1,8 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
 use crate::ast::{HLLString, Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, Annotations, LetBinding, Virtualable, FuncCall, DeclaredArgument};
+use lalrpop_util::ErrorRecovery;
 
-grammar;
+grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, &'static str>>);
 
 // http://lalrpop.github.io/lalrpop/tutorial/006_macros.html
 Comma<T>: Vec<T> = {
@@ -28,7 +29,9 @@ Annotated<T>: T = {
 }
 
 pub Expr: Expression = {
-	Annotated<BaseExpr>
+	Annotated<BaseExpr>,
+	// On error, report and fast forward to the next expression
+	! => { errors.push(<>); Expression::Error },
 }
 
 BaseExpr: Expression = {
