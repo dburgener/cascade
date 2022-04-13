@@ -415,6 +415,7 @@ impl Annotations {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Argument {
     Var(HLLString),
+    Named(HLLString, Box<Argument>),
     List(Vec<HLLString>),
     Quote(HLLString),
 }
@@ -423,6 +424,16 @@ impl Argument {
     pub fn get_range(&self) -> Option<Range<usize>> {
         match self {
             Argument::Var(a) => a.get_range(),
+            Argument::Named(n, a) => {
+                if let (Some(l), Some(r)) = (n.get_range(), a.get_range()) {
+                    Some(Range {
+                        start: l.start,
+                        end: r.end,
+                    })
+                } else {
+                    None
+                }
+            }
             Argument::List(l) => HLLString::slice_to_range(&l.iter().collect::<Vec<_>>()),
             Argument::Quote(a) => a.get_range(),
         }
@@ -433,6 +444,7 @@ impl fmt::Display for Argument {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Argument::Var(a) => write!(f, "'{}'", a),
+            Argument::Named(n, a) => write!(f, "{}={}", n, a),
             Argument::List(_) => write!(f, "[TODO]",),
             Argument::Quote(a) => write!(f, "\"{}\"", a),
         }
@@ -444,4 +456,57 @@ pub struct DeclaredArgument {
     pub param_type: HLLString,
     pub is_list_param: bool,
     pub name: HLLString,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn arg_get_range() {
+        let none_range = Argument::Var("foo".into());
+        assert!(none_range.get_range().is_none());
+        let var_range = Argument::Var(HLLString::new("bar".into(), Range { start: 1, end: 2 }));
+        assert!(matches!(
+            var_range.get_range(),
+            Some(Range { start: 1, end: 2 })
+        ));
+
+        let named_range1 = Argument::Named("foo".into(), Box::new(var_range.clone()));
+        assert!(named_range1.get_range().is_none());
+        let named_range2 = Argument::Named(
+            HLLString::new("foo".into(), Range { start: 3, end: 4 }),
+            Box::new(var_range.clone()),
+        );
+        assert!(matches!(
+            named_range2.get_range(),
+            Some(Range { start: 3, end: 2 })
+        ));
+
+        let list_range = Argument::List(vec![
+            HLLString::new("a".into(), Range { start: 5, end: 6 }),
+            HLLString::new("b".into(), Range { start: 7, end: 8 }),
+            HLLString::new("c".into(), Range { start: 9, end: 10 }),
+        ]);
+        assert!(matches!(
+            list_range.get_range(),
+            Some(Range { start: 5, end: 10 })
+        ));
+
+        let quote_range =
+            Argument::Quote(HLLString::new("foo".into(), Range { start: 11, end: 12 }));
+        assert!(matches!(
+            quote_range.get_range(),
+            Some(Range { start: 11, end: 12 })
+        ));
+
+        let named_range3 = Argument::Named(
+            HLLString::new("foo".into(), Range { start: 13, end: 14 }),
+            Box::new(list_range.clone()),
+        );
+        assert!(matches!(
+            named_range3.get_range(),
+            Some(Range { start: 13, end: 10 })
+        ));
+    }
 }

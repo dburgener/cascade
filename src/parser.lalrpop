@@ -114,6 +114,7 @@ List: Vec<HLLString> = {
 
 Arg: Argument = {
 	Symbol => Argument::Var(<>),
+	<s:Symbol> "=" <a: Arg> => Argument::Named(s, Box::new(a)),
 	List => Argument::List(<>),
 	Quoted_String => Argument::Quote(<>),
 }

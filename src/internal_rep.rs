@@ -1654,6 +1654,7 @@ impl<'a> From<&'a Argument> for ArgForValidation<'a> {
     fn from(a: &'a Argument) -> Self {
         match a {
             Argument::Var(s) => ArgForValidation::Var(s),
+            Argument::Named(_n, _a) => todo!(),
             Argument::List(v) => ArgForValidation::List(v.iter().collect()),
             Argument::Quote(s) => ArgForValidation::Quote(s),
         }
