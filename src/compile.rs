@@ -288,7 +288,7 @@ fn find_cycles_or_bad_types(
     let mut ret = HLLErrors::new();
 
     for p in &type_to_check.inherits {
-        if visited_types.contains(&p.to_string() as &str) || *p == type_to_check.name {
+        if visited_types.contains(p.as_ref()) || *p == type_to_check.name {
             // cycle
             return Err(HLLErrors::from(
                 HLLErrorItem::make_compile_or_internal_error(
@@ -299,7 +299,7 @@ fn find_cycles_or_bad_types(
                 ),
             ));
         }
-        let parent_ti = match types.get(&p.to_string()) {
+        let parent_ti = match types.get(p.as_ref()) {
             Some(t) => t,
             None => {
                 return Err(HLLErrors::from(
