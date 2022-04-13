@@ -1,0 +1,22 @@
+resource foo {
+	fn read_foo(domain source) {
+		allow(source, this, file, read);
+	}
+}
+
+resource bar {
+	fn read_bar(domain source) {
+		allow(source, this, file, read);
+	}
+}
+
+api foobar_reader {
+	fn read_foo_and_bar(domain source) {
+		foo.read_foo(source);
+		bar.read_bar(source);
+	}
+}
+
+domain baz {
+	foobar_reader.read_foo_and_bar(this);
+}

@@ -247,8 +247,13 @@ pub fn build_func_map<'a>(
                     file,
                 )?);
             }
-            Declaration::Api(_a) => {
-                todo!()
+            Declaration::Api(a) => {
+                for f in &a.functions {
+                    decl_map.insert(
+                        f.get_cil_name(),
+                        FunctionInfo::new(&*f, types, FunctionClass::Api(&a.name), file)?,
+                    );
+                }
             }
             Declaration::Func(f) => {
                 // FIXME: error out for duplicate entries

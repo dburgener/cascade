@@ -411,6 +411,17 @@ mod tests {
     }
 
     #[test]
+    fn api_test() {
+        valid_policy_test(
+            "api.cas",
+            &[
+                "(macro foobar_reader-read_foo_and_bar",
+                "(call foobar_reader-read_foo_and_bar",
+            ],
+        );
+    }
+
+    #[test]
     fn makelist_test() {
         let policy_file = [POLICIES_DIR, "makelist.cas"].concat();
 

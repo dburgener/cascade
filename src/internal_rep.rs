@@ -1508,9 +1508,15 @@ impl ValidatedCall {
         };
 
         // Each argument must match the type the function signature expects
-        let mut args = match &call.class_name {
-            Some(c) => vec![c.to_string()], // "this"
-            None => Vec::new(),
+        let mut args = {
+            // Below would be cleaner with if-let chaining, but that is not yet supported, so use a
+            // tuple workaround
+            // https://stackoverflow.com/questions/53235477/does-rust-2018-support-if-let-chaining
+            if let (Some(c), FunctionClass::Type(_)) = (&call.class_name, function_info.class) {
+                vec![c.to_string()] // "this"
+            } else {
+                Vec::new()
+            }
         };
 
         for arg in validate_arguments(
