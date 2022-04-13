@@ -48,9 +48,11 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
         };
         let p = match parse_policy(&policy_str) {
             Ok(p) => p,
-            Err(e) => {
-                // TODO: avoid String duplication
-                errors.add_error(error::HLLParseError::new(e, f.into(), policy_str.clone()));
+            Err(evec) => {
+                for e in evec {
+                    // TODO: avoid String duplication
+                    errors.add_error(error::HLLParseError::new(e, f.into(), policy_str.clone()));
+                }
                 continue;
             }
         };
@@ -164,10 +166,33 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
 
 fn parse_policy<'a>(
     policy: &'a str,
-) -> Result<Box<Policy>, ParseError<usize, lalrpop_util::lexer::Token<'a>, &'static str>> {
+) -> Result<Box<Policy>, Vec<ParseError<usize, lalrpop_util::lexer::Token<'a>, &'static str>>> {
+    let mut errors = Vec::new();
     // TODO: Probably should only construct once
     // Why though?
-    parser::PolicyParser::new().parse(policy)
+    let parse_res = parser::PolicyParser::new().parse(&mut errors, policy);
+    // errors is a vec of ErrorRecovery.  ErrorRecovery is a struct wrapping a ParseError
+    // and a sequence of discarded characters.  We don't need those characters, so we just
+    // remove the wrapping.
+    let mut parse_errors: Vec<ParseError<usize, lalrpop_util::lexer::Token, &str>> =
+        errors.iter().map(|e| e.error.clone()).collect();
+    match parse_res {
+        Ok(p) => {
+            if !errors.is_empty() {
+                // Lalrpop returns errors in the reverse order they were found
+                // Reverse so that display is in source line order
+                parse_errors.reverse();
+                Err(parse_errors)
+            } else {
+                Ok(p)
+            }
+        }
+        Err(e) => {
+            parse_errors.push(e);
+            parse_errors.reverse();
+            Err(parse_errors)
+        }
+    }
 }
 
 fn generate_cil(v: Vec<sexp::Sexp>) -> String {
@@ -303,39 +328,46 @@ mod tests {
 
     #[test]
     fn basic_expression_parse_test() {
-        let res = parser::ExprParser::new().parse("domain foo {}");
+        let mut errors = Vec::new();
+        let res = parser::ExprParser::new().parse(&mut errors, "domain foo {}");
         assert!(res.is_ok(), "Parse Error: {:?}", res);
 
-        let res = parser::ExprParser::new().parse("virtual resource foo {}");
+        let res = parser::ExprParser::new().parse(&mut errors, "virtual resource foo {}");
         assert!(res.is_ok(), "Parse Error: {:?}", res);
 
-        let res = parser::ExprParser::new().parse("this.read();");
+        let res = parser::ExprParser::new().parse(&mut errors, "this.read();");
         assert!(res.is_ok(), "Parse Error: {:?}", res);
+
+        assert_eq!(errors.len(), 0);
     }
 
     #[test]
     fn name_decl_test() {
+        let mut errors = Vec::new();
         for name in &["a", "a_a", "a_a_a", "a_aa_a", "a0", "a_0", "a0_00"] {
             let _: ast::HLLString = parser::NameDeclParser::new()
-                .parse(name)
+                .parse(&mut errors, name)
                 .expect(&format!("failed to validate `{}`", name));
         }
         for name in &[
             "0", "0a", "_", "_a", "a_", "a_a_", "a__a", "a__a_a", "a_a___a", "-", "a-a",
         ] {
             let _: ParseError<_, _, _> = parser::NameDeclParser::new()
-                .parse(name)
+                .parse(&mut errors, name)
                 .expect_err(&format!("successfully validated invalid `{}`", name));
         }
+        assert_eq!(errors.len(), 0)
     }
 
     #[test]
     fn basic_policy_parse_test() {
+        let mut errors = Vec::new();
         let policy_file = [POLICIES_DIR, "tmp_file.cas"].concat();
         let policy = fs::read_to_string(policy_file).unwrap();
 
-        let res = parser::PolicyParser::new().parse(&policy);
+        let res = parser::PolicyParser::new().parse(&mut errors, &policy);
         assert!(res.is_ok(), "Parse Error: {:?}", res);
+        assert_eq!(errors.len(), 0);
     }
 
     #[test]
