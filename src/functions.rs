@@ -1387,7 +1387,7 @@ impl<'a> FunctionInfo<'a> {
                 }
                 type_aliases
             }
-            FunctionClass::Collection(_) => todo!(),
+            FunctionClass::Collection(_) => vec![None], // TODO
             FunctionClass::Global => vec![None],
         };
 
@@ -2225,11 +2225,11 @@ impl ValidatedCall {
             }
         }
 
-        let mut args = match &call.class_name {
-            Some(class_name) => {
+        let mut args = match (&call.class_name, function_info.class) {
+            (Some(class_name), FunctionClass::Type(_)) => {
                 vec![convert_class_name_if_this(class_name, parent_type)?.get_cil_name()]
             }
-            None => Vec::new(),
+            _ => Vec::new(),
         };
 
         for arg in validate_arguments(

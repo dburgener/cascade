@@ -734,6 +734,19 @@ mod tests {
     }
 
     #[test]
+    fn collection_test() {
+        valid_policy_test(
+            "collection.cas",
+            &[
+                "(macro foobar_reader-read_foo_and_bar",
+                "(call foobar_reader-read_foo_and_bar",
+            ],
+            &[],
+            0,
+        );
+    }
+
+    #[test]
     fn makelist_test() {
         let policy_file = [POLICIES_DIR, "makelist.cas"].concat();
 
