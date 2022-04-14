@@ -3,23 +3,20 @@
 use selinux_cascade::compile_system_policy;
 use selinux_cascade::error::HLLErrorItem;
 
-use clap::{crate_authors, crate_version, App, Arg};
+use clap::Parser;
 use std::fs::File;
 use std::io::{Error, ErrorKind, Write};
 
-fn main() -> std::io::Result<()> {
-    let matches = App::new("casc")
-        .version(crate_version!())
-        .author(crate_authors!("\n"))
-        .arg(
-            Arg::with_name("INPUT_FILE")
-                .help("Cascade policy files to parse")
-                .required(true)
-                .multiple(true),
-        )
-        .get_matches();
+#[derive(Parser, Debug)]
+#[clap(author, version, name = "casc")]
+struct Args {
+    #[clap(required(true))]
+    input_file: Vec<String>,
+}
 
-    let policies: Vec<&str> = matches.values_of("INPUT_FILE").unwrap().collect();
+fn main() -> std::io::Result<()> {
+    let args = Args::parse();
+    let policies: Vec<&str> = args.input_file.iter().map(|s| s as &str).collect();
     let mut out_file = File::create("out.cil")?;
     let res = compile_system_policy(policies);
     match res {
