@@ -93,6 +93,7 @@ pub fn extend_type_map(p: &PolicyFile, type_map: &mut TypeMap) -> Result<(), HLL
     // TODO: This only allows declarations at the top level.
     // Nested declarations are legal, but auto-associate with the parent, so they'll need special
     // handling when association is implemented
+    let mut errors = HLLErrors::new();
     for e in &p.policy.exprs {
         let d = match e {
             Expression::Decl(d) => d,
@@ -100,12 +101,15 @@ pub fn extend_type_map(p: &PolicyFile, type_map: &mut TypeMap) -> Result<(), HLL
         };
         match d {
             Declaration::Type(t) => {
-                type_map.insert(t.name.to_string(), TypeInfo::new(*t.clone(), &p.file)?)
+                match TypeInfo::new(*t.clone(), &p.file) {
+                    Ok(new_type) => type_map.insert(t.name.to_string(), new_type),
+                    Err(e) => { errors.append(e); None }
+                }
             }
             Declaration::Func(_) => continue,
         };
     }
-    Ok(())
+    errors.into_result(())
 }
 
 pub fn get_built_in_types_map() -> TypeMap {
