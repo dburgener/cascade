@@ -63,6 +63,7 @@ pub struct Associated {
 pub enum AnnotationInfo {
     MakeList,
     Associate(Associated),
+    Alias(HLLString),
 }
 
 #[derive(Clone, Debug)]
@@ -367,12 +368,29 @@ fn get_type_annotations(
                     ));
                 }
             }
+            "alias" => {
+                for a in &annotation.arguments {
+                    match a {
+                        Argument::Var(a) => {
+                            infos.insert(AnnotationInfo::Alias(a.clone()));
+                        }
+                        _ => {
+                            return Err(HLLCompileError::new(
+                                "Invalid alias",
+                                file,
+                                a.get_range(),
+                                "This must be a symbol",
+                            ));
+                        }
+                    }
+                }
+            }
             _ => {
                 return Err(HLLCompileError::new(
                     "Unknown annotation",
                     file,
                     annotation.name.get_range(),
-                    "The only known annotations are '@makelist' and '@associate'.",
+                    "This is not a valid annotation name.",
                 ));
             }
         }
