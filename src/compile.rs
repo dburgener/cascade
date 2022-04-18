@@ -102,10 +102,7 @@ pub fn extend_type_map(p: &PolicyFile, type_map: &mut TypeMap) -> Result<(), HLL
         match d {
             Declaration::Type(t) => match TypeInfo::new(*t.clone(), &p.file) {
                 Ok(new_type) => type_map.insert(t.name.to_string(), new_type),
-                Err(e) => {
-                    errors.append(e);
-                    None
-                }
+                Err(e) => errors.append(e),
             },
             Declaration::Func(_) => continue,
         };
@@ -455,7 +452,7 @@ fn interpret_associate(
     }
 
     for (_, (res, _)) in potential_resources.iter().filter(|(_, (_, seen))| !seen) {
-        match types.get(&res.to_string()) {
+        match types.get(res.as_ref()) {
             Some(class) => {
                 match create_synthetic_resource(
                     types,
@@ -551,7 +548,7 @@ fn inherit_annotations<'a>(
     let inherited_annotations = {
         let mut ret = Vec::new();
         for parent_name in &dom_info.inherits {
-            let parent_ti = match types.get(&parent_name.to_string()) {
+            let parent_ti = match types.get(parent_name.as_ref()) {
                 Some(p) => p,
                 // Ignores inheritance issues for now, see bad_type_error_test().
                 None => continue,
@@ -653,7 +650,7 @@ pub fn apply_annotations<'a>(
 fn check_non_virtual_inheritance(types: &TypeMap) -> Result<(), HLLErrors> {
     for t in types.values() {
         for parent in &t.inherits {
-            if let Some(p) = types.get(&parent.to_string()) {
+            if let Some(p) = types.get(parent.as_ref()) {
                 if !p.is_virtual {
                     return Err(HLLErrorItem::make_compile_or_internal_error(
                         "Inheriting from a non-virtual type is not yet supported",
