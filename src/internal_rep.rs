@@ -23,7 +23,36 @@ const DEFAULT_OBJECT_ROLE: &str = "object_r";
 const DEFAULT_DOMAIN_ROLE: &str = "system_r";
 const DEFAULT_MLS: &str = "s0";
 
-pub type TypeMap = BTreeMap<String, TypeInfo>;
+pub struct TypeMap {
+    types: BTreeMap<String, TypeInfo>,
+    #[allow(dead_code)]
+    aliases: BTreeMap<String, String>,
+}
+
+impl TypeMap {
+    pub fn get(&self, key: &str) -> Option<&TypeInfo> {
+        self.types.get(key)
+    }
+
+    pub fn new() -> Self {
+        TypeMap {
+            types: BTreeMap::new(),
+            aliases: BTreeMap::new(),
+        }
+    }
+
+    pub fn insert(&mut self, key: String, value: TypeInfo) {
+        self.types.insert(key, value);
+    }
+
+    pub fn values(&self) -> std::collections::btree_map::Values<'_, String, TypeInfo> {
+        self.types.values()
+    }
+
+    pub fn iter(&self) -> std::collections::btree_map::Iter<'_, String, TypeInfo> {
+        self.types.iter()
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Associated {
@@ -140,7 +169,7 @@ impl TypeInfo {
         }
 
         for parent in &self.inherits {
-            let parent_typeinfo = match types.get(&parent.to_string()) {
+            let parent_typeinfo = match types.get(parent.as_ref()) {
                 Some(t) => t,
                 None => continue,
             };
@@ -178,7 +207,7 @@ impl TypeInfo {
     }
 
     pub fn is_type_by_name(&self, types: &TypeMap, name: &str) -> bool {
-        let ti = match types.get(&name.to_string()) {
+        let ti = match types.get(name.as_ref()) {
             Some(ti) => ti,
             None => return false,
         };
