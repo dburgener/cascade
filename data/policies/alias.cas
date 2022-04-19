@@ -1,0 +1,9 @@
+@alias(foo)
+@alias(bar)
+resource baz {}
+
+domain quz {
+	allow(this, foo, file, read);
+	allow(this, bar, file, write);
+	allow(this, baz, file, open);
+}

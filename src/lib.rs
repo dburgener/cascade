@@ -111,7 +111,7 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
 
         // TODO: Validate original functions before adding synthetic ones to avoid confusing errors for users.
 
-        match compile::apply_annotations(&type_map, &tmp_func_map) {
+        match compile::apply_associate_annotations(&type_map, &tmp_func_map) {
             Ok(exprs) => {
                 let pf = PolicyFile::new(
                     Policy::new(exprs),
@@ -128,6 +128,10 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
     // Stops if something went wrong for this major step.
     errors = errors.into_result_self()?;
 
+    // Generate type aliases
+    let t_aliases = compile::collect_aliases(type_map.iter());
+    type_map.set_aliases(t_aliases);
+
     // Collect all function declarations
     for p in &policies {
         let mut m = match compile::build_func_map(&p.policy.exprs, &type_map, None, &p.file) {
@@ -141,6 +145,8 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
     }
     // Stops if something went wrong for this major step.
     errors = errors.into_result_self()?;
+
+    //func_map.set_aliases(f_aliases); //TODO
 
     // Validate all functions
     let func_map_copy = func_map.clone(); // In order to read function info while mutating
@@ -433,6 +439,11 @@ mod tests {
     }
 
     #[test]
+    fn alias_test() {
+        valid_policy_test("alias.cas", &["(typealias bar)", "(typealiasactual bar baz)"])
+    }
+
+    #[test]
     fn makelist_test() {
         let policy_file = [POLICIES_DIR, "makelist.cas"].concat();
 
@@ -487,6 +498,11 @@ mod tests {
     #[test]
     fn non_virtual_inherit_test() {
         error_policy_test!("non_virtual_inherit.cas", 1, HLLErrorItem::Compile(_));
+    }
+
+    #[test]
+    fn bad_alias_test() {
+        error_policy_test!("alias.cas", 2, HLLErrorItem::Compile(_));
     }
 
     #[test]
