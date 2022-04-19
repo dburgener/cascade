@@ -1234,6 +1234,7 @@ pub struct FunctionInfo<'a> {
     pub name: String,
     pub class: Option<&'a TypeInfo>,
     pub args: Vec<FunctionArgument<'a>>,
+    pub annotations: BTreeSet<AnnotationInfo>,
     pub original_body: &'a Vec<Statement>,
     pub body: Option<BTreeSet<ValidatedStatement<'a>>>,
     pub declaration_file: &'a SimpleFile<String, String>,
@@ -1250,6 +1251,7 @@ impl<'a> FunctionInfo<'a> {
     ) -> Result<FunctionInfo<'a>, HLLErrors> {
         let mut args = Vec::new();
         let mut errors = HLLErrors::new();
+        let mut annotations = BTreeSet::new();
 
         // All member functions automatically have "this" available as a reference to their type
         if let Some(parent_type) = parent_type {
@@ -1282,6 +1284,23 @@ impl<'a> FunctionInfo<'a> {
                     }
                     is_associated_call =
                         check_associated_call(annotation, funcdecl, declaration_file)?;
+                    // We're done with these, so no need to save them in the annotations
+                }
+                "alias" => {
+                    for arg in &annotation.arguments {
+                        match arg {
+                            Argument::Var(s) => {
+                                annotations.insert(AnnotationInfo::Alias(s.clone()));
+                            }
+                            _ => {
+                                return Err(HLLCompileError::new(
+                                    "Invalid alias",
+                                    declaration_file,
+                                    annotation.name.get_range(),
+                                    "Alias name must be a symbol").into());
+                            }
+                        }
+                    }
                 }
                 _ => {
                     return Err(HLLCompileError::new(
@@ -1299,6 +1318,7 @@ impl<'a> FunctionInfo<'a> {
             name: funcdecl.name.to_string(),
             class: parent_type,
             args,
+            annotations,
             original_body: &funcdecl.body,
             body: None,
             declaration_file,
