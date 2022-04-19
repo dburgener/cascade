@@ -31,7 +31,12 @@ pub struct TypeMap {
 
 impl TypeMap {
     pub fn get(&self, key: &str) -> Option<&TypeInfo> {
-        self.types.get(key)
+        let type_name = if self.aliases.contains_key(key) {
+            &self.aliases[key]
+        } else {
+            key
+        };
+        self.types.get(type_name)
     }
 
     pub fn new() -> Self {
@@ -51,6 +56,10 @@ impl TypeMap {
 
     pub fn iter(&self) -> std::collections::btree_map::Iter<'_, String, TypeInfo> {
         self.types.iter()
+    }
+
+    pub fn set_aliases(&mut self, aliases: BTreeMap<String, String>) {
+        self.aliases = aliases
     }
 }
 
@@ -81,6 +90,10 @@ impl BoundTypeInfo {
             BoundTypeInfo::Unbound => Vec::new(),
         }
     }
+}
+
+pub trait Annotated {
+    fn get_annotations(&self) -> std::collections::btree_set::Iter<AnnotationInfo>;
 }
 
 #[derive(Clone, Debug)]
@@ -114,6 +127,12 @@ impl PartialOrd for TypeInfo {
 impl Ord for TypeInfo {
     fn cmp(&self, other: &Self) -> Ordering {
         self.name.cmp(&other.name)
+    }
+}
+
+impl Annotated for &TypeInfo {
+    fn get_annotations(&self) -> std::collections::btree_set::Iter<AnnotationInfo> {
+        self.annotations.iter()
     }
 }
 

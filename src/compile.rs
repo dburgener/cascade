@@ -12,7 +12,7 @@ use crate::constants;
 use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
 use crate::internal_rep::{
     argument_to_typeinfo, argument_to_typeinfo_vec, generate_sid_rules, type_slice_to_variant,
-    AnnotationInfo, ArgForValidation, Associated, BoundTypeInfo, ClassList, Context,
+    Annotated, AnnotationInfo, ArgForValidation, Associated, BoundTypeInfo, ClassList, Context,
     FunctionArgument, FunctionInfo, FunctionMap, Sid, TypeInfo, TypeMap, ValidatedStatement,
 };
 
@@ -490,7 +490,7 @@ struct InheritedAnnotation<'a> {
     parent: Option<&'a TypeInfo>,
 }
 
-fn interpret_annotations<'a, T>(
+fn interpret_inherited_annotations<'a, T>(
     global_exprs: &mut HashSet<Expression>,
     associate_exprs: &mut AssociateExprs,
     funcs: &FunctionMap<'_>,
@@ -567,7 +567,7 @@ fn inherit_annotations<'a>(
         }
         ret
     };
-    match interpret_annotations(
+    match interpret_inherited_annotations(
         global_exprs,
         associate_exprs,
         funcs,
@@ -595,7 +595,7 @@ fn inherit_annotations<'a>(
     })
 }
 
-pub fn apply_annotations<'a>(
+pub fn apply_associate_annotations<'a>(
     types: &'a TypeMap,
     funcs: &FunctionMap<'_>,
 ) -> Result<Vec<Expression>, HLLErrors> {
@@ -716,6 +716,25 @@ fn organize_type_map(types: &TypeMap) -> Result<Vec<&TypeInfo>, HLLErrors> {
     Ok(out)
 }
 
+// TODO: Make generic
+// Gather all the alias annotations for types and functions and return them so they can be stored
+// in the maps
+pub fn collect_aliases<'a, I, T>(aliasable_map: I) -> BTreeMap<String, String>
+    where I: Iterator<Item = (&'a String, T)>,
+          T: Annotated
+{
+    let mut aliases = BTreeMap::new();
+    for (k,v) in aliasable_map {
+        for a in v.get_annotations() {
+            if let AnnotationInfo::Alias(a) = a {
+                aliases.insert(a.to_string(), k.clone());
+            }
+        }
+    }
+    
+    aliases
+}
+
 fn do_rules_pass<'a>(
     exprs: &'a [Expression],
     types: &'a TypeMap,
@@ -804,6 +823,17 @@ fn get_rules_vec_for_type(ti: &TypeInfo, s: sexp::Sexp, type_map: &TypeMap) -> V
         ]));
     }
 
+    for a in &ti.annotations {
+        if let AnnotationInfo::Alias(a) = a {
+            ret.push(list(&[
+                          atom_s("typealias"),
+                          atom_s(a.as_ref())]));
+            ret.push(list(&[
+                          atom_s("typealiasactual"),
+                          atom_s(a.as_ref()),
+                          atom_s(ti.name.as_ref())]));
+        }
+    }
     ret
 }
 
