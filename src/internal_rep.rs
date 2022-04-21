@@ -23,43 +23,70 @@ const DEFAULT_OBJECT_ROLE: &str = "object_r";
 const DEFAULT_DOMAIN_ROLE: &str = "system_r";
 const DEFAULT_MLS: &str = "s0";
 
-pub struct TypeMap {
-    types: BTreeMap<String, TypeInfo>,
+#[derive(Clone)]
+pub struct AliasMap<T> {
+    declarations: BTreeMap<String, T>,
     #[allow(dead_code)]
     aliases: BTreeMap<String, String>,
 }
 
-impl TypeMap {
-    pub fn get(&self, key: &str) -> Option<&TypeInfo> {
+pub type TypeMap = AliasMap<TypeInfo>;
+
+impl<T> AliasMap<T> {
+    pub fn get(&self, key: &str) -> Option<&T> {
         let type_name = if self.aliases.contains_key(key) {
             &self.aliases[key]
         } else {
             key
         };
-        self.types.get(type_name)
+        self.declarations.get(type_name)
     }
 
     pub fn new() -> Self {
-        TypeMap {
-            types: BTreeMap::new(),
+        AliasMap {
+            declarations: BTreeMap::new(),
             aliases: BTreeMap::new(),
         }
     }
 
-    pub fn insert(&mut self, key: String, value: TypeInfo) {
-        self.types.insert(key, value);
+    pub fn insert(&mut self, key: String, value: T) {
+        self.declarations.insert(key, value);
     }
 
-    pub fn values(&self) -> std::collections::btree_map::Values<'_, String, TypeInfo> {
-        self.types.values()
+    pub fn values(&self) -> std::collections::btree_map::Values<'_, String, T> {
+        self.declarations.values()
     }
 
-    pub fn iter(&self) -> std::collections::btree_map::Iter<'_, String, TypeInfo> {
-        self.types.iter()
+    pub fn values_mut(&mut self) -> std::collections::btree_map::ValuesMut<'_, String, T> {
+        self.declarations.values_mut()
+    }
+
+    pub fn iter(&self) -> std::collections::btree_map::Iter<'_, String, T> {
+        self.declarations.iter()
+    }
+
+    pub fn append(&mut self, other: &mut AliasMap<T>) {
+        self.declarations.append(&mut other.declarations);
+        self.aliases.append(&mut other.aliases);
     }
 
     pub fn set_aliases(&mut self, aliases: BTreeMap<String, String>) {
         self.aliases = aliases
+    }
+}
+
+impl<T> Extend<(String, T)> for AliasMap<T> {
+    fn extend<I: IntoIterator<Item = (String, T)>>(&mut self, iter: I) {
+        self.declarations.extend(iter)
+    }
+}
+
+impl<T> IntoIterator for AliasMap<T> {
+    type Item = (String, T);
+    type IntoIter = std::collections::btree_map::IntoIter<String, T>;
+
+    fn into_iter(self) -> std::collections::btree_map::IntoIter<String, T> {
+        self.declarations.into_iter()
     }
 }
 
@@ -1227,7 +1254,7 @@ fn check_associated_call(
     Ok(true)
 }
 
-pub type FunctionMap<'a> = BTreeMap<String, FunctionInfo<'a>>;
+pub type FunctionMap<'a> = AliasMap<FunctionInfo<'a>>;
 
 #[derive(Debug, Clone)]
 pub struct FunctionInfo<'a> {
@@ -1297,7 +1324,9 @@ impl<'a> FunctionInfo<'a> {
                                     "Invalid alias",
                                     declaration_file,
                                     annotation.name.get_range(),
-                                    "Alias name must be a symbol").into());
+                                    "Alias name must be a symbol",
+                                )
+                                .into());
                             }
                         }
                     }

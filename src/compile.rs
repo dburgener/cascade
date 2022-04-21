@@ -716,22 +716,22 @@ fn organize_type_map(types: &TypeMap) -> Result<Vec<&TypeInfo>, HLLErrors> {
     Ok(out)
 }
 
-// TODO: Make generic
 // Gather all the alias annotations for types and functions and return them so they can be stored
 // in the maps
 pub fn collect_aliases<'a, I, T>(aliasable_map: I) -> BTreeMap<String, String>
-    where I: Iterator<Item = (&'a String, T)>,
-          T: Annotated
+where
+    I: Iterator<Item = (&'a String, T)>,
+    T: Annotated,
 {
     let mut aliases = BTreeMap::new();
-    for (k,v) in aliasable_map {
+    for (k, v) in aliasable_map {
         for a in v.get_annotations() {
             if let AnnotationInfo::Alias(a) = a {
                 aliases.insert(a.to_string(), k.clone());
             }
         }
     }
-    
+
     aliases
 }
 
@@ -825,13 +825,12 @@ fn get_rules_vec_for_type(ti: &TypeInfo, s: sexp::Sexp, type_map: &TypeMap) -> V
 
     for a in &ti.annotations {
         if let AnnotationInfo::Alias(a) = a {
+            ret.push(list(&[atom_s("typealias"), atom_s(a.as_ref())]));
             ret.push(list(&[
-                          atom_s("typealias"),
-                          atom_s(a.as_ref())]));
-            ret.push(list(&[
-                          atom_s("typealiasactual"),
-                          atom_s(a.as_ref()),
-                          atom_s(ti.name.as_ref())]));
+                atom_s("typealiasactual"),
+                atom_s(a.as_ref()),
+                atom_s(ti.name.as_ref()),
+            ]));
         }
     }
     ret
