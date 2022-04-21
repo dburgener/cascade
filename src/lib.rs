@@ -440,7 +440,10 @@ mod tests {
 
     #[test]
     fn alias_test() {
-        valid_policy_test("alias.cas", &["(typealias bar)", "(typealiasactual bar baz)"])
+        valid_policy_test(
+            "alias.cas",
+            &["(typealias bar)", "(typealiasactual bar baz)"],
+        )
     }
 
     #[test]
