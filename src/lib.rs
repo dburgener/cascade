@@ -280,7 +280,7 @@ mod tests {
         assert!(count > 9);
     }
 
-    fn valid_policy_test(filename: &str, expected_contents: &[&str]) {
+    fn valid_policy_test(filename: &str, expected_contents: &[&str], disallowed_contents: &[&str]) {
         let policy_file = [POLICIES_DIR, filename].concat();
         let policy_contents = match compile_system_policy(vec![&policy_file]) {
             Ok(p) => p,
@@ -290,6 +290,13 @@ mod tests {
             assert!(
                 policy_contents.contains(query),
                 "Output policy does not contain {}",
+                query
+            );
+        }
+        for query in disallowed_contents {
+            assert!(
+                !policy_contents.contains(query),
+                "Output policy contains {}",
                 query
             );
         }
@@ -388,12 +395,13 @@ mod tests {
                 "typeattributeset user_type (staff)",
                 "typeattributeset domain (user_type)",
             ],
+            &[],
         );
     }
 
     #[test]
     fn simple_policy_build_test() {
-        valid_policy_test("simple.cas", &[]);
+        valid_policy_test("simple.cas", &[], &[]);
     }
 
     #[test]
@@ -401,17 +409,18 @@ mod tests {
         valid_policy_test(
             "function.cas",
             &["macro my_file-read", "call my_file-read", "allow source"],
+            &[],
         );
     }
 
     #[test]
     fn auditallow_test() {
-        valid_policy_test("auditallow.cas", &["auditallow my_domain foo"]);
+        valid_policy_test("auditallow.cas", &["auditallow my_domain foo"], &[]);
     }
 
     #[test]
     fn dontaudit_test() {
-        valid_policy_test("dontaudit.cas", &["(dontaudit my_domain foo"]);
+        valid_policy_test("dontaudit.cas", &["(dontaudit my_domain foo"], &[]);
     }
 
     #[test]
@@ -419,6 +428,7 @@ mod tests {
         valid_policy_test(
             "arguments.cas",
             &["(macro foo-some_func ((type this) (name a) (name b) (type c) (type d))"],
+            &[],
         );
     }
 
@@ -427,17 +437,35 @@ mod tests {
         valid_policy_test(
             "filecon.cas",
             &["(filecon \"/bin\" file (", "(filecon \"/bin\" dir ("],
+            &[],
         );
     }
 
     #[test]
     fn domtrans_test() {
-        valid_policy_test("domtrans.cas", &["typetransition bar foo_exec process foo"]);
+        valid_policy_test(
+            "domtrans.cas",
+            &["typetransition bar foo_exec process foo"],
+            &[],
+        );
     }
 
     #[test]
     fn symbol_binding_test() {
-        valid_policy_test("let.cas", &["(allow foo bar (file (read open getattr)))"]);
+        valid_policy_test(
+            "let.cas",
+            &["(allow foo bar (file (read open getattr)))"],
+            &[],
+        );
+    }
+
+    #[test]
+    fn virtual_function_test() {
+        valid_policy_test(
+            "virtual_function.cas",
+            &["macro foo-foo"],
+            &["macro foo_parent-foo"],
+        );
     }
 
     #[test]
@@ -454,6 +482,7 @@ mod tests {
                 "macro foo-read",
                 "macro baz-list",
             ],
+            &[],
         )
     }
 
@@ -465,6 +494,7 @@ mod tests {
                 "(call some_domain-three_args (some_domain bar baz foo))",
                 "(call some_domain-three_args (some_domain foo bar baz))",
             ],
+            &[],
         );
     }
 
@@ -543,6 +573,21 @@ mod tests {
                     ..
                 })
             if msg == *"Function foo.read expected 2 arguments, got 1");
+    }
+
+    #[test]
+    fn virtual_function_error_test() {
+        let policy_file = [ERROR_POLICIES_DIR, "virtual_function_errors.cas"].concat();
+
+        match compile_system_policy(vec![&policy_file]) {
+            Ok(_) => panic!("Misuse of virtual function compiled successfully"),
+            Err(e) => {
+                assert_eq!(e.error_count(), 1);
+                for error in e {
+                    assert!(matches!(error, ErrorItem::Compile(_)));
+                }
+            }
+        }
     }
 
     #[test]
@@ -682,6 +727,7 @@ mod tests {
                 "typeattributeset bar (baz)",
                 "typeattributeset domain (baz)",
             ],
+            &[]
         );
     }
 }

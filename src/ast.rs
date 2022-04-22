@@ -190,7 +190,7 @@ impl Virtualable for Declaration {
     fn set_virtual(&mut self) {
         match self {
             Declaration::Type(t) => t.set_virtual(),
-            Declaration::Func(_f) => {} // TODO
+            Declaration::Func(f) => f.set_virtual(),
         }
     }
 }
@@ -259,18 +259,36 @@ pub fn get_cil_name(class_name: Option<&CascadeString>, func_name: &CascadeStrin
 pub struct FuncDecl {
     pub class_name: Option<CascadeString>,
     pub name: CascadeString,
+    pub is_virtual: bool,
     pub args: Vec<DeclaredArgument>,
     pub body: Vec<Statement>,
     pub annotations: Annotations,
 }
 
 impl FuncDecl {
+    pub fn new(name: CascadeString, args: Vec<DeclaredArgument>, body: Vec<Statement>) -> Self {
+        FuncDecl {
+            class_name: None,
+            name,
+            is_virtual: false,
+            args,
+            body,
+            annotations: Annotations::new(),
+        }
+    }
+
     pub fn get_cil_name(&self) -> String {
         get_cil_name(self.class_name.as_ref(), &self.name)
     }
 
     pub fn add_annotation(&mut self, annotation: Annotation) {
         self.annotations.push(annotation);
+    }
+}
+
+impl Virtualable for FuncDecl {
+    fn set_virtual(&mut self) {
+        self.is_virtual = true;
     }
 }
 

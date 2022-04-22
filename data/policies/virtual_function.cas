@@ -1,0 +1,13 @@
+virtual resource foo_parent {
+	virtual fn foo(domain source) {}
+}
+
+resource foo inherits foo_parent {
+	fn foo(domain source) {
+		allow(source, this, file, read);
+	}
+}
+
+domain bar {
+	foo.foo(this);
+}
