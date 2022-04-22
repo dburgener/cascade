@@ -869,7 +869,14 @@ fn func_map_to_sexp(funcs: &FunctionMap<'_>) -> Result<Vec<sexp::Sexp>, HLLError
     let mut errors = HLLErrors::new();
     for f in funcs.values() {
         match Sexp::try_from(f) {
-            Ok(f) => ret.push(f),
+            Ok(func_sexp) => {
+                ret.push(func_sexp);
+                for ann in &f.annotations {
+                    if let AnnotationInfo::Alias(a) = ann {
+                        ret.push(f.generate_synthetic_alias_call(a.as_ref()));
+                    }
+                }
+            }
             Err(e) => errors.add_error(e),
         }
     }

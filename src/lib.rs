@@ -146,7 +146,8 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
     // Stops if something went wrong for this major step.
     errors = errors.into_result_self()?;
 
-    //func_map.set_aliases(f_aliases); //TODO
+    let f_aliases = compile::collect_aliases(func_map.iter());
+    func_map.set_aliases(f_aliases);
 
     // Validate all functions
     let func_map_copy = func_map.clone(); // In order to read function info while mutating
@@ -442,7 +443,16 @@ mod tests {
     fn alias_test() {
         valid_policy_test(
             "alias.cas",
-            &["(typealias bar)", "(typealiasactual bar baz)"],
+            &[
+                "(typealias bar)",
+                "(typealiasactual bar baz)",
+                "macro baz-read",
+                "macro bar-list",
+                "macro bar-read",
+                "macro foo-list",
+                "macro foo-read",
+                "macro baz-list",
+            ],
         )
     }
 

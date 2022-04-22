@@ -244,6 +244,13 @@ impl Virtualable for TypeDecl {
     }
 }
 
+pub fn get_cil_name(class_name: Option<&HLLString>, func_name: &HLLString) -> String {
+    match &class_name {
+        Some(class) => format!("{}-{}", class, func_name),
+        None => func_name.to_string(),
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FuncDecl {
     pub class_name: Option<HLLString>,
@@ -255,10 +262,7 @@ pub struct FuncDecl {
 
 impl FuncDecl {
     pub fn get_cil_name(&self) -> String {
-        match &self.class_name {
-            Some(class) => format!("{}-{}", class, self.name),
-            None => self.name.to_string(),
-        }
+        get_cil_name(self.class_name.as_ref(), &self.name)
     }
 
     pub fn add_annotation(&mut self, annotation: Annotation) {
@@ -329,10 +333,7 @@ impl FuncCall {
     }
 
     pub fn get_cil_name(&self) -> String {
-        match &self.class_name {
-            Some(class) => format!("{}-{}", class, self.name),
-            None => self.name.to_string(),
-        }
+        get_cil_name(self.class_name.as_ref(), &self.name)
     }
 
     pub fn add_annotation(&mut self, annotation: Annotation) {
