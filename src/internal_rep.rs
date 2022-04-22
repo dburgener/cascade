@@ -12,8 +12,8 @@ use std::str::FromStr;
 use codespan_reporting::files::SimpleFile;
 
 use crate::ast::{
-    Annotation, Annotations, Argument, BuiltIns, DeclaredArgument, FuncCall, FuncDecl, HLLString,
-    Statement, TypeDecl,
+    get_cil_name, Annotation, Annotations, Argument, BuiltIns, DeclaredArgument, FuncCall,
+    FuncDecl, HLLString, Statement, TypeDecl,
 };
 use crate::constants;
 use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
@@ -1281,9 +1281,27 @@ impl<'a> FunctionInfo<'a> {
         let mut annotations = BTreeSet::new();
 
         // All member functions automatically have "this" available as a reference to their type
-        if let Some(parent_type) = parent_type {
+        let parent_type_name = if let Some(parent_type) = parent_type {
             args.push(FunctionArgument::new_this_argument(parent_type));
-        }
+            Some(&parent_type.name)
+        } else {
+            None
+        };
+
+        let class_aliases = match parent_type {
+            Some(ti) => {
+                let mut type_aliases = vec![Some(&ti.name)];
+                for ann in &ti.annotations {
+                    if let AnnotationInfo::Alias(alias_name) = ann {
+                        type_aliases.push(Some(alias_name));
+                    }
+                }
+                type_aliases
+            }
+            None => vec![None],
+        };
+
+        let mut func_aliases = vec![&funcdecl.name];
 
         for a in &funcdecl.args {
             match FunctionArgument::new(a, types, Some(declaration_file)) {
@@ -1317,7 +1335,7 @@ impl<'a> FunctionInfo<'a> {
                     for arg in &annotation.arguments {
                         match arg {
                             Argument::Var(s) => {
-                                annotations.insert(AnnotationInfo::Alias(s.clone()));
+                                func_aliases.push(s);
                             }
                             _ => {
                                 return Err(HLLCompileError::new(
@@ -1340,6 +1358,23 @@ impl<'a> FunctionInfo<'a> {
                     )
                     .into());
                 }
+            }
+        }
+
+        // For every function, there may be aliases to the class name or the function name.
+        // So if we have a function on class 'foo' named 'read', and 'foo' has an alias 'bar'
+        // and the 'read' function in 'foo' has an alias 'list', then we need to output functions
+        // named: 'foo-list', 'bar-read' and 'bar-list'.  (The real name, 'foo-read' is outputted
+        // by FunctionInfo try_from()).  These functions all call into the real function.
+        for class_alias in &class_aliases {
+            for func_alias in &func_aliases {
+                // No alias for real class and func combo
+                if *class_alias == parent_type_name && *func_alias == &funcdecl.name {
+                    continue;
+                }
+                annotations.insert(AnnotationInfo::Alias(
+                    get_cil_name(*class_alias, func_alias).into(),
+                ));
             }
         }
 
@@ -1386,6 +1421,27 @@ impl<'a> FunctionInfo<'a> {
         }
         self.body = Some(new_body);
         errors.into_result(())
+    }
+
+    // Generate the sexp for a synthetic alias function calling the real function
+    pub fn generate_synthetic_alias_call(&self, alias_cil_name: &str) -> sexp::Sexp {
+        let call = ValidatedCall {
+            cil_name: self.get_cil_name(),
+            args: self.args.iter().map(|a| a.name.clone()).collect(),
+        };
+
+        Sexp::List(vec![
+            atom_s("macro"),
+            atom_s(alias_cil_name),
+            Sexp::List(self.args.iter().map(Sexp::from).collect()),
+            Sexp::from(&call),
+        ])
+    }
+}
+
+impl Annotated for &FunctionInfo<'_> {
+    fn get_annotations(&self) -> std::collections::btree_set::Iter<AnnotationInfo> {
+        self.annotations.iter()
     }
 }
 
@@ -1602,7 +1658,16 @@ impl ValidatedCall {
         parent_args: Option<&[FunctionArgument]>,
         file: &SimpleFile<String, String>,
     ) -> Result<ValidatedCall, HLLErrors> {
-        let cil_name = call.get_cil_name();
+        let cil_name = match &call.class_name {
+            Some(class_name) => {
+                // Resolve aliases
+                match types.get(class_name.as_ref()) {
+                    Some(type_name) => get_cil_name(Some(&type_name.name), &call.name),
+                    None => call.get_cil_name(), // Expected to error out below
+                }
+            }
+            None => call.get_cil_name(),
+        };
         let function_info = match functions.get(&cil_name) {
             Some(function_info) => function_info,
             None => {
