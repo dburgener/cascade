@@ -872,6 +872,9 @@ fn func_map_to_sexp(funcs: &FunctionMap<'_>) -> Result<Vec<sexp::Sexp>, CascadeE
     let mut ret = Vec::new();
     let mut errors = CascadeErrors::new();
     for f in funcs.values() {
+        if f.is_virtual {
+            continue;
+        }
         match Sexp::try_from(f) {
             Ok(func_sexp) => {
                 ret.push(func_sexp);

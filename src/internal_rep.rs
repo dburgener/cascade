@@ -1298,6 +1298,7 @@ pub type FunctionMap<'a> = AliasMap<FunctionInfo<'a>>;
 pub struct FunctionInfo<'a> {
     pub name: String,
     pub class: Option<&'a TypeInfo>,
+    pub is_virtual: bool,
     pub args: Vec<FunctionArgument<'a>>,
     pub annotations: BTreeSet<AnnotationInfo>,
     pub original_body: &'a Vec<Statement>,
@@ -1419,6 +1420,7 @@ impl<'a> FunctionInfo<'a> {
         errors.into_result(FunctionInfo {
             name: funcdecl.name.to_string(),
             class: parent_type,
+            is_virtual: funcdecl.is_virtual,
             args,
             annotations,
             original_body: &funcdecl.body,
@@ -1716,6 +1718,15 @@ impl ValidatedCall {
                 ))));
             }
         };
+
+        if function_info.is_virtual {
+            return Err(CascadeErrors::from(CompileError::new(
+                "Invalid call to virtual function",
+                file,
+                call.get_name_range(),
+                "This function is marked as virtual, so it can't be called.",
+            )));
+        }
 
         // Each argument must match the type the function signature expects
         let mut args = match &call.class_name {

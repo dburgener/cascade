@@ -1,0 +1,7 @@
+virtual resource foo_parent {
+	virtual fn foo(domain source) {}
+}
+
+domain bar {
+	foo_parent.foo(this); // Illegal call
+}

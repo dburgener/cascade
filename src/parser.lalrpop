@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
-use crate::ast::{CascadeString, Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, Annotations, LetBinding, Virtualable, FuncCall, DeclaredArgument};
+use crate::ast::{CascadeString, Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, LetBinding, Virtualable, FuncCall, DeclaredArgument};
 use lalrpop_util::ErrorRecovery;
 
 grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, &'static str>>);
@@ -74,7 +74,7 @@ BuiltInType: CascadeString = {
 }
 
 FuncDecl: Box<FuncDecl> = {
-	"fn" <n: NameDecl> "(" <a: Comma<FuncDeclArg>> ")" "{" <b: Stmt+> "}" => Box::new(FuncDecl { class_name: None, name: n, args: a, body: b, annotations: Annotations::new() }),
+	"fn" <n: NameDecl> "(" <a: Comma<FuncDeclArg>> ")" "{" <b: Stmt*> "}" => Box::new(FuncDecl::new(n, a, b)),
 }
 
 FuncDeclArg: DeclaredArgument = {
