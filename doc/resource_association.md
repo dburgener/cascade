@@ -73,7 +73,7 @@ resource tmp_file {
 		this.manage_files(source);
 		this.manage_dirs(source);
 		this.manage_symlinks(source);
-		resource_transition(source, this, [file dir symlink]);
+		resource_transition(this, source, tmp_file, [file dir symlink]);
 	}
 }
 ```
@@ -117,6 +117,13 @@ resource some_qemu_domain-qemu_tmp inherits qemu_tmp {}
 
 The `associate_tmp_files()` call will also automatically be performed as part
 of the inheritance from `qemu`.
+
+Note that a consequence of this is that the "this" keyword in the original
+definition may refer to an automatically created type (some_qemu_domain-qemu-tmp
+in this example).  This means that there is a distinction between using the type
+name (where it will always refer to the original type) and the keyword "this"
+(which will refer to a specific instantiation such as an inherited or
+automatically created type).
 
 
 [1] https://github.com/SELinuxProject/refpolicy/blob/master/policy/modules/system/iptables.te
