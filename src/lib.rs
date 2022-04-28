@@ -285,6 +285,22 @@ mod tests {
         assert!(!err, "Error removing generated policy files");
     }
 
+    macro_rules! error_policy_test {
+        ($filename:literal, $expected_error_count:literal, $error_pattern:pat_param $(if $guard:expr)?) => {
+            let policy_file = [ERROR_POLICIES_DIR, $filename].concat();
+
+            match compile_system_policy(vec![&policy_file]) {
+                Ok(_) => panic!("{} compiled successfully", $filename),
+                Err(e) => {
+                    assert_eq!(e.error_count(), $expected_error_count);
+                    for error in e {
+                        assert!(matches!(error, $error_pattern $(if $guard)?));
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn basic_expression_parse_test() {
         let res = parser::ExprParser::new().parse("domain foo {}");
@@ -423,157 +439,82 @@ mod tests {
 
     #[test]
     fn cycle_error_test() {
-        let policy_file = [ERROR_POLICIES_DIR, "cycle.cas"].concat();
-
-        match compile_system_policy(vec![&policy_file]) {
-            Ok(_) => panic!("Cycle compiled successfully"),
-            Err(mut e) => {
-                assert!(matches!(e.next(), Some(HLLErrorItem::Compile(_))));
-                assert!(matches!(e.next(), Some(HLLErrorItem::Compile(_))));
-                assert!(matches!(e.next(), None));
-            }
-        }
+        error_policy_test!("cycle.cas", 2, HLLErrorItem::Compile(_));
     }
 
     #[test]
     fn bad_type_error_test() {
-        let policy_file = [ERROR_POLICIES_DIR, "nonexistent_inheritance.cas"].concat();
-
-        match compile_system_policy(vec![&policy_file]) {
-            Ok(_) => panic!("Nonexistent type compiled successfully"),
-            Err(mut e) => {
-                assert!(matches!(e.next(), Some(HLLErrorItem::Compile(_))));
-                assert!(matches!(e.next(), None));
-            }
-        }
+        error_policy_test!("nonexistent_inheritance.cas", 1, HLLErrorItem::Compile(_));
     }
 
     #[test]
     fn bad_allow_rules_test() {
-        let policy_file = [ERROR_POLICIES_DIR, "bad_allow.cas"].concat();
-
-        match compile_system_policy(vec![&policy_file]) {
-            Ok(_) => panic!("Bad allow rules compiled successfully"),
-            Err(e) => {
-                assert_eq!(e.error_count(), 3);
-                for error in e {
-                    assert!(matches!(error, HLLErrorItem::Compile(_)));
-                }
-            }
-        }
+        error_policy_test!("bad_allow.cas", 3, HLLErrorItem::Compile(_));
     }
 
     #[test]
     fn non_virtual_inherit_test() {
-        let policy_file = [ERROR_POLICIES_DIR, "non_virtual_inherit.cas"].concat();
-
-        match compile_system_policy(vec![&policy_file]) {
-            Ok(_) => panic!("Non virtual inheritance compiled successfully"),
-            Err(e) => {
-                assert_eq!(e.error_count(), 1);
-                for error in e {
-                    assert!(matches!(error, HLLErrorItem::Compile(_)));
-                }
-            }
-        }
+        error_policy_test!("non_virtual_inherit.cas", 1, HLLErrorItem::Compile(_));
     }
 
     #[test]
     fn parsing_unrecognized_token() {
-        let policy_file = [ERROR_POLICIES_DIR, "parse_unrecognized_token.cas"].concat();
-
-        match compile_system_policy(vec![&policy_file]) {
-            Ok(_) => panic!("Bad grammar compiled successfully"),
-            Err(e) => {
-                for error in e {
-                    assert!(matches!(
-                                error,
-                                HLLErrorItem::Parse(HLLParseError {
-                                    diagnostic: Diag {
-                                        inner: Diagnostic {
-                                            message: msg,
-                                            ..
-                                        }
-                                    },
-                                    ..
-                                })
-                                if msg == *"Unexpected character \".\""));
-                }
-            }
-        }
+        error_policy_test!("parse_unrecognized_token.cas", 1,
+            HLLErrorItem::Parse(HLLParseError {
+                diagnostic: Diag {
+                    inner: Diagnostic {
+                        message: msg,
+                        ..
+                    }
+                },
+                ..
+            })
+            if msg == *"Unexpected character \".\"");
     }
 
     #[test]
     fn parsing_unknown_token() {
-        let policy_file = [ERROR_POLICIES_DIR, "parse_unknown_token.cas"].concat();
-
-        match compile_system_policy(vec![&policy_file]) {
-            Ok(_) => panic!("Bad grammar compiled successfully"),
-            Err(e) => {
-                for error in e {
-                    assert!(matches!(
-                                error,
-                                HLLErrorItem::Parse(HLLParseError {
-                                    diagnostic: Diag {
-                                        inner: Diagnostic {
-                                            message: msg,
-                                            ..
-                                        }
-                                    },
-                                    ..
-                                })
-                                if msg == *"Unknown character"));
-                }
-            }
-        }
+        error_policy_test!("parse_unknown_token.cas", 1,
+            HLLErrorItem::Parse(HLLParseError {
+                diagnostic: Diag {
+                    inner: Diagnostic {
+                        message: msg,
+                        ..
+                    }
+                },
+                ..
+            })
+            if msg == *"Unknown character");
     }
 
     #[test]
     fn parsing_unexpected_eof() {
-        let policy_file = [ERROR_POLICIES_DIR, "parse_unexpected_eof.cas"].concat();
-
-        match compile_system_policy(vec![&policy_file]) {
-            Ok(_) => panic!("Bad grammar compiled successfully"),
-            Err(e) => {
-                for error in e {
-                    assert!(matches!(
-                                error,
-                                HLLErrorItem::Parse(HLLParseError {
-                                    diagnostic: Diag {
-                                        inner: Diagnostic {
-                                            message: msg,
-                                            ..
-                                        }
-                                    },
-                                    ..
-                                })
-                                if msg == *"Unexpected end of file"));
-                }
-            }
-        }
+        error_policy_test!("parse_unexpected_eof.cas", 1,
+            HLLErrorItem::Parse(HLLParseError {
+                diagnostic: Diag {
+                    inner: Diagnostic {
+                        message: msg,
+                        ..
+                    }
+                },
+                ..
+            })
+            if msg == *"Unexpected end of file");
     }
 
     #[test]
     fn domain_filecon_test() {
-        let policy_file = [ERROR_POLICIES_DIR, "domain_filecon.cas"].concat();
-
-        match compile_system_policy(vec![&policy_file]) {
-            Ok(_) => panic!("file_context() in domain compiled successfully"),
-            Err(e) => {
-                for error in e {
-                    assert!(matches!(error, HLLErrorItem::Compile(HLLCompileError {
-                                diagnostic: Diag {
-                                    inner: Diagnostic {
-                                        message: msg,
-                                        ..
-                                    }
-                                },
-                                ..
-                            }) if msg.contains("file_context() calls are only allowed in resources")
-                    ));
-                }
-            }
-        }
+        error_policy_test!("domain_filecon.cas", 1,
+        HLLErrorItem::Compile(HLLCompileError {
+                    diagnostic: Diag {
+                        inner: Diagnostic {
+                            message: msg,
+                            ..
+                        }
+                    },
+                    ..
+                }) if msg.contains("file_context() calls are only allowed in resources")
+        );
     }
 
     #[test]
