@@ -109,17 +109,20 @@ domain some_qemu_domain inherits qemu {}
 ```
 
 In this case, a resource inheriting from `qemu_tmp` is automatically created,
-named `some_qemu_domain-qemu_tmp`, equivalent to the following definition:
+named `some_qemu_domain.qemu_tmp`, equivalent to the following definition:
 
 ```
-resource some_qemu_domain-qemu_tmp inherits qemu_tmp {}
+resource some_qemu_domain.qemu_tmp inherits qemu_tmp {}
 ```
+
+(Although note that explicit declaration of a type containing the character "."
+is disallowed).
 
 The `associate_tmp_files()` call will also automatically be performed as part
 of the inheritance from `qemu`.
 
 Note that a consequence of this is that the "this" keyword in the original
-definition may refer to an automatically created type (some_qemu_domain-qemu-tmp
+definition may refer to an automatically created type (some_qemu_domain.qemu_tmp
 in this example).  This means that there is a distinction between using the type
 name (where it will always refer to the original type) and the keyword "this"
 (which will refer to a specific instantiation such as an inherited or
