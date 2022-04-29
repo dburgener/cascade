@@ -113,7 +113,7 @@ Stmt: Statement = {
 }
 
 StmtBody: Statement = {
-	<c:Symbol> "." <n:Symbol> "(" <a:Comma<Arg>> ")" => Statement::Call(Box::new(FuncCall::new(Some(c), n, a))),
+	<c:TypeName> "." <n:NameDecl> "(" <a:Comma<Arg>> ")" => Statement::Call(Box::new(FuncCall::new(Some(c), n, a))),
 	<n:Symbol> "(" <a:Comma<Arg>> ")" => Statement::Call(Box::new(FuncCall::new(None, n, a))),
 	<l:LetBind> => Statement::LetBinding(Box::new(<>)),
 }
@@ -145,6 +145,11 @@ Ann: Annotation = {
 	"@" <s:NameDecl> => Annotation::new(s),
 }
 
+TypeName: CascadeString = {
+	Symbol,
+	<start: @L> <l: TypeName> "." <r: Symbol> <end: @R> => CascadeString::new([l.as_ref(), ".", r.as_ref()].concat(), start..end)
+}
+
 pub NameDecl: CascadeString = {
 	// Naming rules:
 	// * must start with a letter
@@ -155,8 +160,6 @@ pub NameDecl: CascadeString = {
 }
 
 Symbol: CascadeString = {
-	// Less constrained than NameDecl and accepts '-', which enables to use synthetic resources.
-	<start: @L> <s: r"[a-zA-Z]+-[0-9a-zA-Z_-]*[0-9a-zA-Z]"> <end: @R>  => CascadeString::new(s.to_string(), start..end),
 	NameDecl,
 	BuiltInType
 }

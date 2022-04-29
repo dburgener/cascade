@@ -188,11 +188,11 @@ Associating a resource with a domain does three things:
 
 1. It causes that resource to be grouped together with the domain when the  
 domain is included in a module or full system policy
-2. It calls the resource's __assoc__() function (if present) with the domain  
+2. It calls any @associated_call member functions in the resource with the domain
 as the first argument.
 3. If the domain is inherited from, a child resource is automatically created  
 and is associated with the child class.  This resource is named  
-`[child name]-[resource name]`.
+`[child name].[resource name]`.
 
 See the specific resource association document for more information.
 

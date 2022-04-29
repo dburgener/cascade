@@ -48,6 +48,13 @@ impl CascadeString {
             _ => None,
         }
     }
+
+    // '.' is used in string for name mangled types in block inheritance
+    // We also use '.' for name mangled types, but don't implement them as
+    // block inheritance, so we translate to '-' in the resulting CIL
+    pub fn get_cil_name(&self) -> String {
+        self.string.replace('.', "-")
+    }
 }
 
 impl AsRef<str> for CascadeString {
@@ -271,7 +278,7 @@ impl Virtualable for TypeDecl {
 
 pub fn get_cil_name(class_name: Option<&CascadeString>, func_name: &CascadeString) -> String {
     match &class_name {
-        Some(class) => format!("{}-{}", class, func_name),
+        Some(class) => format!("{}-{}", class.get_cil_name(), func_name),
         None => func_name.to_string(),
     }
 }
