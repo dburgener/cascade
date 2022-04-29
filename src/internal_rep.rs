@@ -1847,7 +1847,7 @@ impl ValidatedCall {
 
         // Each argument must match the type the function signature expects
         let mut args = match &call.class_name {
-            Some(c) => vec![convert_class_name_if_this(c, parent_type)?.to_string()],
+            Some(c) => vec![convert_class_name_if_this(c, parent_type)?.get_cil_name()],
             None => Vec::new(),
         };
 
