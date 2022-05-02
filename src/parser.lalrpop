@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
-use crate::ast::{HLLString, Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, Annotations, LetBinding, Virtualable, FuncCall, DeclaredArgument};
+use crate::ast::{CascadeString, Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, Annotations, LetBinding, Virtualable, FuncCall, DeclaredArgument};
 use lalrpop_util::ErrorRecovery;
 
 grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, &'static str>>);
@@ -64,13 +64,13 @@ TypeDecl: Box<TypeDecl> = {
 	},
 }
 
-InheritList: Vec<HLLString> = {
+InheritList: Vec<CascadeString> = {
 	"inherits" <Comma<Symbol>>,
 }
 
-BuiltInType: HLLString = {
-	<start: @L> <s: "domain"> <end: @R> => HLLString::new(s.to_string(), start..end),
-	<start: @L> <s: "resource"> <end: @R> => HLLString::new(s.to_string(), start..end),
+BuiltInType: CascadeString = {
+	<start: @L> <s: "domain"> <end: @R> => CascadeString::new(s.to_string(), start..end),
+	<start: @L> <s: "resource"> <end: @R> => CascadeString::new(s.to_string(), start..end),
 }
 
 FuncDecl: Box<FuncDecl> = {
@@ -95,23 +95,23 @@ Ann: Annotation = {
 	"@" <s:NameDecl> => Annotation::new(s),
 }
 
-pub NameDecl: HLLString = {
+pub NameDecl: CascadeString = {
 	// Naming rules:
 	// * must start with a letter
 	// * must not end with an underscore
 	// * must not contain consecutive underscores
 	// * can contain letters, digits and underscores
-	<start: @L> <s: r"[a-zA-Z](_?([0-9a-zA-Z]+_)*[0-9a-zA-Z]+)?"> <end: @R>  => HLLString::new(s.to_string(), start..end),
+	<start: @L> <s: r"[a-zA-Z](_?([0-9a-zA-Z]+_)*[0-9a-zA-Z]+)?"> <end: @R>  => CascadeString::new(s.to_string(), start..end),
 }
 
-Symbol: HLLString = {
+Symbol: CascadeString = {
 	// Less constrained than NameDecl and accepts '-', which enables to use synthetic resources.
-	<start: @L> <s: r"[a-zA-Z]+-[0-9a-zA-Z_-]*[0-9a-zA-Z]"> <end: @R>  => HLLString::new(s.to_string(), start..end),
+	<start: @L> <s: r"[a-zA-Z]+-[0-9a-zA-Z_-]*[0-9a-zA-Z]"> <end: @R>  => CascadeString::new(s.to_string(), start..end),
 	NameDecl,
 	BuiltInType
 }
 
-List: Vec<HLLString> = {
+List: Vec<CascadeString> = {
 	"[" <Symbol+> "]"
 }
 
@@ -122,8 +122,8 @@ Arg: Argument = {
 	Quoted_String => Argument::Quote(<>),
 }
 
-Quoted_String: HLLString = {
-	<start: @L> <s: r#""[^"]*""#> <end: @R> => HLLString::new(s.to_string(), start..end),
+Quoted_String: CascadeString = {
+	<start: @L> <s: r#""[^"]*""#> <end: @R> => CascadeString::new(s.to_string(), start..end),
 }
 
 // lexing precedence

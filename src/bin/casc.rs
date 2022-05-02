@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
 use selinux_cascade::compile_system_policy;
-use selinux_cascade::error::HLLErrorItem;
+use selinux_cascade::error::ErrorItem;
 
 use clap::Parser;
 use std::fs::File;
@@ -22,9 +22,9 @@ fn main() -> std::io::Result<()> {
     match res {
         Err(error_list) => {
             for e in error_list {
-                if let HLLErrorItem::Parse(p) = e {
+                if let ErrorItem::Parse(p) = e {
                     p.print_diagnostic();
-                } else if let HLLErrorItem::Compile(c) = e {
+                } else if let ErrorItem::Compile(c) = e {
                     c.print_diagnostic();
                 } else {
                     eprintln!("{}", e);

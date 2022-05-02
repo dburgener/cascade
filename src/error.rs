@@ -5,7 +5,7 @@ use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
 use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
 use lalrpop_util::lexer::Token;
-use lalrpop_util::ParseError;
+use lalrpop_util::ParseError as LalrpopParseError;
 use std::fmt;
 use std::io;
 use std::ops::Range;
@@ -13,7 +13,7 @@ use thiserror::Error;
 
 #[derive(Error, Clone, Debug)]
 #[error("{diagnostic}")]
-pub struct HLLCompileError {
+pub struct CompileError {
     pub diagnostic: Diag,
     pub file: SimpleFile<String, String>,
 }
@@ -36,7 +36,7 @@ impl fmt::Display for Diag {
     }
 }
 
-impl HLLCompileError {
+impl CompileError {
     pub fn new(
         msg: &str,
         file: &SimpleFile<String, String>,
@@ -49,7 +49,7 @@ impl HLLCompileError {
             None => diagnostic,
             Some(r) => diagnostic.with_labels(vec![Label::primary((), r).with_message(help)]),
         };
-        HLLCompileError {
+        CompileError {
             diagnostic: diagnostic.into(),
             file: file.clone(),
         }
@@ -69,11 +69,11 @@ impl HLLCompileError {
 
 #[derive(Error, Clone, Debug)]
 #[error("TODO")]
-pub struct HLLInternalError {}
+pub struct InternalError {}
 
 #[derive(Error, Clone, Debug)]
 #[error("{diagnostic}")]
-pub struct HLLParseError {
+pub struct ParseError {
     pub diagnostic: Diag,
     pub file: SimpleFile<String, String>,
 }
@@ -84,20 +84,20 @@ struct ParseErrorMsg {
     help: String,
 }
 
-impl From<ParseError<usize, Token<'_>, &str>> for ParseErrorMsg {
-    fn from(error: ParseError<usize, Token<'_>, &str>) -> Self {
+impl From<LalrpopParseError<usize, Token<'_>, &str>> for ParseErrorMsg {
+    fn from(error: LalrpopParseError<usize, Token<'_>, &str>) -> Self {
         match error {
-            ParseError::InvalidToken { location } => ParseErrorMsg {
+            LalrpopParseError::InvalidToken { location } => ParseErrorMsg {
                 issue: "Unknown character".into(),
                 range: Some(location..location),
                 help: String::new(),
             },
-            ParseError::UnrecognizedEOF { location, expected } => ParseErrorMsg {
+            LalrpopParseError::UnrecognizedEOF { location, expected } => ParseErrorMsg {
                 issue: "Unexpected end of file".into(),
                 range: Some(location..location),
                 help: format!("Expected {}", expected.join(" or ")),
             },
-            ParseError::UnrecognizedToken {
+            LalrpopParseError::UnrecognizedToken {
                 token: (l, t, r),
                 expected,
             } => ParseErrorMsg {
@@ -109,7 +109,7 @@ impl From<ParseError<usize, Token<'_>, &str>> for ParseErrorMsg {
                 range: Some(l..r),
                 help: format!("Expected {}", expected.join(" or ")),
             },
-            ParseError::ExtraToken { token: (l, t, r) } => ParseErrorMsg {
+            LalrpopParseError::ExtraToken { token: (l, t, r) } => ParseErrorMsg {
                 issue: if r - l == 1 {
                     format!("Unintended character \"{}\"", t.1)
                 } else {
@@ -118,7 +118,7 @@ impl From<ParseError<usize, Token<'_>, &str>> for ParseErrorMsg {
                 range: Some(l..r),
                 help: String::new(),
             },
-            ParseError::User { error } => ParseErrorMsg {
+            LalrpopParseError::User { error } => ParseErrorMsg {
                 issue: error.into(),
                 range: None,
                 help: String::new(),
@@ -127,15 +127,15 @@ impl From<ParseError<usize, Token<'_>, &str>> for ParseErrorMsg {
     }
 }
 
-impl HLLParseError {
+impl ParseError {
     pub fn new(
-        error: ParseError<usize, Token<'_>, &str>,
+        error: LalrpopParseError<usize, Token<'_>, &str>,
         file_name: String,
         policy: String,
     ) -> Self {
         let msg: ParseErrorMsg = error.into();
         let diagnostic = Diagnostic::error().with_message(msg.issue);
-        HLLParseError {
+        ParseError {
             file: SimpleFile::new(file_name, policy),
             diagnostic: match msg.range {
                 None => diagnostic,
@@ -161,19 +161,19 @@ impl HLLParseError {
 }
 
 #[derive(Error, Debug)]
-pub enum HLLErrorItem {
+pub enum ErrorItem {
     #[error("Compilation error: {0}")]
-    Compile(#[from] HLLCompileError),
+    Compile(#[from] CompileError),
     #[error("Internal error: {0}")]
-    Internal(#[from] HLLInternalError),
+    Internal(#[from] InternalError),
     #[error("Parsing error: {0}")]
-    Parse(#[from] HLLParseError),
+    Parse(#[from] ParseError),
     // TODO: Replace IO() with semantic errors wraping io::Error.
     #[error("I/O error: {0}")]
     IO(#[from] io::Error),
 }
 
-impl HLLErrorItem {
+impl ErrorItem {
     pub fn make_compile_or_internal_error(
         msg: &str,
         file: Option<&SimpleFile<String, String>>,
@@ -181,31 +181,31 @@ impl HLLErrorItem {
         help: &str,
     ) -> Self {
         match file {
-            Some(f) => HLLErrorItem::Compile(HLLCompileError::new(msg, f, range, help)),
-            None => HLLErrorItem::Internal(HLLInternalError {}),
+            Some(f) => ErrorItem::Compile(CompileError::new(msg, f, range, help)),
+            None => ErrorItem::Internal(InternalError {}),
         }
     }
 }
 
-impl From<HLLErrorItem> for Vec<HLLErrorItem> {
-    fn from(error: HLLErrorItem) -> Self {
+impl From<ErrorItem> for Vec<ErrorItem> {
+    fn from(error: ErrorItem) -> Self {
         vec![error]
     }
 }
 
 #[derive(Error, Debug)]
-pub struct HLLErrors {
-    errors: Vec<HLLErrorItem>,
+pub struct CascadeErrors {
+    errors: Vec<ErrorItem>,
 }
 
-impl HLLErrors {
+impl CascadeErrors {
     pub fn new() -> Self {
-        HLLErrors { errors: Vec::new() }
+        CascadeErrors { errors: Vec::new() }
     }
 
     pub fn add_error<T>(&mut self, error: T)
     where
-        T: Into<HLLErrorItem>,
+        T: Into<ErrorItem>,
     {
         self.errors.push(error.into());
     }
@@ -214,11 +214,11 @@ impl HLLErrors {
         self.errors.is_empty()
     }
 
-    pub fn append(&mut self, mut other: HLLErrors) {
+    pub fn append(&mut self, mut other: CascadeErrors) {
         self.errors.append(&mut other.errors);
     }
 
-    pub fn into_result_with<F, T>(self, ok_with: F) -> Result<T, HLLErrors>
+    pub fn into_result_with<F, T>(self, ok_with: F) -> Result<T, CascadeErrors>
     where
         F: FnOnce() -> T,
     {
@@ -229,7 +229,7 @@ impl HLLErrors {
         }
     }
 
-    pub fn into_result<T>(self, ok: T) -> Result<T, HLLErrors> {
+    pub fn into_result<T>(self, ok: T) -> Result<T, CascadeErrors> {
         self.into_result_with(|| ok)
     }
 
@@ -238,7 +238,7 @@ impl HLLErrors {
     /// because of unsatisfied prerequiste.
     ///
     /// For a multi-step workflow, it works as follow:
-    /// 1. creates an accumulator with `let mut errors = HLLErrors::new();`
+    /// 1. creates an accumulator with `let mut errors = CascadeErrors::new();`
     /// 2. within a major step accumulate errors with `errors.add_error(e);`
     /// 3. between major steps check for any errors with `errors =
     ///    errors.into_result_self()?;` which returns `Err(self)` if there are
@@ -256,34 +256,34 @@ impl HLLErrors {
     }
 }
 
-impl From<HLLErrorItem> for HLLErrors {
-    fn from(error: HLLErrorItem) -> Self {
-        HLLErrors {
+impl From<ErrorItem> for CascadeErrors {
+    fn from(error: ErrorItem) -> Self {
+        CascadeErrors {
             errors: vec![error],
         }
     }
 }
 
-impl From<HLLCompileError> for HLLErrors {
-    fn from(error: HLLCompileError) -> Self {
-        HLLErrors::from(HLLErrorItem::from(error))
+impl From<CompileError> for CascadeErrors {
+    fn from(error: CompileError) -> Self {
+        CascadeErrors::from(ErrorItem::from(error))
     }
 }
 
-impl From<HLLInternalError> for HLLErrors {
-    fn from(error: HLLInternalError) -> Self {
-        HLLErrors::from(HLLErrorItem::from(error))
+impl From<InternalError> for CascadeErrors {
+    fn from(error: InternalError) -> Self {
+        CascadeErrors::from(ErrorItem::from(error))
     }
 }
 
-impl Iterator for HLLErrors {
-    type Item = HLLErrorItem;
+impl Iterator for CascadeErrors {
+    type Item = ErrorItem;
     fn next(&mut self) -> Option<Self::Item> {
         self.errors.pop() // TODO: This reverses the list of errors
     }
 }
 
-impl fmt::Display for HLLErrors {
+impl fmt::Display for CascadeErrors {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let num_errors = self.errors.len();
         let s = match num_errors {
