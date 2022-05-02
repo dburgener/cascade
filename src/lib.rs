@@ -457,6 +457,17 @@ mod tests {
     }
 
     #[test]
+    fn named_args_test() {
+        valid_policy_test(
+            "named_args.cas",
+            &[
+                "(call some_domain-three_args (some_domain bar baz foo))",
+                "(call some_domain-three_args (some_domain foo bar baz))",
+            ],
+        );
+    }
+
+    #[test]
     fn makelist_test() {
         let policy_file = [POLICIES_DIR, "makelist.cas"].concat();
 
@@ -516,6 +527,21 @@ mod tests {
     #[test]
     fn bad_alias_test() {
         error_policy_test!("alias.cas", 2, HLLErrorItem::Compile(_));
+    }
+
+    #[test]
+    fn unsupplied_arg_test() {
+        error_policy_test!("unsupplied_arg.cas", 1, HLLErrorItem::Compile(
+                HLLCompileError {
+                    diagnostic: Diag {
+                        inner: Diagnostic {
+                            message: msg,
+                            ..
+                        }
+                    },
+                    ..
+                })
+            if msg == *"Function foo.read expected 2 arguments, got 1");
     }
 
     #[test]

@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
 use sexp::{atom_s, list, Sexp};
+use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::TryFrom;
@@ -851,15 +852,15 @@ fn generate_sids<'a>(
     vec![
         Sid::new(
             "kernel",
-            Context::new(true, None, None, kernel_sid, None, None),
+            Context::new(true, None, None, Cow::Borrowed(kernel_sid), None, None),
         ),
         Sid::new(
             "security",
-            Context::new(false, None, None, security_sid, None, None),
+            Context::new(false, None, None, Cow::Borrowed(security_sid), None, None),
         ),
         Sid::new(
             "unlabeled",
-            Context::new(false, None, None, unlabeled_sid, None, None),
+            Context::new(false, None, None, Cow::Borrowed(unlabeled_sid), None, None),
         ),
     ]
 }

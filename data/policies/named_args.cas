@@ -1,0 +1,15 @@
+domain some_domain {
+	fn three_args(resource a, resource b, resource c) {
+		allow(this, a, file, write);
+		allow(this, b, file, read);
+		allow(this, c, file, open);
+	}
+
+	// TODO: It looks like using "this" as a class name is broken
+	some_domain.three_args(a=foo, b=bar, c=baz);
+	some_domain.three_args(c=foo, b=baz, a=bar);
+}
+
+resource foo {}
+resource bar {}
+resource baz {}
