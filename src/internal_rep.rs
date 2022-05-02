@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 use sexp::{atom_s, list, Atom, Sexp};
 
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryFrom;
@@ -542,9 +543,9 @@ pub enum AvRuleFlavor {
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AvRule<'a> {
     pub av_rule_flavor: AvRuleFlavor,
-    pub source: &'a HLLString,
-    pub target: &'a HLLString,
-    pub class: &'a HLLString,
+    pub source: Cow<'a, HLLString>,
+    pub target: Cow<'a, HLLString>,
+    pub class: Cow<'a, HLLString>,
     // Lifetimes get weird once permissions get expanded, so AV rules should just own their permissions
     pub perms: Vec<HLLString>,
 }
@@ -566,8 +567,8 @@ impl From<&AvRule<'_>> for sexp::Sexp {
             }
         });
 
-        ret.push(atom_s(rule.source.as_ref()));
-        ret.push(atom_s(rule.target.as_ref()));
+        ret.push(atom_s(rule.source.as_ref().as_ref()));
+        ret.push(atom_s(rule.target.as_ref().as_ref()));
 
         let mut classpermset = vec![Sexp::Atom(Atom::S(rule.class.to_string()))];
 
@@ -585,49 +586,49 @@ impl From<&AvRule<'_>> for sexp::Sexp {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Context<'a> {
-    user: &'a str,
-    role: &'a str,
-    setype: &'a str,
-    mls_low: &'a str,
-    mls_high: &'a str,
+    user: Cow<'a, str>,
+    role: Cow<'a, str>,
+    setype: Cow<'a, str>,
+    mls_low: Cow<'a, str>,
+    mls_high: Cow<'a, str>,
 }
 
-impl Context<'_> {
+impl<'a> Context<'a> {
     // All fields except setype is optional.  User and role are replaced with defaults if set to None
-    pub fn new<'a>(
+    pub fn new(
         is_domain: bool,
-        u: Option<&'a str>,
-        r: Option<&'a str>,
-        t: &'a str,
-        ml: Option<&'a str>,
-        mh: Option<&'a str>,
-    ) -> Context<'a> {
+        u: Option<Cow<'a, str>>,
+        r: Option<Cow<'a, str>>,
+        t: Cow<'a, str>,
+        ml: Option<Cow<'a, str>>,
+        mh: Option<Cow<'a, str>>,
+    ) -> Self {
         Context {
-            user: u.unwrap_or(DEFAULT_USER),
+            user: u.unwrap_or(Cow::Borrowed(DEFAULT_USER)),
             role: r.unwrap_or(if is_domain {
-                DEFAULT_DOMAIN_ROLE
+                Cow::Borrowed(DEFAULT_DOMAIN_ROLE)
             } else {
-                DEFAULT_OBJECT_ROLE
+                Cow::Borrowed(DEFAULT_OBJECT_ROLE)
             }),
             setype: t,
-            mls_low: ml.unwrap_or(DEFAULT_MLS),
-            mls_high: mh.unwrap_or(DEFAULT_MLS),
+            mls_low: ml.unwrap_or(Cow::Borrowed(DEFAULT_MLS)),
+            mls_high: mh.unwrap_or(Cow::Borrowed(DEFAULT_MLS)),
         }
     }
 }
 
-impl From<Context<'_>> for sexp::Sexp {
-    fn from(c: Context) -> sexp::Sexp {
+impl From<&Context<'_>> for sexp::Sexp {
+    fn from(c: &Context) -> sexp::Sexp {
         let mls_range = Sexp::List(vec![
-            Sexp::List(vec![atom_s(c.mls_low)]),
-            Sexp::List(vec![atom_s(c.mls_high)]),
+            Sexp::List(vec![atom_s(&c.mls_low)]),
+            Sexp::List(vec![atom_s(&c.mls_high)]),
         ]);
         Sexp::List(vec![
-            atom_s(c.user),
-            atom_s(c.role),
-            atom_s(c.setype),
+            atom_s(&c.user),
+            atom_s(&c.role),
+            atom_s(&c.setype),
             mls_range,
         ])
     }
@@ -642,6 +643,9 @@ impl From<Context<'_>> for sexp::Sexp {
 // error
 // These contexts are always resources
 // Errors will be handled by level above
+// TODO: Somewhere along the line the mls low vs high distinction got confused with the sensitivity
+// vs category distinction.  Since MLS isn't implemented yet, this is all placeholders, but this
+// will need to be fixed before we implement MLS
 impl<'a> TryFrom<&'a str> for Context<'a> {
     type Error = ();
     fn try_from(s: &'a str) -> Result<Context<'a>, ()> {
@@ -650,7 +654,16 @@ impl<'a> TryFrom<&'a str> for Context<'a> {
         let second_field = split_string.next();
 
         let role = match second_field {
-            None => return Ok(Context::new(false, None, None, first_field, None, None)),
+            None => {
+                return Ok(Context::new(
+                    false,
+                    None,
+                    None,
+                    Cow::Borrowed(first_field),
+                    None,
+                    None,
+                ))
+            }
             Some(role) => role,
         };
 
@@ -666,14 +679,32 @@ impl<'a> TryFrom<&'a str> for Context<'a> {
             None => None,
         };
 
-        return Ok(Context::new(
+        Ok(Context::new(
             false,
-            Some(user),
-            Some(role),
-            context_type,
-            sensitivity,
-            category,
-        ));
+            Some(Cow::Borrowed(user)),
+            Some(Cow::Borrowed(role)),
+            Cow::Borrowed(context_type),
+            sensitivity.map(Cow::Borrowed),
+            category.map(Cow::Borrowed),
+        ))
+    }
+}
+
+// Result in owned types in CoW
+impl<'a> TryFrom<String> for Context<'a> {
+    type Error = ();
+    // https://github.com/rust-lang/rust/issues/52188
+    fn try_from(s: String) -> Result<Context<'a>, ()> {
+        let context = Context::try_from(s.as_ref())?;
+
+        Ok(Context::new(
+            false,
+            Some(Cow::Owned(context.user.into_owned())),
+            Some(Cow::Owned(context.role.into_owned())),
+            Cow::Owned(context.setype.into_owned()),
+            None, // TODO
+            None,
+        ))
     }
 }
 
@@ -695,7 +726,7 @@ impl<'a> Sid<'a> {
         Sexp::List(vec![
             atom_s("sidcontext"),
             atom_s(self.name),
-            Sexp::from(self.context),
+            Sexp::from(&self.context),
         ])
     }
 
@@ -952,16 +983,16 @@ fn call_to_av_rule<'a>(
     }
 
     for p in &perms {
-        class_perms.verify_permission(class, p, file)?;
+        class_perms.verify_permission(&class, p, file)?;
     }
 
     let perms = class_perms.expand_perm_list(perms);
 
     Ok(AvRule {
         av_rule_flavor: flavor,
-        source,
-        target,
-        class,
+        source: Cow::Owned(source),
+        target: Cow::Owned(target),
+        class: Cow::Owned(class),
         perms,
     })
 }
@@ -1027,7 +1058,7 @@ impl From<&FileContextRule<'_>> for sexp::Sexp {
             atom_s("filecon"),
             atom_s(&f.regex_string),
             Sexp::Atom(Atom::S(f.file_type.to_string())),
-            Sexp::from(f.context),
+            Sexp::from(&f.context),
         ])
     }
 }
@@ -1082,18 +1113,18 @@ fn call_to_fc_rules<'a>(
         .next()
         .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?
         .get_list()?;
-    let context = args_iter
+    let context_str = args_iter
         .next()
         .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?
         .get_name_or_string()?;
-    let context = match Context::try_from(context.as_ref()) {
+    let context = match Context::try_from(context_str.to_string()) {
         Ok(c) => c,
         Err(_) => {
             return Err(HLLErrors::from(HLLErrorItem::Compile(
                 HLLCompileError::new(
                     "Invalid context",
                     file,
-                    context.get_range(),
+                    context_str.get_range(),
                     "Cannot parse this into a context",
                 ),
             )))
@@ -1113,7 +1144,7 @@ fn call_to_fc_rules<'a>(
         ret.push(FileContextRule {
             regex_string: regex_string.clone(),
             file_type,
-            context,
+            context: context.clone(),
         });
     }
 
@@ -1480,6 +1511,7 @@ pub struct FunctionArgument<'a> {
     pub param_type: &'a TypeInfo,
     pub name: String,
     pub is_list_param: bool,
+    pub default_value: Option<Argument>,
 }
 
 impl<'a> FunctionArgument<'a> {
@@ -1506,6 +1538,7 @@ impl<'a> FunctionArgument<'a> {
             param_type,
             name: declared_arg.name.to_string(),
             is_list_param: declared_arg.is_list_param,
+            default_value: None,
         })
     }
 
@@ -1514,6 +1547,7 @@ impl<'a> FunctionArgument<'a> {
             param_type: parent_type,
             name: "this".to_string(),
             is_list_param: false,
+            default_value: None,
         }
     }
 }
@@ -1703,31 +1737,33 @@ impl ValidatedCall {
 }
 
 // Some TypeInfos have a string associated with a particular instance.  Most are just the TypeInfo
+// These strings might have been generated locally rather than in the source, so we need to own the
+// values so they live long enough
 #[derive(Clone, Debug)]
-enum TypeValue<'a> {
-    Str(&'a HLLString),
-    Vector(Vec<&'a HLLString>),
+enum TypeValue {
+    Str(HLLString),
+    Vector(Vec<HLLString>),
     SEType(Option<Range<usize>>),
 }
 
 #[derive(Clone, Debug)]
 struct TypeInstance<'a> {
-    instance_value: TypeValue<'a>,
+    instance_value: TypeValue,
     pub type_info: &'a TypeInfo,
     file: &'a SimpleFile<String, String>,
 }
 
 impl<'a> TypeInstance<'a> {
-    fn get_name_or_string(&self) -> Result<&'a HLLString, HLLErrorItem> {
-        match self.instance_value {
+    fn get_name_or_string(&self) -> Result<HLLString, HLLErrorItem> {
+        match &self.instance_value {
             TypeValue::Str(s) => {
                 if s == "this" {
                     // Always convert "this" into its typeinfo.  This is to support the usage of
                     // "this" in domains and resources.  Other instances of TypeValue::Str are in
                     // function calls and should be left as the bound names for cil to handle
-                    Ok(&self.type_info.name)
+                    Ok(self.type_info.name.clone())
                 } else {
-                    Ok(s)
+                    Ok(s.clone())
                 }
             }
             TypeValue::Vector(_) => Err(HLLErrorItem::Compile(HLLCompileError::new(
@@ -1736,13 +1772,13 @@ impl<'a> TypeInstance<'a> {
                 self.get_range(),
                 "Expected scalar value here",
             ))),
-            TypeValue::SEType(_) => Ok(&self.type_info.name),
+            TypeValue::SEType(_) => Ok(self.type_info.name.clone()),
         }
     }
 
-    fn get_list(&self) -> Result<Vec<&'a HLLString>, HLLErrorItem> {
+    fn get_list(&'a self) -> Result<Vec<&'a HLLString>, HLLErrorItem> {
         match &self.instance_value {
-            TypeValue::Vector(v) => Ok(v.clone()),
+            TypeValue::Vector(v) => Ok(v.iter().collect()),
             _ => Err(HLLErrorItem::Compile(HLLCompileError::new(
                 "Expected list",
                 self.file,
@@ -1755,32 +1791,46 @@ impl<'a> TypeInstance<'a> {
     fn get_range(&self) -> Option<Range<usize>> {
         match &self.instance_value {
             TypeValue::Str(s) => s.get_range(),
-            TypeValue::Vector(v) => HLLString::slice_to_range(v),
+            TypeValue::Vector(v) => {
+                HLLString::slice_to_range(v.iter().collect::<Vec<&HLLString>>().as_slice())
+            }
             TypeValue::SEType(r) => r.clone(),
         }
     }
 
-    fn new(
-        arg: &ArgForValidation<'a>,
-        ti: &'a TypeInfo,
-        file: &'a SimpleFile<String, String>,
-    ) -> Self {
+    fn new(arg: &ArgForValidation, ti: &'a TypeInfo, file: &'a SimpleFile<String, String>) -> Self {
         let instance_value = match arg {
             ArgForValidation::Var(s) => {
                 if s == &&ti.name {
                     TypeValue::SEType(s.get_range())
                 } else {
-                    TypeValue::Str(s)
+                    TypeValue::Str((*s).clone())
                 }
             }
-            ArgForValidation::List(vec) => TypeValue::Vector(vec.clone()),
-            ArgForValidation::Quote(q) => TypeValue::Str(q),
+            ArgForValidation::List(vec) => {
+                TypeValue::Vector(vec.iter().map(|s| (*s).clone()).collect())
+            }
+            ArgForValidation::Quote(q) => TypeValue::Str((*q).clone()),
         };
 
         TypeInstance {
             instance_value,
             type_info: ti,
             file,
+        }
+    }
+}
+
+struct ExpectedArgInfo<'a, 'b> {
+    function_arg: &'a FunctionArgument<'a>,
+    provided_arg: Option<TypeInstance<'b>>,
+}
+
+impl<'a> From<&'a FunctionArgument<'a>> for ExpectedArgInfo<'a, '_> {
+    fn from(f: &'a FunctionArgument) -> Self {
+        ExpectedArgInfo {
+            function_arg: f,
+            provided_arg: None,
         }
     }
 }
@@ -1797,12 +1847,17 @@ fn validate_arguments<'a>(
     let function_args_iter = function_args.iter().skip_while(|a| a.name == "this");
 
     if function_args_iter.clone().count() != call.args.len() {
+        let function_args_len = if function_args.iter().take(1).any(|f| f.name == "this") {
+            function_args.len() - 1
+        } else {
+            function_args.len()
+        };
         return Err(HLLErrors::from(HLLErrorItem::Compile(
             HLLCompileError::new(
                 &format!(
                     "Function {} expected {} arguments, got {}",
                     call.get_display_name(),
-                    function_args.len(),
+                    function_args_len,
                     call.args.len()
                 ),
                 file,
@@ -1813,17 +1868,104 @@ fn validate_arguments<'a>(
     }
 
     let mut args = Vec::new();
-    for (a, fa) in call.args.iter().zip(function_args_iter) {
-        args.push(validate_argument(
+    for fa in function_args_iter {
+        args.push(ExpectedArgInfo::from(fa));
+    }
+    for (index, a) in call
+        .args
+        .iter()
+        .take_while(|a| !matches!(a, Argument::Named(_, _)))
+        .enumerate()
+    {
+        let validated_arg = validate_argument(
             ArgForValidation::from(a),
-            fa,
+            args[index].function_arg,
             types,
             class_perms,
             parent_args,
             file,
-        )?);
+        )?;
+        args[index].provided_arg = Some(validated_arg);
     }
-    Ok(args)
+
+    for a in call
+        .args
+        .iter()
+        .skip_while(|a| !matches!(a, Argument::Named(_, _)))
+    {
+        match a {
+            Argument::Named(n, a) => {
+                let index = match args
+                    .iter()
+                    .position(|ea| ea.function_arg.name == n.as_ref())
+                {
+                    Some(i) => i,
+                    None => {
+                        return Err(HLLErrorItem::Compile(HLLCompileError::new(
+                            "No such argument",
+                            file,
+                            n.get_range(),
+                            "The function does not have an argument with this name",
+                        ))
+                        .into());
+                    }
+                };
+                let validated_arg = validate_argument(
+                    ArgForValidation::from(&**a),
+                    args[index].function_arg,
+                    types,
+                    class_perms,
+                    parent_args,
+                    file,
+                )?;
+                args[index].provided_arg = Some(validated_arg);
+            }
+            _ => {
+                return Err(HLLErrorItem::Compile(
+                    HLLCompileError::new(
+                        "Cannot specify anonymous argument after named argument",
+                        file,
+                        a.get_range(),
+                        "This argument is anonymous, but named arguments occurred previously.  All anonymous arguments must come before any named arguments")).into());
+            }
+        }
+    }
+
+    let mut out = Vec::new();
+    for a in args {
+        let provided_arg = match a.provided_arg {
+            Some(arg) => arg,
+            None => {
+                match &a.function_arg.default_value {
+                    // TODO: A compile error here may be confusing.  This should really
+                    // be validated earlier and then return an internal error here on failure
+                    Some(v) => validate_argument(
+                        ArgForValidation::from(v),
+                        a.function_arg,
+                        types,
+                        class_perms,
+                        parent_args,
+                        file,
+                    )?,
+                    None => {
+                        return Err(HLLErrorItem::Compile(HLLCompileError::new(
+                            &format!("No value supplied for {}", a.function_arg.name),
+                            file,
+                            call.get_name_range(),
+                            &format!(
+                                "{} has no default value, and was not supplied by this call",
+                                a.function_arg.name
+                            ),
+                        ))
+                        .into());
+                    }
+                }
+            }
+        };
+        out.push(provided_arg);
+    }
+
+    Ok(out)
 }
 
 // The ast Argument owns the data, this struct is similar, but has references to the owned data in
@@ -1838,7 +1980,7 @@ impl<'a> From<&'a Argument> for ArgForValidation<'a> {
     fn from(a: &'a Argument) -> Self {
         match a {
             Argument::Var(s) => ArgForValidation::Var(s),
-            Argument::Named(_n, _a) => todo!(),
+            Argument::Named(_, a) => ArgForValidation::from(&**a),
             Argument::List(v) => ArgForValidation::List(v.iter().collect()),
             Argument::Quote(s) => ArgForValidation::Quote(s),
         }
@@ -1875,7 +2017,7 @@ impl<'a> ArgForValidation<'a> {
 }
 
 fn validate_argument<'a>(
-    arg: ArgForValidation<'a>,
+    arg: ArgForValidation,
     target_argument: &FunctionArgument,
     types: &'a TypeMap,
     class_perms: &ClassList,
@@ -1969,9 +2111,9 @@ mod tests {
     fn generate_cil_for_av_rule_test() {
         let cil_sexp = Sexp::from(&AvRule {
             av_rule_flavor: AvRuleFlavor::Allow,
-            source: &"foo".into(),
-            target: &"bar".into(),
-            class: &"file".into(),
+            source: Cow::Owned("foo".into()),
+            target: Cow::Owned("bar".into()),
+            class: Cow::Owned("file".into()),
             perms: vec!["read".into(), "getattr".into()],
         });
 
@@ -1982,13 +2124,13 @@ mod tests {
 
     #[test]
     fn sexp_from_context() {
-        let context_sexp = Sexp::from(Context::new(
+        let context_sexp = Sexp::from(&Context::new(
             true,
-            Some("u"),
-            Some("r"),
-            "t",
-            Some("s0"),
-            Some("s0"),
+            Some(Cow::Borrowed("u")),
+            Some(Cow::Borrowed("r")),
+            Cow::Borrowed("t"),
+            Some(Cow::Borrowed("s0")),
+            Some(Cow::Borrowed("s0")),
         ));
         let cil_expected = "(u r t ((s0) (s0)))";
         assert_eq!(context_sexp.to_string(), cil_expected.to_string());
@@ -1996,15 +2138,28 @@ mod tests {
 
     #[test]
     fn sexp_from_context_defaults() {
-        let context_sexp = Sexp::from(Context::new(true, None, None, "t", None, None));
+        let context_sexp = Sexp::from(&Context::new(
+            true,
+            None,
+            None,
+            Cow::Borrowed("t"),
+            None,
+            None,
+        ));
         let cil_expected = "(system_u system_r t ((s0) (s0)))";
         assert_eq!(context_sexp.to_string(), cil_expected.to_string());
     }
 
     #[test]
     fn generate_sid_rules_test() {
-        let sid1 = Sid::new("foo", Context::new(true, None, None, "foo_t", None, None));
-        let sid2 = Sid::new("bar", Context::new(false, None, None, "bar_t", None, None));
+        let sid1 = Sid::new(
+            "foo",
+            Context::new(true, None, None, Cow::Borrowed("foo_t"), None, None),
+        );
+        let sid2 = Sid::new(
+            "bar",
+            Context::new(false, None, None, Cow::Borrowed("bar_t"), None, None),
+        );
 
         let rules = generate_sid_rules(vec![sid1, sid2]);
         let cil_expected = vec![
@@ -2097,7 +2252,14 @@ mod tests {
         let fc = FileContextRule {
             regex_string: "\"/bin\"".to_string(),
             file_type: FileType::File,
-            context: Context::new(false, Some("u"), Some("r"), "bin_t", None, None),
+            context: Context::new(
+                false,
+                Some(Cow::Borrowed("u")),
+                Some(Cow::Borrowed("r")),
+                Cow::Borrowed("bin_t"),
+                None,
+                None,
+            ),
         };
         assert_eq!(
             "(filecon \"/bin\" file (u r bin_t ((s0) (s0))))".to_string(),
