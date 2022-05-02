@@ -10,20 +10,20 @@ use codespan_reporting::files::SimpleFile;
 use crate::constants;
 
 #[derive(Clone, Debug, Eq)]
-pub struct HLLString {
+pub struct CascadeString {
     string: String,
     range: Option<Range<usize>>,
 }
 
-impl fmt::Display for HLLString {
+impl fmt::Display for CascadeString {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.string)
     }
 }
 
-impl HLLString {
+impl CascadeString {
     pub fn new(string: String, range: Range<usize>) -> Self {
-        HLLString {
+        CascadeString {
             string,
             range: Some(range),
         }
@@ -35,7 +35,7 @@ impl HLLString {
 
     // TODO: This doesn't include the brackets at the end, but we haven't saved enough info from
     // the AST for that
-    pub fn slice_to_range(v: &[&HLLString]) -> Option<Range<usize>> {
+    pub fn slice_to_range(v: &[&CascadeString]) -> Option<Range<usize>> {
         let start = v.first();
         let end = v.last();
 
@@ -49,79 +49,79 @@ impl HLLString {
     }
 }
 
-impl AsRef<str> for HLLString {
+impl AsRef<str> for CascadeString {
     fn as_ref(&self) -> &str {
         self.string.as_str()
     }
 }
 
-impl From<String> for HLLString {
-    fn from(s: String) -> HLLString {
-        HLLString {
+impl From<String> for CascadeString {
+    fn from(s: String) -> CascadeString {
+        CascadeString {
             string: s,
             range: None,
         }
     }
 }
 
-impl From<&str> for HLLString {
-    fn from(s: &str) -> HLLString {
-        HLLString {
+impl From<&str> for CascadeString {
+    fn from(s: &str) -> CascadeString {
+        CascadeString {
             string: s.to_string(),
             range: None,
         }
     }
 }
 
-impl Hash for HLLString {
+impl Hash for CascadeString {
     fn hash<H: Hasher>(&self, h: &mut H) {
         self.string.hash(h);
     }
 }
 
-impl PartialEq for HLLString {
+impl PartialEq for CascadeString {
     fn eq(&self, other: &Self) -> bool {
         self.string == other.string
     }
 }
 
-impl PartialEq<String> for HLLString {
+impl PartialEq<String> for CascadeString {
     fn eq(&self, other: &String) -> bool {
         self.string == *other
     }
 }
 
-impl PartialEq<str> for HLLString {
+impl PartialEq<str> for CascadeString {
     fn eq(&self, other: &str) -> bool {
         self.string == other
     }
 }
 
-impl PartialEq<HLLString> for str {
-    fn eq(&self, other: &HLLString) -> bool {
+impl PartialEq<CascadeString> for str {
+    fn eq(&self, other: &CascadeString) -> bool {
         self == other.string
     }
 }
 
-impl PartialEq<&str> for HLLString {
+impl PartialEq<&str> for CascadeString {
     fn eq(&self, other: &&str) -> bool {
         self.string == *other
     }
 }
 
-impl PartialEq<HLLString> for &str {
-    fn eq(&self, other: &HLLString) -> bool {
+impl PartialEq<CascadeString> for &str {
+    fn eq(&self, other: &CascadeString) -> bool {
         *self == other.string
     }
 }
 
-impl PartialOrd for HLLString {
+impl PartialOrd for CascadeString {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.string.partial_cmp(&other.string)
     }
 }
 
-impl Ord for HLLString {
+impl Ord for CascadeString {
     fn cmp(&self, other: &Self) -> Ordering {
         self.string.cmp(&other.string)
     }
@@ -161,7 +161,7 @@ pub enum Expression {
 }
 
 impl Expression {
-    pub fn set_class_name_if_decl(&mut self, name: HLLString) {
+    pub fn set_class_name_if_decl(&mut self, name: CascadeString) {
         if let Expression::Decl(Declaration::Func(d)) = self {
             d.class_name = Some(name)
         }
@@ -206,15 +206,19 @@ impl Declaration {
 
 #[derive(Clone, Debug, Eq)]
 pub struct TypeDecl {
-    pub name: HLLString,
-    pub inherits: Vec<HLLString>,
+    pub name: CascadeString,
+    pub inherits: Vec<CascadeString>,
     pub is_virtual: bool,
     pub expressions: Vec<Expression>,
     pub annotations: Annotations,
 }
 
 impl TypeDecl {
-    pub fn new(name: HLLString, inherits: Vec<HLLString>, exprs: Vec<Expression>) -> TypeDecl {
+    pub fn new(
+        name: CascadeString,
+        inherits: Vec<CascadeString>,
+        exprs: Vec<Expression>,
+    ) -> TypeDecl {
         TypeDecl {
             name,
             inherits,
@@ -244,7 +248,7 @@ impl Virtualable for TypeDecl {
     }
 }
 
-pub fn get_cil_name(class_name: Option<&HLLString>, func_name: &HLLString) -> String {
+pub fn get_cil_name(class_name: Option<&CascadeString>, func_name: &CascadeString) -> String {
     match &class_name {
         Some(class) => format!("{}-{}", class, func_name),
         None => func_name.to_string(),
@@ -253,8 +257,8 @@ pub fn get_cil_name(class_name: Option<&HLLString>, func_name: &HLLString) -> St
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FuncDecl {
-    pub class_name: Option<HLLString>,
-    pub name: HLLString,
+    pub class_name: Option<CascadeString>,
+    pub name: CascadeString,
     pub args: Vec<DeclaredArgument>,
     pub body: Vec<Statement>,
     pub annotations: Annotations,
@@ -293,14 +297,14 @@ pub enum BuiltIns {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FuncCall {
-    pub class_name: Option<HLLString>,
-    pub name: HLLString,
+    pub class_name: Option<CascadeString>,
+    pub name: CascadeString,
     pub args: Vec<Argument>,
     pub annotations: Annotations,
 }
 
 impl FuncCall {
-    pub fn new(cn: Option<HLLString>, n: HLLString, a: Vec<Argument>) -> FuncCall {
+    pub fn new(cn: Option<CascadeString>, n: CascadeString, a: Vec<Argument>) -> FuncCall {
         FuncCall {
             class_name: cn,
             name: n,
@@ -353,13 +357,13 @@ impl FuncCall {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LetBinding {
-    pub name: HLLString,
+    pub name: CascadeString,
     pub value: Argument,
     pub annotations: Annotations,
 }
 
 impl LetBinding {
-    pub fn new(name: HLLString, value: Argument) -> LetBinding {
+    pub fn new(name: CascadeString, value: Argument) -> LetBinding {
         LetBinding {
             name,
             value,
@@ -374,12 +378,12 @@ impl LetBinding {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Annotation {
-    pub name: HLLString,
+    pub name: CascadeString,
     pub arguments: Vec<Argument>,
 }
 
 impl Annotation {
-    pub fn new(name: HLLString) -> Self {
+    pub fn new(name: CascadeString) -> Self {
         Annotation {
             name,
             arguments: Vec::new(),
@@ -420,10 +424,10 @@ impl Annotations {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Argument {
-    Var(HLLString),
-    Named(HLLString, Box<Argument>),
-    List(Vec<HLLString>),
-    Quote(HLLString),
+    Var(CascadeString),
+    Named(CascadeString, Box<Argument>),
+    List(Vec<CascadeString>),
+    Quote(CascadeString),
 }
 
 impl Argument {
@@ -440,7 +444,7 @@ impl Argument {
                     None
                 }
             }
-            Argument::List(l) => HLLString::slice_to_range(&l.iter().collect::<Vec<_>>()),
+            Argument::List(l) => CascadeString::slice_to_range(&l.iter().collect::<Vec<_>>()),
             Argument::Quote(a) => a.get_range(),
         }
     }
@@ -459,9 +463,9 @@ impl fmt::Display for Argument {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct DeclaredArgument {
-    pub param_type: HLLString,
+    pub param_type: CascadeString,
     pub is_list_param: bool,
-    pub name: HLLString,
+    pub name: CascadeString,
 }
 
 #[cfg(test)]
@@ -472,7 +476,7 @@ mod tests {
     fn arg_get_range() {
         let none_range = Argument::Var("foo".into());
         assert!(none_range.get_range().is_none());
-        let var_range = Argument::Var(HLLString::new("bar".into(), Range { start: 1, end: 2 }));
+        let var_range = Argument::Var(CascadeString::new("bar".into(), Range { start: 1, end: 2 }));
         assert!(matches!(
             var_range.get_range(),
             Some(Range { start: 1, end: 2 })
@@ -481,7 +485,7 @@ mod tests {
         let named_range1 = Argument::Named("foo".into(), Box::new(var_range.clone()));
         assert!(named_range1.get_range().is_none());
         let named_range2 = Argument::Named(
-            HLLString::new("foo".into(), Range { start: 3, end: 4 }),
+            CascadeString::new("foo".into(), Range { start: 3, end: 4 }),
             Box::new(var_range.clone()),
         );
         assert!(matches!(
@@ -490,24 +494,26 @@ mod tests {
         ));
 
         let list_range = Argument::List(vec![
-            HLLString::new("a".into(), Range { start: 5, end: 6 }),
-            HLLString::new("b".into(), Range { start: 7, end: 8 }),
-            HLLString::new("c".into(), Range { start: 9, end: 10 }),
+            CascadeString::new("a".into(), Range { start: 5, end: 6 }),
+            CascadeString::new("b".into(), Range { start: 7, end: 8 }),
+            CascadeString::new("c".into(), Range { start: 9, end: 10 }),
         ]);
         assert!(matches!(
             list_range.get_range(),
             Some(Range { start: 5, end: 10 })
         ));
 
-        let quote_range =
-            Argument::Quote(HLLString::new("foo".into(), Range { start: 11, end: 12 }));
+        let quote_range = Argument::Quote(CascadeString::new(
+            "foo".into(),
+            Range { start: 11, end: 12 },
+        ));
         assert!(matches!(
             quote_range.get_range(),
             Some(Range { start: 11, end: 12 })
         ));
 
         let named_range3 = Argument::Named(
-            HLLString::new("foo".into(), Range { start: 13, end: 14 }),
+            CascadeString::new("foo".into(), Range { start: 13, end: 14 }),
             Box::new(list_range.clone()),
         );
         assert!(matches!(

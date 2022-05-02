@@ -7,10 +7,10 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::TryFrom;
 
 use crate::ast::{
-    Annotations, Argument, Declaration, Expression, FuncCall, HLLString, PolicyFile, Statement,
+    Annotations, Argument, CascadeString, Declaration, Expression, FuncCall, PolicyFile, Statement,
 };
 use crate::constants;
-use crate::error::{HLLCompileError, HLLErrorItem, HLLErrors, HLLInternalError};
+use crate::error::{CascadeErrors, CompileError, ErrorItem, InternalError};
 use crate::internal_rep::{
     argument_to_typeinfo, argument_to_typeinfo_vec, generate_sid_rules, type_slice_to_variant,
     Annotated, AnnotationInfo, ArgForValidation, Associated, BoundTypeInfo, ClassList, Context,
@@ -24,7 +24,7 @@ pub fn compile_rules_one_file<'a>(
     classlist: &'a ClassList<'a>,
     type_map: &'a TypeMap,
     func_map: &'a FunctionMap<'a>,
-) -> Result<BTreeSet<ValidatedStatement<'a>>, HLLErrors> {
+) -> Result<BTreeSet<ValidatedStatement<'a>>, CascadeErrors> {
     do_rules_pass(
         &p.policy.exprs,
         type_map,
@@ -40,7 +40,7 @@ pub fn generate_sexp(
     classlist: &ClassList,
     policy_rules: BTreeSet<ValidatedStatement>,
     func_map: &FunctionMap<'_>,
-) -> Result<Vec<sexp::Sexp>, HLLErrors> {
+) -> Result<Vec<sexp::Sexp>, CascadeErrors> {
     let type_decl_list = organize_type_map(type_map)?;
     // TODO: The rest of compilation
     let cil_types = type_list_to_sexp(type_decl_list, type_map);
@@ -90,11 +90,11 @@ fn generate_cil_headers(classlist: &ClassList) -> Vec<sexp::Sexp> {
 }
 
 // TODO: Refactor below nearly identical functions to eliminate redundant code
-pub fn extend_type_map(p: &PolicyFile, type_map: &mut TypeMap) -> Result<(), HLLErrors> {
+pub fn extend_type_map(p: &PolicyFile, type_map: &mut TypeMap) -> Result<(), CascadeErrors> {
     // TODO: This only allows declarations at the top level.
     // Nested declarations are legal, but auto-associate with the parent, so they'll need special
     // handling when association is implemented
-    let mut errors = HLLErrors::new();
+    let mut errors = CascadeErrors::new();
     for e in &p.policy.exprs {
         let d = match e {
             Expression::Decl(d) => d,
@@ -125,8 +125,8 @@ pub fn get_built_in_types_map() -> TypeMap {
 
     //Special handling for sids.  These are temporary built in types that are handled differently
     let kernel_sid = TypeInfo {
-        name: HLLString::from("kernel_sid"),
-        inherits: vec![HLLString::from(constants::DOMAIN)],
+        name: CascadeString::from("kernel_sid"),
+        inherits: vec![CascadeString::from(constants::DOMAIN)],
         is_virtual: false,
         list_coercion: false,
         declaration_file: None,
@@ -136,8 +136,8 @@ pub fn get_built_in_types_map() -> TypeMap {
     };
 
     let security_sid = TypeInfo {
-        name: HLLString::from("security_sid"),
-        inherits: vec![HLLString::from(constants::RESOURCE)],
+        name: CascadeString::from("security_sid"),
+        inherits: vec![CascadeString::from(constants::RESOURCE)],
         is_virtual: false,
         list_coercion: false,
         declaration_file: None,
@@ -147,8 +147,8 @@ pub fn get_built_in_types_map() -> TypeMap {
     };
 
     let unlabeled_sid = TypeInfo {
-        name: HLLString::from("unlabeled_sid"),
-        inherits: vec![HLLString::from(constants::RESOURCE)],
+        name: CascadeString::from("unlabeled_sid"),
+        inherits: vec![CascadeString::from(constants::RESOURCE)],
         is_virtual: false,
         list_coercion: false,
         declaration_file: None,
@@ -169,7 +169,7 @@ pub fn get_global_bindings(
     types: &mut TypeMap,
     classlist: &mut ClassList,
     file: &SimpleFile<String, String>,
-) -> Result<(), HLLErrors> {
+) -> Result<(), CascadeErrors> {
     for e in &p.policy.exprs {
         if let Expression::Stmt(Statement::LetBinding(l)) = e {
             let let_rvalue = ArgForValidation::from(&l.value);
@@ -189,7 +189,7 @@ pub fn get_global_bindings(
                             "perm",
                             match a {
                                 ArgForValidation::Var(s) => BoundTypeInfo::Single(s.to_string()),
-                                _ => return Err(HLLInternalError {}.into()),
+                                _ => return Err(InternalError {}.into()),
                             },
                         )
                     } else {
@@ -222,7 +222,7 @@ pub fn build_func_map<'a>(
     types: &'a TypeMap,
     parent_type: Option<&'a TypeInfo>,
     file: &'a SimpleFile<String, String>,
-) -> Result<FunctionMap<'a>, HLLErrors> {
+) -> Result<FunctionMap<'a>, CascadeErrors> {
     let mut decl_map = FunctionMap::new();
     // TODO: This only allows declarations at the top level.
     for e in exprs {
@@ -234,7 +234,7 @@ pub fn build_func_map<'a>(
             Declaration::Type(t) => {
                 let type_being_parsed = match types.get(&t.name.to_string()) {
                     Some(t) => t,
-                    None => return Err(HLLErrorItem::Internal(HLLInternalError {}).into()),
+                    None => return Err(ErrorItem::Internal(InternalError {}).into()),
                 };
                 decl_map.extend(build_func_map(
                     &t.expressions,
@@ -262,8 +262,8 @@ pub fn validate_functions<'a, 'b>(
     types: &'b TypeMap,
     class_perms: &'b ClassList,
     functions_copy: &'b FunctionMap<'b>,
-) -> Result<(), HLLErrors> {
-    let mut errors = HLLErrors::new();
+) -> Result<(), CascadeErrors> {
+    let mut errors = CascadeErrors::new();
     for function in functions.values_mut() {
         match function.validate_body(
             functions_copy,
@@ -287,14 +287,14 @@ fn find_cycles_or_bad_types(
     type_to_check: &TypeInfo,
     types: &TypeMap,
     visited_types: HashSet<&str>,
-) -> Result<(), HLLErrors> {
-    let mut ret = HLLErrors::new();
+) -> Result<(), CascadeErrors> {
+    let mut ret = CascadeErrors::new();
 
     for p in &type_to_check.inherits {
         if visited_types.contains(p.as_ref()) || *p == type_to_check.name {
             // cycle
-            return Err(HLLErrors::from(
-                HLLErrorItem::make_compile_or_internal_error(
+            return Err(CascadeErrors::from(
+                ErrorItem::make_compile_or_internal_error(
                     "Cycle detected",
                     type_to_check.declaration_file.as_ref(),
                     p.get_range(),
@@ -305,8 +305,8 @@ fn find_cycles_or_bad_types(
         let parent_ti = match types.get(p.as_ref()) {
             Some(t) => t,
             None => {
-                return Err(HLLErrors::from(
-                    HLLErrorItem::make_compile_or_internal_error(
+                return Err(CascadeErrors::from(
+                    ErrorItem::make_compile_or_internal_error(
                         "Not a valid identifier",
                         type_to_check.declaration_file.as_ref(),
                         p.get_range(),
@@ -328,12 +328,12 @@ fn find_cycles_or_bad_types(
     ret.into_result(())
 }
 
-fn generate_type_no_parent_errors(missed_types: Vec<&TypeInfo>, types: &TypeMap) -> HLLErrors {
-    let mut ret = HLLErrors::new();
+fn generate_type_no_parent_errors(missed_types: Vec<&TypeInfo>, types: &TypeMap) -> CascadeErrors {
+    let mut ret = CascadeErrors::new();
     for t in &missed_types {
         match find_cycles_or_bad_types(t, types, HashSet::new()) {
             Ok(()) => {
-                ret.add_error(HLLInternalError {});
+                ret.add_error(InternalError {});
                 return ret;
             }
             Err(e) => ret.append(e),
@@ -343,7 +343,10 @@ fn generate_type_no_parent_errors(missed_types: Vec<&TypeInfo>, types: &TypeMap)
     ret
 }
 
-fn get_synthetic_resource_name(dom_info: &TypeInfo, associated_resource: &HLLString) -> HLLString {
+fn get_synthetic_resource_name(
+    dom_info: &TypeInfo,
+    associated_resource: &CascadeString,
+) -> CascadeString {
     format!("{}-{}", dom_info.name, associated_resource).into()
 }
 
@@ -352,16 +355,16 @@ fn create_synthetic_resource(
     dom_info: &TypeInfo,
     associated_parent: Option<&TypeInfo>,
     class: &TypeInfo,
-    class_string: &HLLString,
+    class_string: &CascadeString,
     global_exprs: &mut HashSet<Expression>,
-) -> Result<HLLString, HLLErrorItem> {
+) -> Result<CascadeString, ErrorItem> {
     if !class.is_resource(types) {
-        return Err(HLLCompileError::new(
+        return Err(CompileError::new(
             "not a resource",
             dom_info
                 .declaration_file
                 .as_ref()
-                .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?,
+                .ok_or(ErrorItem::Internal(InternalError {}))?,
             class_string.get_range(),
             "This should not be a domain but a resource.",
         )
@@ -369,7 +372,7 @@ fn create_synthetic_resource(
     }
 
     // Creates a synthetic resource declaration.
-    let mut dup_res_decl = class.decl.as_ref().ok_or(HLLInternalError {})?.clone();
+    let mut dup_res_decl = class.decl.as_ref().ok_or(InternalError {})?.clone();
     let res_name = get_synthetic_resource_name(dom_info, &class.name);
     dup_res_decl.name = res_name.clone();
     // See TypeDecl::new() in parser.lalrpop for resource inheritance.
@@ -384,7 +387,7 @@ fn create_synthetic_resource(
         .iter_mut()
         .for_each(|e| e.set_class_name_if_decl(res_name.clone()));
     if !global_exprs.insert(Expression::Decl(Declaration::Type(Box::new(dup_res_decl)))) {
-        return Err(HLLInternalError {}.into());
+        return Err(InternalError {}.into());
     }
     Ok(res_name)
 }
@@ -397,11 +400,11 @@ fn interpret_associate(
     associate: &Associated,
     associated_parent: Option<&TypeInfo>,
     dom_info: &TypeInfo,
-) -> Result<(), HLLErrors> {
+) -> Result<(), CascadeErrors> {
     // Only allow a set of specific annotation names and strictly check their arguments.
     // TODO: Add tests to verify these checks.
 
-    let mut errors = HLLErrors::new();
+    let mut errors = CascadeErrors::new();
     let mut potential_resources: BTreeMap<_, _> = associate
         .resources
         .iter()
@@ -413,7 +416,7 @@ fn interpret_associate(
         if let Some(class) = func_info.class {
             if let Some((res, seen)) = potential_resources.get_mut(class.name.as_ref()) {
                 *seen = if *seen {
-                    errors.add_error(HLLErrorItem::Compile(HLLCompileError::new(
+                    errors.add_error(ErrorItem::Compile(CompileError::new(
                         "multiple @associated_call in the same resource",
                         func_info.declaration_file,
                         func_info.decl.name.get_range(),
@@ -446,7 +449,7 @@ fn interpret_associate(
                     vec![Argument::Var("this".into())],
                 ))));
                 if !local_exprs.insert(new_call) {
-                    return Err(HLLErrorItem::Internal(HLLInternalError {}).into());
+                    return Err(ErrorItem::Internal(InternalError {}).into());
                 }
             }
         }
@@ -467,12 +470,12 @@ fn interpret_associate(
                     Err(e) => errors.add_error(e),
                 }
             }
-            None => errors.add_error(HLLCompileError::new(
+            None => errors.add_error(CompileError::new(
                 "unknown resource",
                 dom_info
                     .declaration_file
                     .as_ref()
-                    .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?,
+                    .ok_or(ErrorItem::Internal(InternalError {}))?,
                 res.get_range(),
                 "didn't find this resource in the policy",
             )),
@@ -483,7 +486,7 @@ fn interpret_associate(
 }
 
 // domain -> related expressions
-type AssociateExprs = HashMap<HLLString, HashSet<Expression>>;
+type AssociateExprs = HashMap<CascadeString, HashSet<Expression>>;
 
 #[derive(Clone)]
 struct InheritedAnnotation<'a> {
@@ -498,11 +501,11 @@ fn interpret_inherited_annotations<'a, T>(
     types: &TypeMap,
     dom_info: &'a TypeInfo,
     extra_annotations: T,
-) -> Result<(), HLLErrors>
+) -> Result<(), CascadeErrors>
 where
     T: Iterator<Item = InheritedAnnotation<'a>>,
 {
-    let mut errors = HLLErrors::new();
+    let mut errors = CascadeErrors::new();
 
     let local_exprs = match associate_exprs.entry(dom_info.name.clone()) {
         // Ignores already processed domains.
@@ -543,8 +546,8 @@ fn inherit_annotations<'a>(
     funcs: &FunctionMap<'_>,
     types: &'a TypeMap,
     dom_info: &'a TypeInfo,
-) -> Result<Vec<InheritedAnnotation<'a>>, HLLErrors> {
-    let mut errors = HLLErrors::new();
+) -> Result<Vec<InheritedAnnotation<'a>>, CascadeErrors> {
+    let mut errors = CascadeErrors::new();
 
     let inherited_annotations = {
         let mut ret = Vec::new();
@@ -599,8 +602,8 @@ fn inherit_annotations<'a>(
 pub fn apply_associate_annotations<'a>(
     types: &'a TypeMap,
     funcs: &FunctionMap<'_>,
-) -> Result<Vec<Expression>, HLLErrors> {
-    let mut errors = HLLErrors::new();
+) -> Result<Vec<Expression>, CascadeErrors> {
+    let mut errors = CascadeErrors::new();
 
     // Makes sure that there is no cycle.
     organize_type_map(types)?;
@@ -627,16 +630,16 @@ pub fn apply_associate_annotations<'a>(
             // TODO: Avoid cloning all expressions.
             let mut new_domain = types
                 .get(&k.to_string())
-                .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?
+                .ok_or(ErrorItem::Internal(InternalError {}))?
                 .decl
                 .as_ref()
-                .ok_or(HLLErrorItem::Internal(HLLInternalError {}))?
+                .ok_or(ErrorItem::Internal(InternalError {}))?
                 .clone();
             new_domain.expressions = v.into_iter().collect();
             Ok(Expression::Decl(Declaration::Type(Box::new(new_domain))))
         })
         .chain(global_exprs.into_iter().map(Ok))
-        .collect::<Result<_, HLLErrors>>()
+        .collect::<Result<_, CascadeErrors>>()
     {
         Ok(r) => errors.into_result(r),
         Err(e) => {
@@ -648,12 +651,12 @@ pub fn apply_associate_annotations<'a>(
 
 // Temporary check for non-virtual inheritance
 // TODO: remove when adding support for non-virtual inheritance
-fn check_non_virtual_inheritance(types: &TypeMap) -> Result<(), HLLErrors> {
+fn check_non_virtual_inheritance(types: &TypeMap) -> Result<(), CascadeErrors> {
     for t in types.values() {
         for parent in &t.inherits {
             if let Some(p) = types.get(parent.as_ref()) {
                 if !p.is_virtual {
-                    return Err(HLLErrorItem::make_compile_or_internal_error(
+                    return Err(ErrorItem::make_compile_or_internal_error(
                         "Inheriting from a non-virtual type is not yet supported",
                         t.declaration_file.as_ref(),
                         parent.get_range(),
@@ -673,7 +676,7 @@ fn check_non_virtual_inheritance(types: &TypeMap) -> Result<(), HLLErrors> {
 // 1. All types have at least one parent
 // 2. All listed parents are themselves types (or "domain" or "resource")
 // 3. No cycles exist
-fn organize_type_map(types: &TypeMap) -> Result<Vec<&TypeInfo>, HLLErrors> {
+fn organize_type_map(types: &TypeMap) -> Result<Vec<&TypeInfo>, CascadeErrors> {
     let mut tmp_types: BTreeMap<&String, &TypeInfo> = types.iter().collect();
 
     let mut out: Vec<&TypeInfo> = Vec::new();
@@ -743,9 +746,9 @@ fn do_rules_pass<'a>(
     class_perms: &ClassList<'a>,
     parent_type: Option<&'a TypeInfo>,
     file: &'a SimpleFile<String, String>,
-) -> Result<BTreeSet<ValidatedStatement<'a>>, HLLErrors> {
+) -> Result<BTreeSet<ValidatedStatement<'a>>, CascadeErrors> {
     let mut ret = BTreeSet::new();
-    let mut errors = HLLErrors::new();
+    let mut errors = CascadeErrors::new();
     for e in exprs {
         match e {
             Expression::Stmt(s) => {
@@ -769,7 +772,7 @@ fn do_rules_pass<'a>(
             Expression::Decl(Declaration::Type(t)) => {
                 let type_being_parsed = match types.get(&t.name.to_string()) {
                     Some(t) => t,
-                    None => return Err(HLLErrorItem::Internal(HLLInternalError {}).into()),
+                    None => return Err(ErrorItem::Internal(InternalError {}).into()),
                 };
                 match do_rules_pass(
                     &t.expressions,
@@ -865,9 +868,9 @@ fn generate_sids<'a>(
     ]
 }
 
-fn func_map_to_sexp(funcs: &FunctionMap<'_>) -> Result<Vec<sexp::Sexp>, HLLErrors> {
+fn func_map_to_sexp(funcs: &FunctionMap<'_>) -> Result<Vec<sexp::Sexp>, CascadeErrors> {
     let mut ret = Vec::new();
-    let mut errors = HLLErrors::new();
+    let mut errors = CascadeErrors::new();
     for f in funcs.values() {
         match Sexp::try_from(f) {
             Ok(func_sexp) => {
@@ -887,7 +890,7 @@ fn func_map_to_sexp(funcs: &FunctionMap<'_>) -> Result<Vec<sexp::Sexp>, HLLError
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{Declaration, Expression, HLLString, Policy, TypeDecl};
+    use crate::ast::{CascadeString, Declaration, Expression, Policy, TypeDecl};
     use crate::internal_rep::TypeInfo;
 
     #[test]
@@ -895,8 +898,8 @@ mod tests {
         let mut exprs = Vec::new();
         exprs.push(Expression::Decl(Declaration::Type(Box::new(
             TypeDecl::new(
-                HLLString::from("foo"),
-                vec![HLLString::from(constants::DOMAIN)],
+                CascadeString::from("foo"),
+                vec![CascadeString::from(constants::DOMAIN)],
                 Vec::new(),
             ),
         ))));
@@ -919,8 +922,8 @@ mod tests {
         let mut types = get_built_in_types_map();
         let mut foo_type = TypeInfo::new(
             TypeDecl::new(
-                HLLString::from("foo"),
-                vec![HLLString::from(constants::DOMAIN)],
+                CascadeString::from("foo"),
+                vec![CascadeString::from(constants::DOMAIN)],
                 Vec::new(),
             ),
             &SimpleFile::new(String::new(), String::new()),
@@ -930,8 +933,11 @@ mod tests {
 
         let mut bar_type = TypeInfo::new(
             TypeDecl::new(
-                HLLString::from("bar"),
-                vec![HLLString::from(constants::DOMAIN), HLLString::from("foo")],
+                CascadeString::from("bar"),
+                vec![
+                    CascadeString::from(constants::DOMAIN),
+                    CascadeString::from("foo"),
+                ],
                 Vec::new(),
             ),
             &SimpleFile::new(String::new(), String::new()),
@@ -941,11 +947,11 @@ mod tests {
 
         let baz_type = TypeInfo::new(
             TypeDecl::new(
-                HLLString::from("baz"),
+                CascadeString::from("baz"),
                 vec![
-                    HLLString::from(constants::DOMAIN),
-                    HLLString::from("foo"),
-                    HLLString::from("bar"),
+                    CascadeString::from(constants::DOMAIN),
+                    CascadeString::from("foo"),
+                    CascadeString::from("bar"),
                 ],
                 Vec::new(),
             ),

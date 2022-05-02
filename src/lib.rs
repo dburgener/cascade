@@ -20,11 +20,11 @@ use ast::{Policy, PolicyFile};
 use internal_rep::FunctionMap;
 
 use codespan_reporting::files::SimpleFile;
-use error::HLLErrors;
-use lalrpop_util::ParseError;
+use error::CascadeErrors;
+use lalrpop_util::ParseError as LalrpopParseError;
 
 #[cfg(test)]
-use error::HLLErrorItem;
+use error::ErrorItem;
 
 lalrpop_mod!(#[allow(clippy::all)] pub parser);
 
@@ -34,9 +34,9 @@ lalrpop_mod!(#[allow(clippy::all)] pub parser);
 /// Returns a Result containing either a string of CIL policy which is the compiled result or a
 /// list of errors.
 /// In order to convert the compiled CIL policy into a usable policy, you must use secilc
-pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HLLErrors> {
+pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::CascadeErrors> {
     let mut policies: Vec<PolicyFile> = Vec::new();
-    let mut errors = HLLErrors::new();
+    let mut errors = CascadeErrors::new();
 
     for f in input_files {
         let policy_str = match std::fs::read_to_string(&f) {
@@ -51,7 +51,7 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
             Err(evec) => {
                 for e in evec {
                     // TODO: avoid String duplication
-                    errors.add_error(error::HLLParseError::new(e, f.into(), policy_str.clone()));
+                    errors.add_error(error::ParseError::new(e, f.into(), policy_str.clone()));
                 }
                 continue;
             }
@@ -173,7 +173,8 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::HL
 
 fn parse_policy<'a>(
     policy: &'a str,
-) -> Result<Box<Policy>, Vec<ParseError<usize, lalrpop_util::lexer::Token<'a>, &'static str>>> {
+) -> Result<Box<Policy>, Vec<LalrpopParseError<usize, lalrpop_util::lexer::Token<'a>, &'static str>>>
+{
     let mut errors = Vec::new();
     // TODO: Probably should only construct once
     // Why though?
@@ -181,7 +182,7 @@ fn parse_policy<'a>(
     // errors is a vec of ErrorRecovery.  ErrorRecovery is a struct wrapping a ParseError
     // and a sequence of discarded characters.  We don't need those characters, so we just
     // remove the wrapping.
-    let mut parse_errors: Vec<ParseError<usize, lalrpop_util::lexer::Token, &str>> =
+    let mut parse_errors: Vec<LalrpopParseError<usize, lalrpop_util::lexer::Token, &str>> =
         errors.iter().map(|e| e.error.clone()).collect();
     match parse_res {
         Ok(p) => {
@@ -213,7 +214,7 @@ fn generate_cil(v: Vec<sexp::Sexp>) -> String {
 mod tests {
     lalrpop_mod!(pub parser);
 
-    use crate::error::{Diag, HLLCompileError, HLLParseError};
+    use crate::error::{CompileError, Diag, ParseError};
     use codespan_reporting::diagnostic::Diagnostic;
     use std::fs;
     use std::io::Write;
@@ -352,14 +353,14 @@ mod tests {
     fn name_decl_test() {
         let mut errors = Vec::new();
         for name in &["a", "a_a", "a_a_a", "a_aa_a", "a0", "a_0", "a0_00"] {
-            let _: ast::HLLString = parser::NameDeclParser::new()
+            let _: ast::CascadeString = parser::NameDeclParser::new()
                 .parse(&mut errors, name)
                 .expect(&format!("failed to validate `{}`", name));
         }
         for name in &[
             "0", "0a", "_", "_a", "a_", "a_a_", "a__a", "a__a_a", "a_a___a", "-", "a-a",
         ] {
-            let _: ParseError<_, _, _> = parser::NameDeclParser::new()
+            let _: LalrpopParseError<_, _, _> = parser::NameDeclParser::new()
                 .parse(&mut errors, name)
                 .expect_err(&format!("successfully validated invalid `{}`", name));
         }
@@ -506,33 +507,33 @@ mod tests {
 
     #[test]
     fn cycle_error_test() {
-        error_policy_test!("cycle.cas", 2, HLLErrorItem::Compile(_));
+        error_policy_test!("cycle.cas", 2, ErrorItem::Compile(_));
     }
 
     #[test]
     fn bad_type_error_test() {
-        error_policy_test!("nonexistent_inheritance.cas", 1, HLLErrorItem::Compile(_));
+        error_policy_test!("nonexistent_inheritance.cas", 1, ErrorItem::Compile(_));
     }
 
     #[test]
     fn bad_allow_rules_test() {
-        error_policy_test!("bad_allow.cas", 3, HLLErrorItem::Compile(_));
+        error_policy_test!("bad_allow.cas", 3, ErrorItem::Compile(_));
     }
 
     #[test]
     fn non_virtual_inherit_test() {
-        error_policy_test!("non_virtual_inherit.cas", 1, HLLErrorItem::Compile(_));
+        error_policy_test!("non_virtual_inherit.cas", 1, ErrorItem::Compile(_));
     }
 
     #[test]
     fn bad_alias_test() {
-        error_policy_test!("alias.cas", 2, HLLErrorItem::Compile(_));
+        error_policy_test!("alias.cas", 2, ErrorItem::Compile(_));
     }
 
     #[test]
     fn unsupplied_arg_test() {
-        error_policy_test!("unsupplied_arg.cas", 1, HLLErrorItem::Compile(
-                HLLCompileError {
+        error_policy_test!("unsupplied_arg.cas", 1, ErrorItem::Compile(
+                CompileError {
                     diagnostic: Diag {
                         inner: Diagnostic {
                             message: msg,
@@ -547,7 +548,7 @@ mod tests {
     #[test]
     fn parsing_unrecognized_token() {
         error_policy_test!("parse_unrecognized_token.cas", 1,
-            HLLErrorItem::Parse(HLLParseError {
+            ErrorItem::Parse(ParseError {
                 diagnostic: Diag {
                     inner: Diagnostic {
                         message: msg,
@@ -562,7 +563,7 @@ mod tests {
     #[test]
     fn parsing_unknown_token() {
         error_policy_test!("parse_unknown_token.cas", 1,
-            HLLErrorItem::Parse(HLLParseError {
+            ErrorItem::Parse(ParseError {
                 diagnostic: Diag {
                     inner: Diagnostic {
                         message: msg,
@@ -577,7 +578,7 @@ mod tests {
     #[test]
     fn parsing_unexpected_eof() {
         error_policy_test!("parse_unexpected_eof.cas", 1,
-            HLLErrorItem::Parse(HLLParseError {
+            ErrorItem::Parse(ParseError {
                 diagnostic: Diag {
                     inner: Diagnostic {
                         message: msg,
@@ -592,7 +593,7 @@ mod tests {
     #[test]
     fn domain_filecon_test() {
         error_policy_test!("domain_filecon.cas", 1,
-        HLLErrorItem::Compile(HLLCompileError {
+        ErrorItem::Compile(CompileError {
                     diagnostic: Diag {
                         inner: Diagnostic {
                             message: msg,
