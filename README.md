@@ -27,7 +27,9 @@ on the secilc package.
 
 ## casc
 The Cascade compiler is named casc, and will be located at target/debug/casc after a
-successful build.  It takes one argument, the name of a policy file to be built:
+successful build.  Input files are supplied as arguments.  Directory arguments
+are searched recursively for policy files.  If no valid policy files are found,
+casc will exit with an error.
 
 ```
 $ casc my_policy.cas
