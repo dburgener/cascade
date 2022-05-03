@@ -31,6 +31,10 @@ pub struct AliasMap<T> {
 }
 
 pub type TypeMap = AliasMap<TypeInfo>;
+pub type AliasMapIter<'a, T> = std::collections::btree_map::Iter<'a, String, T>;
+pub type AliasMapValues<'a, T> = std::collections::btree_map::Values<'a, String, T>;
+pub type AliasMapValuesMut<'a, T> = std::collections::btree_map::ValuesMut<'a, String, T>;
+pub type AliasMapIntoIter<T> = std::collections::btree_map::IntoIter<String, T>;
 
 impl<T> AliasMap<T> {
     pub fn get(&self, key: &str) -> Option<&T> {
@@ -53,15 +57,15 @@ impl<T> AliasMap<T> {
         self.declarations.insert(key, value);
     }
 
-    pub fn values(&self) -> std::collections::btree_map::Values<'_, String, T> {
+    pub fn values(&self) -> AliasMapValues<'_, T> {
         self.declarations.values()
     }
 
-    pub fn values_mut(&mut self) -> std::collections::btree_map::ValuesMut<'_, String, T> {
+    pub fn values_mut(&mut self) -> AliasMapValuesMut<'_, T> {
         self.declarations.values_mut()
     }
 
-    pub fn iter(&self) -> std::collections::btree_map::Iter<'_, String, T> {
+    pub fn iter(&self) -> AliasMapIter<'_, T> {
         self.declarations.iter()
     }
 
@@ -83,9 +87,9 @@ impl<T> Extend<(String, T)> for AliasMap<T> {
 
 impl<T> IntoIterator for AliasMap<T> {
     type Item = (String, T);
-    type IntoIter = std::collections::btree_map::IntoIter<String, T>;
+    type IntoIter = AliasMapIntoIter<T>;
 
-    fn into_iter(self) -> std::collections::btree_map::IntoIter<String, T> {
+    fn into_iter(self) -> AliasMapIntoIter<T> {
         self.declarations.into_iter()
     }
 }
