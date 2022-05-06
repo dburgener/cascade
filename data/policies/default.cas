@@ -1,0 +1,12 @@
+resource foo {
+	fn read(domain source=bar) {
+		allow(source, this, file, read);
+	}
+}
+
+domain bar {}
+
+domain baz {
+	foo.read();
+	foo.read(this);
+}

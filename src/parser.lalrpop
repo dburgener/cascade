@@ -78,8 +78,13 @@ FuncDecl: Box<FuncDecl> = {
 }
 
 FuncDeclArg: DeclaredArgument = {
-	<t: Symbol> <n: NameDecl> => DeclaredArgument { param_type: t, is_list_param: false, name: n },
-	"[" <t: Symbol> "]" <n: NameDecl> => DeclaredArgument { param_type: t, is_list_param: true, name: n },
+	<t: Symbol> <n: NameDecl> <v: DefaultArg?> => DeclaredArgument { param_type: t, is_list_param: false, name: n, default: v },
+	"[" <t: Symbol> "]" <n: NameDecl> <v: DefaultArg?> => DeclaredArgument { param_type: t, is_list_param: false, name: n, default: v },
+}
+
+#[inline]
+DefaultArg: Argument = {
+	"=" <Arg> => <>
 }
 
 Stmt: Statement = <StmtBody> ";";
