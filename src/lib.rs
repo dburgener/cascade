@@ -499,6 +499,15 @@ mod tests {
     }
 
     #[test]
+    fn default_arg_test() {
+        valid_policy_test(
+            "default.cas",
+            &["(call foo-read (foo bar))", "(call foo-read (foo baz))"],
+            &[],
+        );
+    }
+
+    #[test]
     fn makelist_test() {
         let policy_file = [POLICIES_DIR, "makelist.cas"].concat();
 

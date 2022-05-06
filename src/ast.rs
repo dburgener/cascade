@@ -491,6 +491,7 @@ pub struct DeclaredArgument {
     pub param_type: CascadeString,
     pub is_list_param: bool,
     pub name: CascadeString,
+    pub default: Option<Argument>,
 }
 
 #[cfg(test)]

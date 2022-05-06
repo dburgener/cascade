@@ -936,6 +936,7 @@ fn call_to_av_rule<'a>(
                 param_type: CascadeString::from(constants::DOMAIN),
                 is_list_param: false,
                 name: CascadeString::from("source"),
+                default: None,
             },
             types,
             None,
@@ -945,6 +946,7 @@ fn call_to_av_rule<'a>(
                 param_type: CascadeString::from(constants::RESOURCE),
                 is_list_param: false,
                 name: CascadeString::from("target"),
+                default: None,
             },
             types,
             None,
@@ -954,6 +956,7 @@ fn call_to_av_rule<'a>(
                 param_type: CascadeString::from("obj_class"),
                 is_list_param: false,
                 name: CascadeString::from("class"),
+                default: None,
             },
             types,
             None,
@@ -963,6 +966,7 @@ fn call_to_av_rule<'a>(
                 param_type: CascadeString::from("perm"),
                 is_list_param: true,
                 name: CascadeString::from("class"),
+                default: None,
             },
             types,
             None,
@@ -1087,6 +1091,7 @@ fn call_to_fc_rules<'a>(
                 param_type: CascadeString::from("path"),
                 is_list_param: false,
                 name: CascadeString::from("path_regex"),
+                default: None,
             },
             types,
             None,
@@ -1096,6 +1101,7 @@ fn call_to_fc_rules<'a>(
                 param_type: CascadeString::from("obj_class"), //TODO: not really
                 is_list_param: true,
                 name: CascadeString::from("file_type"),
+                default: None,
             },
             types,
             None,
@@ -1105,6 +1111,7 @@ fn call_to_fc_rules<'a>(
                 param_type: CascadeString::from(constants::RESOURCE),
                 is_list_param: false,
                 name: CascadeString::from("file_context"),
+                default: None,
             },
             types,
             None,
@@ -1195,6 +1202,7 @@ fn call_to_domain_transition<'a>(
                 param_type: CascadeString::from(constants::DOMAIN),
                 is_list_param: false,
                 name: CascadeString::from("source"),
+                default: None,
             },
             types,
             None,
@@ -1204,6 +1212,7 @@ fn call_to_domain_transition<'a>(
                 param_type: CascadeString::from(constants::RESOURCE),
                 is_list_param: false,
                 name: CascadeString::from("executable"),
+                default: None,
             },
             types,
             None,
@@ -1213,6 +1222,7 @@ fn call_to_domain_transition<'a>(
                 param_type: CascadeString::from(constants::DOMAIN),
                 is_list_param: false,
                 name: CascadeString::from("target"),
+                default: None,
             },
             types,
             None,
@@ -1278,6 +1288,7 @@ fn check_associated_call(
             param_type,
             is_list_param,
             name: _,
+            default: _,
         }) => {
             if param_type.as_ref() != constants::DOMAIN || *is_list_param {
                 return Err(CompileError::new(
@@ -1552,7 +1563,7 @@ impl<'a> FunctionArgument<'a> {
             param_type,
             name: declared_arg.name.to_string(),
             is_list_param: declared_arg.is_list_param,
-            default_value: None,
+            default_value: declared_arg.default.clone(),
         })
     }
 
@@ -1886,7 +1897,12 @@ fn validate_arguments<'a>(
     // Some functions start with an implicit "this" argument.  If it does, skip it
     let function_args_iter = function_args.iter().skip_while(|a| a.name == "this");
 
-    if function_args_iter.clone().count() != call.args.len() {
+    if function_args_iter
+        .clone()
+        .take_while(|a| matches!(a.default_value, None))
+        .count()
+        > call.args.len()
+    {
         let function_args_len = if function_args.iter().take(1).any(|f| f.name == "this") {
             function_args.len() - 1
         } else {
