@@ -371,6 +371,21 @@ fn baz([foo]) { ... }
 baz(bar); // Converts to [bar] because of annotation.  Would be a compiler error otherwise
 ```
 
+### Alias annotation
+
+The alias annotation tells the compiler to provide an alternate name for
+referrering to the same item.
+
+This is often used for interoperability.  For example, if one is renaming a
+type or function in an already deployed policy, one can provide an alias to the
+old name for backwards compatibility during a transition period until labels or
+callers have been updated.
+
+``
+@alias(bar)
+resource foo {}
+```
+
 ## Comments
 
 Comments are a way for a policy author to provide explanatory notes for human
