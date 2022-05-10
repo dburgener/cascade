@@ -21,7 +21,6 @@ General bugfixing and clean-up tasks are assumed.  This lists major features nee
 
 ## 0.1
 API Blocks - A feature similar to rust traits to create a set of functions that a child must implement
-Derive annotation - Automatic derivation of inherited member functions
 Associate resources with resources
 Associate types via nesting in a block
 Parse networking rules

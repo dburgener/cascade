@@ -152,9 +152,9 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::Ca
     let f_aliases = compile::collect_aliases(func_map.iter());
     func_map.set_aliases(f_aliases);
 
-    // Validate all functions
+    // Validate all functions, including deriving functions from annotations
     let func_map_copy = func_map.clone(); // In order to read function info while mutating
-    compile::validate_functions(&mut func_map, &type_map, &classlist, &func_map_copy)?;
+    let func_map = compile::validate_functions(func_map, &type_map, &classlist, &func_map_copy)?;
 
     for p in &policies {
         let mut r = match compile::compile_rules_one_file(p, &classlist, &type_map, &func_map) {
@@ -586,6 +586,14 @@ mod tests {
                 Err(e) => panic!("Multi file compilation failed with {}", e),
             }
         }
+    }
+
+    #[test]
+    fn derive_test() {
+        valid_policy_test("derive.cas", &["(macro strategy_union-read ((type this) (type source)) (allow source this (dir (read))) (allow source this (file (read))))",
+        "(macro strategy_foo-read ((type this) (type source)) (allow source this (file (read))))",
+        "(macro custom_define-read ((type this) (type source)) (allow source this (lnk_file (read))))"],
+        &[]);
     }
 
     #[test]

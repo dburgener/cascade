@@ -1,0 +1,29 @@
+virtual resource foo {
+	fn read(domain source) {
+		allow(source, this, file, read);
+	}
+}
+
+virtual resource bar {
+	fn read(domain source) {
+		allow(source, this, dir, read);
+	}
+}
+
+resource custom_define inherits foo, bar {
+	fn read(domain source) {
+		allow(source, this, lnk_file, read);
+	}
+}
+
+@derive([read], strategy=union)
+resource strategy_union inherits foo, bar {}
+
+@derive([read], strategy=foo)
+resource strategy_foo inherits foo, bar {}
+
+domain some_domain {
+	strategy_union.read(this);
+	strategy_foo.read(this);
+	custom_define.read(this);
+}
