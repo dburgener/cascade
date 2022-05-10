@@ -28,6 +28,7 @@ Parse networking rules
 Parse filesystem and ephemeral object rules
 Parse conditionals
 Extend keyword - Allows to extend a type block initially declared elsewhere
+Syntax to call parent class version of functions
 
 ## 1.0
 Documentation Comments
@@ -66,3 +67,4 @@ Automatically check documentation examples for correctness
 MLS/MCS support
 Policy binary size optimizations
 Object class and permission customization
+Generics (possibly?)
