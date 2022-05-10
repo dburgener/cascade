@@ -127,7 +127,7 @@
 (type unlabeled_sid)
 (roletype object_r unlabeled_sid)
 (typeattributeset resource (unlabeled_sid))
-(macro foo-read ((type this) (type source)) (allow source foo (file (read))))
+(macro foo-read ((type this) (type source)) (allow source this (file (read))))
 (call foo-read (foo bar))
 (call foo-read (foo baz))
 (sid kernel)

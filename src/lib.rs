@@ -647,7 +647,7 @@ mod tests {
             &[
                 "(allow bar foo (file (getattr)))",
                 "(allow bar foo (file (write)))",
-                "(macro foo-my_func ((type this) (type source)) (allow source foo (file (read))))",
+                "(macro foo-my_func ((type this) (type source)) (allow source this (file (read))))",
             ],
             &[],
         );
@@ -715,7 +715,7 @@ mod tests {
                         assert!(system_cil.contains("(allow thud babble (file (read)))"));
                         assert!(system_cil.contains("(allow thud babble (file (write)))"));
                         assert!(system_cil.contains("(typeattributeset quux (qux))"));
-                        assert!(system_cil.contains("(macro qux-read ((type this) (type source)) (allow source qux (file (read))))"));
+                        assert!(system_cil.contains("(macro qux-read ((type this) (type source)) (allow source this (file (read))))"));
                         assert!(system_cil.contains("(typeattributeset domain (xyzzy))"));
                         assert!(system_cil.contains("(typeattributeset domain (baz))"));
                         assert!(system_cil.contains("(typeattributeset domain (quuz))"));
@@ -726,7 +726,7 @@ mod tests {
                         assert!(system_cil.contains("(typeattributeset domain (baz))"));
                         assert!(system_cil.contains("(typeattributeset domain (quuz))"));
                         assert!(system_cil.contains("(typeattributeset quux (qux))"));
-                        assert!(system_cil.contains("(macro qux-read ((type this) (type source)) (allow source qux (file (read))))"));
+                        assert!(system_cil.contains("(macro qux-read ((type this) (type source)) (allow source this (file (read))))"));
 
                         assert!(!system_cil.contains("(type thud)"));
                         assert!(!system_cil.contains("(type babble)"));
@@ -758,7 +758,7 @@ mod tests {
                         assert!(system_cil.contains("(allow thud babble (file (read)))"));
                         assert!(system_cil.contains("(allow thud babble (file (write)))"));
                         assert!(system_cil.contains("(typeattributeset quux (qux))"));
-                        assert!(system_cil.contains("(macro qux-read ((type this) (type source)) (allow source qux (file (read))))"));
+                        assert!(system_cil.contains("(macro qux-read ((type this) (type source)) (allow source this (file (read))))"));
                         assert!(system_cil.contains("(typeattributeset domain (xyzzy))"));
                         assert!(system_cil.contains("(typeattributeset domain (baz))"));
                         assert!(system_cil.contains("(typeattributeset domain (quuz))"));
@@ -769,7 +769,7 @@ mod tests {
                         assert!(system_cil.contains("(typeattributeset domain (baz))"));
                         assert!(system_cil.contains("(typeattributeset domain (quuz))"));
                         assert!(system_cil.contains("(typeattributeset quux (qux))"));
-                        assert!(system_cil.contains("(macro qux-read ((type this) (type source)) (allow source qux (file (read))))"));
+                        assert!(system_cil.contains("(macro qux-read ((type this) (type source)) (allow source this (file (read))))"));
 
                         assert!(!system_cil.contains("(type thud)"));
                         assert!(!system_cil.contains("(type babble)"));
@@ -820,6 +820,14 @@ mod tests {
             ],
             &["(capabilty (mac_override", "(capability (wake_alarm"],
         );
+    }
+
+    #[test]
+    fn derive_test() {
+        valid_policy_test("derive.cas", &["(macro strategy_union-read ((type this) (type source)) (allow source this (dir (read))) (allow source this (file (read))))",
+        "(macro strategy_foo-read ((type this) (type source)) (allow source this (file (read))))",
+        "(macro custom_define-read ((type this) (type source)) (allow source this (lnk_file (read))))"],
+        &[]);
     }
 
     #[test]

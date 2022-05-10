@@ -128,7 +128,7 @@
 (type unlabeled_sid)
 (roletype object_r unlabeled_sid)
 (typeattributeset resource (unlabeled_sid))
-(macro baz-read ((type this) (type source)) (allow source baz (dir (read))))
+(macro baz-read ((type this) (type source)) (allow source this (dir (read))))
 (macro bar-list ((type this) (type source)) (call baz-read (this source)))
 (macro bar-read ((type this) (type source)) (call baz-read (this source)))
 (macro baz-list ((type this) (type source)) (call baz-read (this source)))

@@ -124,7 +124,7 @@
 (type unlabeled_sid)
 (roletype object_r unlabeled_sid)
 (typeattributeset resource (unlabeled_sid))
-(macro my_file-read ((type this) (type source)) (allow source my_file (file (read open getattr))))
+(macro my_file-read ((type this) (type source)) (allow source this (file (read open getattr))))
 (call my_file-read (my_file my_domain))
 (sid kernel)
 (sidcontext kernel (system_u system_r kernel_sid ((s0) (s0))))

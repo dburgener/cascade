@@ -24,20 +24,35 @@ pub enum BindableObject<'a> {
     Argument(FunctionArgument<'a>),
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BlockType {
+    Domain,
+    Resource,
+    Function,
+    Annotation,
+    Global,
+}
+
 // Encapsulate all local context in a block's scope
 #[derive(Clone, Debug)]
 pub struct Context<'a> {
     symbols: BTreeMap<CascadeString, BindableObject<'a>>,
     type_map: &'a TypeMap,
     parent_type: Option<&'a TypeInfo>,
+    block_type: BlockType,
 }
 
 impl<'a> Context<'a> {
-    pub fn new(types: &'a TypeMap, parent_type: Option<&'a TypeInfo>) -> Self {
+    pub fn new(
+        block_type: BlockType,
+        types: &'a TypeMap,
+        parent_type: Option<&'a TypeInfo>,
+    ) -> Self {
         Context {
             symbols: BTreeMap::new(),
             type_map: types,
             parent_type,
+            block_type,
         }
     }
 
@@ -46,7 +61,7 @@ impl<'a> Context<'a> {
         types: &'a TypeMap,
         parent_type: Option<&'a TypeInfo>,
     ) -> Self {
-        let mut context = Context::new(types, parent_type);
+        let mut context = Context::new(BlockType::Function, types, parent_type);
         context.insert_function_args(args);
         context
     }
@@ -206,6 +221,14 @@ impl<'a> Context<'a> {
         self.insert_binding(name.clone(), self.resolve_internal_symbols(obj));
         Ok(())
     }
+
+    pub fn in_function_block(&self) -> bool {
+        self.block_type == BlockType::Function
+    }
+
+    pub fn in_annotation(&self) -> bool {
+        self.block_type == BlockType::Annotation
+    }
 }
 
 #[cfg(test)]
@@ -216,7 +239,7 @@ mod tests {
     #[test]
     fn test_symbol_in_context() {
         let tm = compile::get_built_in_types_map().unwrap();
-        let mut context = Context::new(&tm, None);
+        let mut context = Context::new(BlockType::Domain, &tm, None);
 
         context.insert_binding(
             CascadeString::from("foo"),
@@ -241,7 +264,7 @@ mod tests {
     #[test]
     fn test_insert_from_argument() {
         let tm = compile::get_built_in_types_map().unwrap();
-        let mut context = Context::new(&tm, None);
+        let mut context = Context::new(BlockType::Domain, &tm, None);
         let cl = ClassList::new();
         let file = SimpleFile::<String, String>::new("name".to_string(), "source".to_string());
 
@@ -272,7 +295,7 @@ mod tests {
     #[test]
     fn test_convert_arg_this() {
         let tm = compile::get_built_in_types_map().unwrap();
-        let context = Context::new(&tm, tm.get("domain"));
+        let context = Context::new(BlockType::Domain, &tm, tm.get("domain"));
         assert_eq!(&context.convert_arg_this("foo"), "foo");
         assert_eq!(&context.convert_arg_this("this"), "this");
         assert_eq!(&context.convert_arg_this("this.foo"), "domain.foo");
