@@ -130,7 +130,7 @@
 (type unlabeled_sid)
 (roletype object_r unlabeled_sid)
 (typeattributeset resource (unlabeled_sid))
-(macro some_domain-three_args ((type this) (type a) (type b) (type c)) (allow some_domain a (file (write))) (allow some_domain b (file (read))) (allow some_domain c (file (open))))
+(macro some_domain-three_args ((type this) (type a) (type b) (type c)) (allow this a (file (write))) (allow this b (file (read))) (allow this c (file (open))))
 (call some_domain-three_args (some_domain bar baz foo))
 (call some_domain-three_args (some_domain foo bar baz))
 (sid kernel)

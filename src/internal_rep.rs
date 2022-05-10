@@ -17,7 +17,7 @@ use crate::ast::{
     FuncCall, FuncDecl, Module, Statement, TypeDecl,
 };
 use crate::constants;
-use crate::context::Context as BlockContext;
+use crate::context::{BlockType, Context as BlockContext};
 use crate::error::{CascadeErrors, CompileError, ErrorItem, InternalError};
 use crate::obj_class::perm_list_to_sexp;
 
@@ -160,6 +160,12 @@ pub enum AnnotationInfo {
     MakeList,
     Associate(Associated),
     Alias(CascadeString),
+    Derive(Vec<Argument>),
+}
+
+pub enum DeriveStrategy {
+    Union,
+    Parent(CascadeString),
 }
 
 #[derive(Clone, Debug)]
@@ -398,6 +404,20 @@ impl TypeInfo {
         }
         false
     }
+
+    pub fn get_all_parent_names<'a>(&'a self, types: &'a TypeMap) -> BTreeSet<&'a CascadeString> {
+        let mut ret = BTreeSet::new();
+        for parent in &self.inherits {
+            if ret.insert(parent) {
+                if let Some(parent_ti) = types.get(parent.as_ref()) {
+                    for name in &parent_ti.get_all_parent_names(types) {
+                        ret.insert(name);
+                    }
+                }
+            }
+        }
+        ret
+    }
 }
 
 // This is the sexp for *declaring* the type
@@ -554,6 +574,10 @@ fn get_type_annotations(
                     }
                 }
             }
+            "derive" => {
+                // Arguments are validated at function creation time
+                infos.insert(AnnotationInfo::Derive(annotation.arguments.clone()));
+            }
             _ => {
                 return Err(CompileError::new(
                     "Unknown annotation",
@@ -567,6 +591,105 @@ fn get_type_annotations(
     Ok(infos)
 }
 
+// On success, returns a tuple of DeriveStrategy and the names of the functions to derive
+pub fn validate_derive_args(
+    target_type: &TypeInfo,
+    arguments: &[Argument],
+    types: &TypeMap,
+    class_perms: &ClassList,
+    file: &SimpleFile<String, String>,
+) -> Result<(DeriveStrategy, Vec<CascadeString>), CascadeErrors> {
+    // TODO: We might actually be in a context here, once nested type declarations are supported
+    let local_context = BlockContext::new(BlockType::Annotation, types, None);
+    let target_args = vec![
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: CascadeString::from("string"),
+                is_list_param: true,
+                name: CascadeString::from("functions"),
+                default: Some(Argument::Var("all".into())),
+            },
+            types,
+            None,
+        )?,
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: CascadeString::from("string"),
+                is_list_param: false,
+                name: CascadeString::from("strategy"),
+                default: Some(Argument::List(vec!["union".into()])),
+            },
+            types,
+            None,
+        )?,
+    ];
+
+    let fake_call = FuncCall::new(None, CascadeString::from("derive"), arguments.to_vec());
+
+    let valid_args = validate_arguments(
+        &fake_call,
+        &target_args,
+        types,
+        class_perms,
+        &local_context,
+        file,
+    )?;
+
+    let mut args_iter = valid_args.iter();
+
+    let functions = args_iter
+        .next()
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
+        .get_list(&local_context)?
+        .iter()
+        .map(|s| (*s).clone())
+        .collect();
+
+    let strategy = args_iter
+        .next()
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
+        .get_name_or_string(&local_context)?;
+
+    if args_iter.next().is_some() {
+        return Err(ErrorItem::Internal(InternalError::new()).into());
+    }
+
+    let derive_strategy = match strategy.as_ref() {
+        "union" => DeriveStrategy::Union,
+        name => {
+            let parent_ti = types.get(name).ok_or_else(|| {
+                CompileError::new(
+                    "No such type",
+                    file,
+                    strategy.get_range(),
+                    "This type does not exist.",
+                )
+            })?;
+            if target_type.name == name {
+                return Err(CompileError::new(
+                    "Cannot derive from self",
+                    file,
+                    strategy.get_range(),
+                    "This needs to be a parent type",
+                )
+                .into());
+            }
+            if !target_type.is_child_or_actual_type(parent_ti, types) {
+                return Err(CompileError::new(
+                    &format!("{} is not a parent of {}", name, target_type.name),
+                    file,
+                    strategy.get_range(),
+                    &format!("This needs to be a parent of {}", target_type.name),
+                )
+                .into());
+            }
+            DeriveStrategy::Parent(strategy)
+        }
+    };
+
+    Ok((derive_strategy, functions))
+}
+
 // strings may be paths or strings
 pub fn type_name_from_string(string: &str) -> String {
     if string.contains('/') {
@@ -578,11 +701,14 @@ pub fn type_name_from_string(string: &str) -> String {
 
 fn typeinfo_from_string<'a>(
     s: &str,
+    coerce_strings: bool,
     types: &'a TypeMap,
     class_perms: &ClassList,
     context: &BlockContext<'a>,
 ) -> Option<&'a TypeInfo> {
-    if class_perms.is_class(s) {
+    if coerce_strings {
+        types.get("string")
+    } else if class_perms.is_class(s) {
         types.get("obj_class")
     } else if class_perms.is_perm(s) {
         types.get("perm")
@@ -601,7 +727,16 @@ pub fn argument_to_typeinfo<'a>(
     let t: Option<&TypeInfo> = match a {
         ArgForValidation::Var(s) => match context.symbol_in_context(s.as_ref()) {
             Some(res) => Some(res),
-            None => typeinfo_from_string(s.as_ref(), types, class_perms, context),
+            // In annotations, we want to treat arguments as strings and the annotation is
+            // responsible for understanding what they refer to.  This allows annotations to work
+            // across namespaces
+            None => typeinfo_from_string(
+                s.as_ref(),
+                context.in_annotation(),
+                types,
+                class_perms,
+                context,
+            ),
         },
         ArgForValidation::Quote(s) => types.get(&type_name_from_string(s.as_ref())),
         ArgForValidation::List(_) => None,
@@ -1630,6 +1765,73 @@ impl<'a> FunctionInfo<'a> {
         })
     }
 
+    // Create a derived FunctionInfo from the union of derive_classes
+    // derive_classes may be a set of classes to be unioned, or a single class to use
+    // All provided classes are to be unioned (the decision to union all vs use a single one was
+    // made in the parent)
+    pub fn new_derived_function(
+        name: &CascadeString,
+        deriving_type: &'a TypeInfo,
+        derive_classes: &BTreeSet<&CascadeString>,
+        functions: &FunctionMap<'a>,
+        file: &'a SimpleFile<String, String>,
+    ) -> Result<FunctionInfo<'a>, CascadeErrors> {
+        let mut first_parent = None;
+        let mut derived_body = BTreeSet::new();
+        for parent in derive_classes {
+            // The parent may or may not have such a function implemented.
+            // As long as at least one parent has it, that's fine
+            let parent_function = match functions.get(&get_cil_name(Some(parent), name)) {
+                Some(f) => f,
+                None => continue,
+            };
+
+            // All parent functions must have the same prototype.  If this is the first function we
+            // are looking at, we save that prototype.  Otherwise, we compare to ensure they are
+            // identical
+            match first_parent {
+                None => first_parent = Some(parent_function),
+                Some(first_parent) => {
+                    if parent_function.args != first_parent.args {
+                        return Err(CompileError::new(
+                                &format!("In attempting to derive {}, parent functions do not have matching prototypes.", name),
+                                first_parent.declaration_file,
+                                first_parent.get_declaration_range(),
+                                "This is the first parent", // TODO: We need to expand CompileError to allow it to point at two places int he source, I think?
+                                ).into());
+                    }
+                }
+            }
+
+            derived_body.append(&mut parent_function.body.clone().unwrap_or_default());
+        }
+
+        let derived_args = match first_parent {
+            Some(parent) => parent.args.clone(),
+            None => {
+                return Err(CompileError::new(
+                    &format!("Unable to derive {}, because it has no parent implementations", name),
+                    file,
+                    name.get_range(),
+                    &format!("Attempted to derive an implementation of {}, but couldn't find any derivable parent implementations", name)).into());
+                // TODO: A hint about the strategy might be useful
+            }
+        };
+
+        Ok(FunctionInfo {
+            name: name.to_string(),
+            class: Some(deriving_type),
+            is_virtual: false, // TODO: Check documentation for correct behavior here
+            args: derived_args,
+            annotations: BTreeSet::new(),
+            original_body: &[], // Unused after validation
+            body: Some(derived_body),
+            declaration_file: file,
+            is_associated_call: false, // I *think* the behavior should be that this is the true if it's true for *any* parent.  TODO: check/document that
+            decl: None,
+        })
+    }
+
     pub fn get_cil_name(&self) -> String {
         match self.decl {
             Some(decl) => decl.get_cil_name(),
@@ -1774,6 +1976,15 @@ impl From<&FunctionArgument<'_>> for sexp::Sexp {
             atom_s(f.param_type.get_cil_macro_arg_type()),
             atom_s(&f.name),
         ])
+    }
+}
+
+// Two arguments are equal if their types are the same (including is_list_param).
+// Names and defaults may differ
+impl PartialEq for FunctionArgument<'_> {
+    fn eq(&self, other: &FunctionArgument) -> bool {
+        &self.name == "this" && &other.name == "this"
+            || (self.param_type == other.param_type && self.is_list_param == other.is_list_param)
     }
 }
 
@@ -2151,11 +2362,17 @@ impl<'a> TypeInstance<'a> {
         match &self.instance_value {
             TypeValue::Str(s) => {
                 // There are three cases here:
-                // 1. "this" is the typeinfo name
-                // 2. Function call args are left along
+                // 1. "this" is the typeinfo name.  If we are in a function, we leave it as "this"
+                //    because it will be passed in by the args and it needs to stay as this for
+                //    deriving.  If we are in a non-function, we need to convert it here.
+                // 2. Function call args are left alone
                 // 3. Locally bound symbols (not args) are converted to what they are bound to
                 if s == "this" {
-                    Ok(self.type_info.name.clone())
+                    if context.in_function_block() {
+                        Ok(CascadeString::from("this"))
+                    } else {
+                        Ok(self.type_info.name.clone())
+                    }
                 } else {
                     context
                         .get_name_or_string(s.as_ref())
@@ -2589,10 +2806,16 @@ fn validate_argument<'a>(
                 Ok(TypeInstance::new(&arg, arg_typeinfo, file, context))
             } else {
                 Err(ErrorItem::Compile(CompileError::new(
-                    &format!("Expected type inheriting {}", arg_typeinfo.name),
+                    &format!(
+                        "Expected type inheriting {}",
+                        target_argument.param_type.name
+                    ),
                     file,
                     arg.get_range(),
-                    &format!("This type should inherit {}", arg_typeinfo.name),
+                    &format!(
+                        "This type should inherit {}",
+                        target_argument.param_type.name
+                    ),
                 )))
             }
         }
@@ -2621,7 +2844,7 @@ mod tests {
         let type_info = TypeInfo::make_built_in("foo".to_string(), false);
         let file = SimpleFile::new("some_file.txt".to_string(), "contents".to_string());
         let tm = TypeMap::new();
-        let context = BlockContext::new(&tm, None);
+        let context = BlockContext::new(BlockType::Global, &tm, None);
         let type_instance = TypeInstance {
             instance_value: TypeValue::SEType(Some(2..4)),
             type_info: Cow::Borrowed(&type_info),

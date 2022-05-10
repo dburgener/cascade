@@ -127,7 +127,7 @@
 (roletype object_r foo)
 (typeattributeset foo_parent (foo))
 (typeattributeset resource (foo))
-(macro foo-foo ((type this) (type source)) (allow source foo (file (read))))
+(macro foo-foo ((type this) (type source)) (allow source this (file (read))))
 (call foo-foo (foo bar))
 (sid kernel)
 (sidcontext kernel (system_u system_r kernel_sid ((s0) (s0))))

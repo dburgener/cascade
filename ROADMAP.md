@@ -20,7 +20,6 @@ This lists remaining steps.  Remove steps below as they are completed.
 General bugfixing and clean-up tasks are assumed.  This lists major features needed for each milestone.
 
 ## 0.1
-* Derive annotation - Automatic derivation of inherited member functions
 * Associate resources with resources
 * Associate types via nesting in a block
 * Parse networking rules
