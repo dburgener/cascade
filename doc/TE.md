@@ -91,8 +91,11 @@ domain iptables {
 }
 ```
 
-A function marked with the virtual keyword is not allowed to be called directly.
-The purpose of such functions is to be inherited and called on the child type.
+A function marked with the `virtual` keyword is not allowed to be called
+directly. The purpose of such functions is to be inherited and called on the
+child type. If a parent function is marked virtual the child *must* define it,
+either explicitely or via a derive.  This is used to define an expected
+interface that children are guaranteed to implement.
 
 ### Type inheritance
 Child types inherit the following from their parents:

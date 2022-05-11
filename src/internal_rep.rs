@@ -283,6 +283,15 @@ impl TypeInfo {
         // I don't think this should be logically possible
         None
     }
+
+    pub fn defines_function(&self, virtual_function_name: &str, functions: &FunctionMap) -> bool {
+        for f in functions.values() {
+            if f.class == Some(self) && f.name == virtual_function_name {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 // This is the sexp for *declaring* the type

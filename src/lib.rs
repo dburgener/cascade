@@ -577,17 +577,22 @@ mod tests {
 
     #[test]
     fn virtual_function_error_test() {
-        let policy_file = [ERROR_POLICIES_DIR, "virtual_function_errors.cas"].concat();
+        error_policy_test!("virtual_function_non_define.cas", 1,
+            ErrorItem::Compile(CompileError {
+                    diagnostic: Diag {
+                        inner: Diagnostic {
+                            message: msg,
+                            ..
+                        }
+                    },
+                    ..
+                }) if msg.contains("foo does not define a function named foo_func"));
 
-        match compile_system_policy(vec![&policy_file]) {
-            Ok(_) => panic!("Misuse of virtual function compiled successfully"),
-            Err(e) => {
-                assert_eq!(e.error_count(), 1);
-                for error in e {
-                    assert!(matches!(error, ErrorItem::Compile(_)));
-                }
-            }
-        }
+        error_policy_test!(
+            "virtual_function_illegal_call.cas",
+            1,
+            ErrorItem::Compile(_)
+        );
     }
 
     #[test]

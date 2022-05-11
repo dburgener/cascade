@@ -1,0 +1,5 @@
+virtual resource foo_parent {
+	virtual fn foo_func(domain source) {}
+}
+
+virtual resource foo inherits foo_parent {} // Illegal non-inheritance
