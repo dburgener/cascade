@@ -264,6 +264,7 @@ pub fn validate_functions<'a, 'b>(
     functions_copy: &'b FunctionMap<'b>,
 ) -> Result<(), CascadeErrors> {
     let mut errors = CascadeErrors::new();
+    let mut classes_to_virtual_functions = BTreeMap::new();
     for function in functions.values_mut() {
         match function.validate_body(
             functions_copy,
@@ -274,7 +275,33 @@ pub fn validate_functions<'a, 'b>(
             Ok(_) => (),
             Err(e) => errors.append(e),
         }
+        if function.is_virtual {
+            if let Some(func_class) = function.class {
+                classes_to_virtual_functions
+                    .entry(&func_class.name)
+                    .or_insert(BTreeSet::new())
+                    .insert(&function.name);
+            }
+        }
     }
+    // Validate that all required functions exist
+    for setype in types.values() {
+        for parent in &setype.inherits {
+            for virtual_function_name in classes_to_virtual_functions
+                .get(&parent)
+                .unwrap_or(&BTreeSet::new())
+            {
+                if !setype.defines_function(virtual_function_name, functions_copy) {
+                    errors.append(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
+                                &format!("{} does not define a function named {}", setype.name, virtual_function_name),
+                                setype.declaration_file.as_ref(),
+                                parent.get_range(),
+                                &format!("All types inheriting {} are required to implement {} because it is marked as virtual", parent, virtual_function_name))))
+                }
+            }
+        }
+    }
+
     errors.into_result(())
 }
 
