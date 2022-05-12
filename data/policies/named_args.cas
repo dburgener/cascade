@@ -5,9 +5,8 @@ domain some_domain {
 		allow(this, c, file, open);
 	}
 
-	// TODO: It looks like using "this" as a class name is broken
-	some_domain.three_args(a=foo, b=bar, c=baz);
-	some_domain.three_args(c=foo, b=baz, a=bar);
+	this.three_args(a=foo, b=bar, c=baz);
+	this.three_args(c=foo, b=baz, a=bar);
 }
 
 resource foo {}

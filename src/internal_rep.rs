@@ -1654,6 +1654,7 @@ impl<'a> ValidatedStatement<'a> {
                         functions,
                         types,
                         class_perms,
+                        parent_type,
                         Some(args),
                         file,
                     )?)))
@@ -1703,13 +1704,14 @@ impl ValidatedCall {
         functions: &FunctionMap<'_>,
         types: &TypeMap,
         class_perms: &ClassList,
+        parent_type: Option<&TypeInfo>,
         parent_args: Option<&[FunctionArgument]>,
         file: &SimpleFile<String, String>,
     ) -> Result<ValidatedCall, CascadeErrors> {
         let cil_name = match &call.class_name {
             Some(class_name) => {
                 // Resolve aliases
-                match types.get(class_name.as_ref()) {
+                match types.get(convert_class_name_if_this(class_name, parent_type)?.as_ref()) {
                     Some(type_name) => get_cil_name(Some(&type_name.name), &call.name),
                     None => call.get_cil_name(), // Expected to error out below
                 }
@@ -1739,7 +1741,7 @@ impl ValidatedCall {
 
         // Each argument must match the type the function signature expects
         let mut args = match &call.class_name {
-            Some(c) => vec![c.to_string()], // "this"
+            Some(c) => vec![convert_class_name_if_this(c, parent_type)?.to_string()],
             None => Vec::new(),
         };
 
@@ -1755,6 +1757,22 @@ impl ValidatedCall {
         }
 
         Ok(ValidatedCall { cil_name, args })
+    }
+}
+
+// If the class_name is "this", return the parent type name,
+// else return the class name.  If the class_name is "this", and the parent type is None, that is
+// an internal error
+fn convert_class_name_if_this<'a>(
+    class_name: &'a CascadeString,
+    parent_type: Option<&'a TypeInfo>,
+) -> Result<&'a CascadeString, ErrorItem> {
+    if class_name != "this" {
+        return Ok(class_name);
+    }
+    match parent_type {
+        Some(t) => Ok(&t.name),
+        None => Err(InternalError {}.into()),
     }
 }
 
