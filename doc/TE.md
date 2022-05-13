@@ -94,13 +94,14 @@ domain iptables {
 A function marked with the `virtual` keyword is not allowed to be called
 directly. The purpose of such functions is to be inherited and called on the
 child type. If a parent function is marked virtual the child *must* define it,
-either explicitely or via a derive.  This is used to define an expected
-interface that children are guaranteed to implement.
+either explicitely or via a derive (if some parent implementation exists).
+This is used to define an expected interface that children are guaranteed to
+implement.
 
 ### Type inheritance
 Child types inherit the following from their parents:
 1. Any rules refering to the parent
-2. Any member functions from the parent
+2. Any non-virtual member functions from the parent
 3. New copies of associated resources (see 'Resource Association') below
 
 When inheriting from multiple types, different types may provide member
@@ -132,6 +133,9 @@ Virtual types are created using the virtual keyword:
 ```
 virtual domain foo {}
 ```
+
+Unlike concrete types, virtual types inherit virtual functions from their
+parents.
 
 ### List of built in types
 The following types are built in to the language:

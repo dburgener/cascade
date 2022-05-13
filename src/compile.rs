@@ -393,7 +393,7 @@ fn create_synthetic_resource(
                 .as_ref()
                 .ok_or(ErrorItem::Internal(InternalError {}))?,
             class_string.get_range(),
-            "This should not be a domain but a resource.",
+            "This should be a resource, not a domain.",
         )
         .into());
     }
@@ -408,11 +408,21 @@ fn create_synthetic_resource(
         Some(parent) => get_synthetic_resource_name(parent, &class.name),
     };
     dup_res_decl.inherits = vec![parent_name, constants::RESOURCE.into()];
+    // Virtual resources become concrete when associated to concrete types
+    dup_res_decl.is_virtual = dup_res_decl.is_virtual && dom_info.is_virtual;
+    let dup_res_is_virtual = dup_res_decl.is_virtual;
     dup_res_decl.annotations = Annotations::new();
     dup_res_decl
         .expressions
         .iter_mut()
         .for_each(|e| e.set_class_name_if_decl(res_name.clone()));
+
+    dup_res_decl.expressions = dup_res_decl
+        .expressions
+        .into_iter()
+        // If dup_res_decl is concrete, do not inherit virtual functions
+        .filter(|e| dup_res_is_virtual || !e.is_virtual_function())
+        .collect();
     if !global_exprs.insert(Expression::Decl(Declaration::Type(Box::new(dup_res_decl)))) {
         return Err(InternalError {}.into());
     }

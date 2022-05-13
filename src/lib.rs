@@ -656,6 +656,11 @@ mod tests {
     }
 
     #[test]
+    fn virtual_function_associate_error() {
+        error_policy_test!("virtual_function_association.cas", 1, ErrorItem::Compile(_));
+    }
+
+    #[test]
     fn associate_test() {
         valid_policy_test(
             "associate.cas",
@@ -715,15 +720,15 @@ mod tests {
                 "typeattribute bar-var",
                 "typeattributeset foo-var (bar-var)",
                 "typeattributeset resource (bar-var)",
-                "typeattribute baz-var",
+                "type baz-var",
                 // baz-var must inherit bar-var, not foo-var
                 "typeattributeset bar-var (baz-var)",
                 "typeattributeset resource (baz-var)",
-                "typeattribute baz-bin",
+                "type baz-bin",
                 // baz-bin must inherit bar-var, not foo-bin
                 "typeattributeset bar-bin (baz-bin)",
                 "typeattributeset resource (baz-bin)",
-                "typeattribute baz-tmp",
+                "type baz-tmp",
                 // baz-tmp must inherit bar-tmp, not foo-tmp
                 "typeattributeset bar-tmp (baz-tmp)",
                 "typeattributeset resource (baz-tmp)",
