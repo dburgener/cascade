@@ -174,6 +174,13 @@ impl Expression {
             Expression::Error => (),
         }
     }
+
+    pub fn is_virtual_function(&self) -> bool {
+        match self {
+            Expression::Decl(Declaration::Func(f)) => f.is_virtual,
+            _ => false,
+        }
+    }
 }
 
 pub trait Virtualable {
