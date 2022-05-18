@@ -17,6 +17,7 @@ use crate::ast::{
     FuncCall, FuncDecl, Statement, TypeDecl,
 };
 use crate::constants;
+use crate::context::Context as BlockContext;
 use crate::error::{CascadeErrors, CompileError, ErrorItem, InternalError};
 
 const DEFAULT_USER: &str = "system_u";
@@ -467,20 +468,6 @@ pub fn type_name_from_string(string: &str) -> String {
     }
 }
 
-fn arg_in_context<'a>(arg: &str, context: Option<&[FunctionArgument<'a>]>) -> Option<&'a TypeInfo> {
-    match context {
-        Some(context) => {
-            for context_arg in context {
-                if arg == context_arg.name {
-                    return Some(context_arg.param_type);
-                }
-            }
-            None
-        }
-        None => None,
-    }
-}
-
 fn typeinfo_from_string<'a>(
     s: &str,
     types: &'a TypeMap,
@@ -499,11 +486,11 @@ pub fn argument_to_typeinfo<'a>(
     a: &ArgForValidation<'_>,
     types: &'a TypeMap,
     class_perms: &ClassList,
-    context: Option<&[FunctionArgument<'a>]>,
+    context: &BlockContext<'_, 'a>,
     file: &SimpleFile<String, String>,
 ) -> Result<&'a TypeInfo, ErrorItem> {
     let t: Option<&TypeInfo> = match a {
-        ArgForValidation::Var(s) => match arg_in_context(s.as_ref(), context) {
+        ArgForValidation::Var(s) => match context.symbol_in_context(s.as_ref()) {
             Some(res) => Some(res),
             None => typeinfo_from_string(s.as_ref(), types, class_perms),
         },
@@ -525,7 +512,7 @@ pub fn argument_to_typeinfo_vec<'a>(
     arg: &[&CascadeString],
     types: &'a TypeMap,
     class_perms: &ClassList,
-    context: Option<&[FunctionArgument<'a>]>,
+    context: &BlockContext<'_, 'a>,
     file: &SimpleFile<String, String>,
 ) -> Result<Vec<&'a TypeInfo>, ErrorItem> {
     let mut ret = Vec::new();
@@ -919,7 +906,7 @@ fn call_to_av_rule<'a>(
     c: &'a FuncCall,
     types: &'a TypeMap,
     class_perms: &ClassList,
-    args: Option<&[FunctionArgument<'a>]>,
+    context: BlockContext<'_, 'a>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<AvRule<'a>, CascadeErrors> {
     let flavor = match c.name.as_ref() {
@@ -973,7 +960,7 @@ fn call_to_av_rule<'a>(
         )?,
     ];
 
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, args, file)?;
+    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
     let mut args_iter = validated_args.iter();
 
     let source = args_iter
@@ -1082,7 +1069,7 @@ fn call_to_fc_rules<'a>(
     c: &'a FuncCall,
     types: &'a TypeMap,
     class_perms: &ClassList,
-    args: Option<&[FunctionArgument<'a>]>,
+    context: BlockContext<'_, 'a>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<Vec<FileContextRule<'a>>, CascadeErrors> {
     let target_args = vec![
@@ -1118,7 +1105,7 @@ fn call_to_fc_rules<'a>(
         )?,
     ];
 
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, args, file)?;
+    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
     let mut args_iter = validated_args.iter();
     let mut ret = Vec::new();
 
@@ -1193,7 +1180,7 @@ fn call_to_domain_transition<'a>(
     c: &'a FuncCall,
     types: &'a TypeMap,
     class_perms: &ClassList,
-    args: Option<&[FunctionArgument<'a>]>,
+    context: BlockContext<'_, 'a>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<DomtransRule<'a>, CascadeErrors> {
     let target_args = vec![
@@ -1229,7 +1216,7 @@ fn call_to_domain_transition<'a>(
         )?,
     ];
 
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, args, file)?;
+    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
     let mut args_iter = validated_args.iter();
 
     let source = args_iter
@@ -1471,7 +1458,7 @@ impl<'a> FunctionInfo<'a> {
                 functions,
                 types,
                 class_perms,
-                &self.args,
+                BlockContext::from(&self.args),
                 self.class,
                 file,
             ) {
@@ -1606,7 +1593,7 @@ impl<'a> ValidatedStatement<'a> {
         functions: &FunctionMap<'a>,
         types: &'a TypeMap,
         class_perms: &ClassList<'a>,
-        args: &[FunctionArgument<'a>],
+        context: BlockContext<'_, 'a>,
         parent_type: Option<&TypeInfo>,
         file: &'a SimpleFile<String, String>,
     ) -> Result<BTreeSet<ValidatedStatement<'a>>, CascadeErrors> {
@@ -1619,13 +1606,13 @@ impl<'a> ValidatedStatement<'a> {
             Statement::Call(c) => {
                 match c.check_builtin() {
                     Some(BuiltIns::AvRule) => Ok(Some(ValidatedStatement::AvRule(
-                        call_to_av_rule(c, types, class_perms, Some(args), file)?,
+                        call_to_av_rule(c, types, class_perms, context, file)?,
                     ))
                     .into_iter()
                     .collect()),
                     Some(BuiltIns::FileContext) => {
                         if in_resource {
-                            Ok(call_to_fc_rules(c, types, class_perms, Some(args), file)?
+                            Ok(call_to_fc_rules(c, types, class_perms, context, file)?
                                 .into_iter()
                                 .map(ValidatedStatement::FcRule)
                                 .collect())
@@ -1645,7 +1632,7 @@ impl<'a> ValidatedStatement<'a> {
                                     c,
                                     types,
                                     class_perms,
-                                    Some(args),
+                                    context,
                                     file,
                                 )?))
                                 .into_iter()
@@ -1666,7 +1653,7 @@ impl<'a> ValidatedStatement<'a> {
                         types,
                         class_perms,
                         parent_type,
-                        Some(args),
+                        context,
                         file,
                     )?)))
                     .into_iter()
@@ -1722,7 +1709,7 @@ impl ValidatedCall {
         types: &TypeMap,
         class_perms: &ClassList,
         parent_type: Option<&TypeInfo>,
-        parent_args: Option<&[FunctionArgument]>,
+        context: BlockContext,
         file: &SimpleFile<String, String>,
     ) -> Result<ValidatedCall, CascadeErrors> {
         let cil_name = match &call.class_name {
@@ -1762,14 +1749,8 @@ impl ValidatedCall {
             None => Vec::new(),
         };
 
-        for arg in validate_arguments(
-            call,
-            &function_info.args,
-            types,
-            class_perms,
-            parent_args,
-            file,
-        )? {
+        for arg in validate_arguments(call, &function_info.args, types, class_perms, context, file)?
+        {
             args.push(arg.get_name_or_string()?.to_string()); // TODO: Handle lists
         }
 
@@ -1897,7 +1878,7 @@ fn validate_arguments<'a>(
     function_args: &[FunctionArgument],
     types: &'a TypeMap,
     class_perms: &ClassList,
-    parent_args: Option<&[FunctionArgument<'a>]>,
+    context: BlockContext<'_, 'a>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<Vec<TypeInstance<'a>>, CascadeErrors> {
     // Some functions start with an implicit "this" argument.  If it does, skip it
@@ -1942,7 +1923,7 @@ fn validate_arguments<'a>(
             args[index].function_arg,
             types,
             class_perms,
-            parent_args,
+            &context,
             file,
         )?;
         args[index].provided_arg = Some(validated_arg);
@@ -1975,7 +1956,7 @@ fn validate_arguments<'a>(
                     args[index].function_arg,
                     types,
                     class_perms,
-                    parent_args,
+                    &context,
                     file,
                 )?;
                 args[index].provided_arg = Some(validated_arg);
@@ -2004,7 +1985,7 @@ fn validate_arguments<'a>(
                         a.function_arg,
                         types,
                         class_perms,
-                        parent_args,
+                        &context,
                         file,
                     )?,
                     None => {
@@ -2081,7 +2062,7 @@ fn validate_argument<'a>(
     target_argument: &FunctionArgument,
     types: &'a TypeMap,
     class_perms: &ClassList,
-    args: Option<&[FunctionArgument<'a>]>,
+    args: &BlockContext<'_, 'a>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<TypeInstance<'a>, ErrorItem> {
     match &arg {

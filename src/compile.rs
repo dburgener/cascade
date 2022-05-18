@@ -10,6 +10,7 @@ use crate::ast::{
     Annotations, Argument, CascadeString, Declaration, Expression, FuncCall, PolicyFile, Statement,
 };
 use crate::constants;
+use crate::context::Context as BlockContext;
 use crate::error::{CascadeErrors, CompileError, ErrorItem, InternalError};
 use crate::internal_rep::{
     argument_to_typeinfo, argument_to_typeinfo_vec, generate_sid_rules, type_slice_to_variant,
@@ -175,7 +176,13 @@ pub fn get_global_bindings(
             let let_rvalue = ArgForValidation::from(&l.value);
             let (variant, bound_type) = match let_rvalue {
                 ArgForValidation::List(v) => {
-                    let ti_vec = argument_to_typeinfo_vec(&v, types, classlist, None, file)?;
+                    let ti_vec = argument_to_typeinfo_vec(
+                        &v,
+                        types,
+                        classlist,
+                        &BlockContext::default(),
+                        file,
+                    )?;
                     let variant = type_slice_to_variant(&ti_vec, types)?;
                     (
                         variant.name.as_ref(),
@@ -183,7 +190,8 @@ pub fn get_global_bindings(
                     )
                 }
                 a => {
-                    let ti = argument_to_typeinfo(&a, types, classlist, None, file)?;
+                    let ti =
+                        argument_to_typeinfo(&a, types, classlist, &BlockContext::default(), file)?;
                     if ti.name.as_ref() == "perm" {
                         (
                             "perm",
@@ -798,7 +806,7 @@ fn do_rules_pass<'a>(
                     funcs,
                     types,
                     class_perms,
-                    &func_args,
+                    BlockContext::from(&func_args),
                     parent_type,
                     file,
                 ) {
