@@ -8,6 +8,7 @@ extern crate thiserror;
 mod ast;
 mod compile;
 mod constants;
+mod context;
 pub mod error;
 mod functions;
 mod internal_rep;
