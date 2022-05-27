@@ -63,3 +63,9 @@ adding a major feature, it would probably be good to discuss it in the issue
 tracker prior to doing too much work so that we can all come to a consensus on
 how it should work.  No advanced discussion is needed for smaller tweaks and
 bug fixes.
+
+## Project status
+The project is still in its early stages and is being developed and improved
+rapidly.  Not all features present in the documentation may be fully
+implemented yet.  For the latest changes please see [CHANGELOG.md](CHANGELOG.md), and for
+future work plans and milestones please see [ROADMAP.md](ROADMAP.md).
