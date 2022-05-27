@@ -25,7 +25,7 @@ const DEFAULT_OBJECT_ROLE: &str = "object_r";
 const DEFAULT_DOMAIN_ROLE: &str = "system_r";
 const DEFAULT_MLS: &str = "s0";
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AliasMap<T> {
     declarations: BTreeMap<String, T>,
     #[allow(dead_code)]
@@ -271,6 +271,14 @@ impl TypeInfo {
         self.is_type_by_name(types, constants::RESOURCE)
     }
 
+    pub fn is_perm(&self, types: &TypeMap) -> bool {
+        self.is_type_by_name(types, constants::PERM)
+    }
+
+    pub fn is_class(&self, types: &TypeMap) -> bool {
+        self.is_type_by_name(types, constants::CLASS)
+    }
+
     // All types must inherit from some built in.  Get one for this type.
     // It's possible to inherit from multiple built-ins, so order matters here.  We return the
     // first type in order of preference.
@@ -486,7 +494,7 @@ pub fn argument_to_typeinfo<'a>(
     a: &ArgForValidation<'_>,
     types: &'a TypeMap,
     class_perms: &ClassList,
-    context: &BlockContext<'_, 'a>,
+    context: &BlockContext<'a>,
     file: &SimpleFile<String, String>,
 ) -> Result<&'a TypeInfo, ErrorItem> {
     let t: Option<&TypeInfo> = match a {
@@ -512,7 +520,7 @@ pub fn argument_to_typeinfo_vec<'a>(
     arg: &[&CascadeString],
     types: &'a TypeMap,
     class_perms: &ClassList,
-    context: &BlockContext<'_, 'a>,
+    context: &BlockContext<'a>,
     file: &SimpleFile<String, String>,
 ) -> Result<Vec<&'a TypeInfo>, ErrorItem> {
     let mut ret = Vec::new();
@@ -906,7 +914,7 @@ fn call_to_av_rule<'a>(
     c: &'a FuncCall,
     types: &'a TypeMap,
     class_perms: &ClassList,
-    context: BlockContext<'_, 'a>,
+    context: &BlockContext<'a>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<AvRule<'a>, CascadeErrors> {
     let flavor = match c.name.as_ref() {
@@ -966,19 +974,19 @@ fn call_to_av_rule<'a>(
     let source = args_iter
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
-        .get_name_or_string()?;
+        .get_name_or_string(context)?;
     let target = args_iter
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
-        .get_name_or_string()?;
+        .get_name_or_string(context)?;
     let class = args_iter
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
-        .get_name_or_string()?;
+        .get_name_or_string(context)?;
     let perms = args_iter
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
-        .get_list()?;
+        .get_list(context)?;
 
     if args_iter.next().is_some() {
         return Err(ErrorItem::Internal(InternalError::new()).into());
@@ -988,7 +996,7 @@ fn call_to_av_rule<'a>(
         class_perms.verify_permission(&class, p, file)?;
     }
 
-    let perms = class_perms.expand_perm_list(perms);
+    let perms = class_perms.expand_perm_list(perms.iter().collect());
 
     Ok(AvRule {
         av_rule_flavor: flavor,
@@ -1069,7 +1077,7 @@ fn call_to_fc_rules<'a>(
     c: &'a FuncCall,
     types: &'a TypeMap,
     class_perms: &ClassList,
-    context: BlockContext<'_, 'a>,
+    context: &BlockContext<'a>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<Vec<FileContextRule<'a>>, CascadeErrors> {
     let target_args = vec![
@@ -1112,16 +1120,16 @@ fn call_to_fc_rules<'a>(
     let regex_string = args_iter
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
-        .get_name_or_string()?
+        .get_name_or_string(context)?
         .to_string();
     let file_types = args_iter
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
-        .get_list()?;
+        .get_list(context)?;
     let context_str = args_iter
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
-        .get_name_or_string()?;
+        .get_name_or_string(context)?;
     let context = match Context::try_from(context_str.to_string()) {
         Ok(c) => c,
         Err(_) => {
@@ -1159,9 +1167,9 @@ fn call_to_fc_rules<'a>(
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DomtransRule<'a> {
-    pub source: &'a TypeInfo,
-    pub target: &'a TypeInfo,
-    pub executable: &'a TypeInfo,
+    pub source: Cow<'a, TypeInfo>,
+    pub target: Cow<'a, TypeInfo>,
+    pub executable: Cow<'a, TypeInfo>,
 }
 
 impl From<&DomtransRule<'_>> for sexp::Sexp {
@@ -1180,7 +1188,7 @@ fn call_to_domain_transition<'a>(
     c: &'a FuncCall,
     types: &'a TypeMap,
     class_perms: &ClassList,
-    context: BlockContext<'_, 'a>,
+    context: &BlockContext<'a>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<DomtransRule<'a>, CascadeErrors> {
     let target_args = vec![
@@ -1217,7 +1225,7 @@ fn call_to_domain_transition<'a>(
     ];
 
     let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
-    let mut args_iter = validated_args.iter();
+    let mut args_iter = validated_args.into_iter();
 
     let source = args_iter
         .next()
@@ -1451,14 +1459,16 @@ impl<'a> FunctionInfo<'a> {
     ) -> Result<(), CascadeErrors> {
         let mut new_body = BTreeSet::new();
         let mut errors = CascadeErrors::new();
+        let mut local_context = BlockContext::new_from_args(&self.args, types);
 
         for statement in self.original_body {
+            // TODO: This needs to become global in a bit
             match ValidatedStatement::new(
                 statement,
                 functions,
                 types,
                 class_perms,
-                BlockContext::from(&self.args),
+                &mut local_context,
                 self.class,
                 file,
             ) {
@@ -1579,6 +1589,7 @@ impl fmt::Display for FunctionArgument<'_> {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ValidatedStatement<'a> {
     Call(Box<ValidatedCall>),
@@ -1593,7 +1604,7 @@ impl<'a> ValidatedStatement<'a> {
         functions: &FunctionMap<'a>,
         types: &'a TypeMap,
         class_perms: &ClassList<'a>,
-        context: BlockContext<'_, 'a>,
+        context: &mut BlockContext<'a>,
         parent_type: Option<&TypeInfo>,
         file: &'a SimpleFile<String, String>,
     ) -> Result<BTreeSet<ValidatedStatement<'a>>, CascadeErrors> {
@@ -1612,7 +1623,7 @@ impl<'a> ValidatedStatement<'a> {
                     .collect()),
                     Some(BuiltIns::FileContext) => {
                         if in_resource {
-                            Ok(call_to_fc_rules(c, types, class_perms, context, file)?
+                            Ok(call_to_fc_rules(c, types, class_perms, &*context, file)?
                                 .into_iter()
                                 .map(ValidatedStatement::FcRule)
                                 .collect())
@@ -1632,7 +1643,7 @@ impl<'a> ValidatedStatement<'a> {
                                     c,
                                     types,
                                     class_perms,
-                                    context,
+                                    &*context,
                                     file,
                                 )?))
                                 .into_iter()
@@ -1653,22 +1664,19 @@ impl<'a> ValidatedStatement<'a> {
                         types,
                         class_perms,
                         parent_type,
-                        context,
+                        &*context,
                         file,
                     )?)))
                     .into_iter()
                     .collect()),
                 }
             }
-            Statement::LetBinding(_l) => {
+            Statement::LetBinding(l) => {
                 // Global scope let bindings were handled by get_global_bindings() in a previous
                 // pass
-
-                // The if half is a TODO.  They'll be different once implemented.  I'd rather leave
-                // the switch in for clear code and future reference than make clippy happy for the
-                // sake of making clippy happy
-                #[allow(clippy::if_same_then_else)]
                 if parent_type.is_some() {
+                    context.insert_from_argument(&l.name, &l.value, class_perms, file)?;
+
                     Ok(BTreeSet::default()) // TODO: This is where local scope let bindings should happen
                 } else {
                     // Global scope, nothing to do here
@@ -1709,7 +1717,7 @@ impl ValidatedCall {
         types: &TypeMap,
         class_perms: &ClassList,
         parent_type: Option<&TypeInfo>,
-        context: BlockContext,
+        context: &BlockContext,
         file: &SimpleFile<String, String>,
     ) -> Result<ValidatedCall, CascadeErrors> {
         let cil_name = match &call.class_name {
@@ -1751,7 +1759,7 @@ impl ValidatedCall {
 
         for arg in validate_arguments(call, &function_info.args, types, class_perms, context, file)?
         {
-            args.push(arg.get_name_or_string()?.to_string()); // TODO: Handle lists
+            args.push(arg.get_name_or_string(context)?.to_string()); // TODO: Handle lists
         }
 
         Ok(ValidatedCall { cil_name, args })
@@ -1785,23 +1793,26 @@ enum TypeValue {
 }
 
 #[derive(Clone, Debug)]
-struct TypeInstance<'a> {
+pub struct TypeInstance<'a> {
     instance_value: TypeValue,
-    pub type_info: &'a TypeInfo,
+    pub type_info: Cow<'a, TypeInfo>,
     file: &'a SimpleFile<String, String>,
 }
 
 impl<'a> TypeInstance<'a> {
-    fn get_name_or_string(&self) -> Result<CascadeString, ErrorItem> {
+    pub fn get_name_or_string(&self, context: &BlockContext) -> Result<CascadeString, ErrorItem> {
         match &self.instance_value {
             TypeValue::Str(s) => {
+                // There are three cases here:
+                // 1. "this" is the typeinfo name
+                // 2. Function call args are left along
+                // 3. Locally bound symbols (not args) are converted to what they are bound to
                 if s == "this" {
-                    // Always convert "this" into its typeinfo.  This is to support the usage of
-                    // "this" in domains and resources.  Other instances of TypeValue::Str are in
-                    // function calls and should be left as the bound names for cil to handle
                     Ok(self.type_info.name.clone())
                 } else {
-                    Ok(s.clone())
+                    context
+                        .get_name_or_string(s.as_ref())
+                        .ok_or_else(|| InternalError::new().into())
                 }
             }
             TypeValue::Vector(_) => Err(ErrorItem::Compile(CompileError::new(
@@ -1814,9 +1825,15 @@ impl<'a> TypeInstance<'a> {
         }
     }
 
-    fn get_list(&'a self) -> Result<Vec<&'a CascadeString>, ErrorItem> {
+    fn get_list(&self, context: &BlockContext) -> Result<Vec<CascadeString>, ErrorItem> {
         match &self.instance_value {
-            TypeValue::Vector(v) => Ok(v.iter().collect()),
+            TypeValue::Vector(v) => {
+                let mut out_vec = Vec::new();
+                for item in v {
+                    out_vec.extend(context.get_list(item.as_ref()));
+                }
+                Ok(out_vec)
+            }
             _ => Err(ErrorItem::Compile(CompileError::new(
                 "Expected list",
                 self.file,
@@ -1836,7 +1853,11 @@ impl<'a> TypeInstance<'a> {
         }
     }
 
-    fn new(arg: &ArgForValidation, ti: &'a TypeInfo, file: &'a SimpleFile<String, String>) -> Self {
+    pub fn new(
+        arg: &ArgForValidation,
+        ti: &'a TypeInfo,
+        file: &'a SimpleFile<String, String>,
+    ) -> Self {
         let instance_value = match arg {
             ArgForValidation::Var(s) => {
                 if s == &&ti.name {
@@ -1853,7 +1874,7 @@ impl<'a> TypeInstance<'a> {
 
         TypeInstance {
             instance_value,
-            type_info: ti,
+            type_info: Cow::Borrowed(ti),
             file,
         }
     }
@@ -1878,7 +1899,7 @@ fn validate_arguments<'a>(
     function_args: &[FunctionArgument],
     types: &'a TypeMap,
     class_perms: &ClassList,
-    context: BlockContext<'_, 'a>,
+    context: &BlockContext<'a>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<Vec<TypeInstance<'a>>, CascadeErrors> {
     // Some functions start with an implicit "this" argument.  If it does, skip it
@@ -1923,7 +1944,7 @@ fn validate_arguments<'a>(
             args[index].function_arg,
             types,
             class_perms,
-            &context,
+            context,
             file,
         )?;
         args[index].provided_arg = Some(validated_arg);
@@ -1956,7 +1977,7 @@ fn validate_arguments<'a>(
                     args[index].function_arg,
                     types,
                     class_perms,
-                    &context,
+                    context,
                     file,
                 )?;
                 args[index].provided_arg = Some(validated_arg);
@@ -1985,7 +2006,7 @@ fn validate_arguments<'a>(
                         a.function_arg,
                         types,
                         class_perms,
-                        &context,
+                        context,
                         file,
                     )?,
                     None => {
@@ -2062,7 +2083,7 @@ fn validate_argument<'a>(
     target_argument: &FunctionArgument,
     types: &'a TypeMap,
     class_perms: &ClassList,
-    args: &BlockContext<'_, 'a>,
+    args: &BlockContext<'a>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<TypeInstance<'a>, ErrorItem> {
     match &arg {
