@@ -1,0 +1,17 @@
+resource foo {}
+
+domain bar {
+	if (true) {
+		allow(this, foo, file, write);
+	} else {
+		allow(this, fool, file, read);
+	}
+
+	if (false) {
+		allow(this, foo, file, entrypoint);
+	}
+
+	// Without full conditional support, the above lines are just ignored
+	// TODO: implement full conditional support and remove this
+	allow(this, foo, file, getattr);
+}

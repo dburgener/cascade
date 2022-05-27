@@ -82,7 +82,10 @@ FuncDeclArg: DeclaredArgument = {
 	"[" <t: Symbol> "]" <n: NameDecl> => DeclaredArgument { param_type: t, is_list_param: true, name: n },
 }
 
-Stmt: Statement = <StmtBody> ";";
+Stmt: Statement = {
+	<StmtBody> ";",
+	IfBlock => Statement::IfBlock, // TODO
+}
 
 StmtBody: Statement = {
 	<c:Symbol> "." <n:Symbol> "(" <a:Comma<Arg>> ")" => Statement::Call(Box::new(FuncCall::new(Some(c), n, a))),
@@ -113,6 +116,24 @@ Symbol: CascadeString = {
 
 List: Vec<CascadeString> = {
 	"[" <Symbol+> "]"
+}
+
+// TODO: Define boolean struct
+BooleanExpr: () = {
+	Symbol,
+	BooleanExpr "&&" Symbol,
+	BooleanExpr "||" Symbol,
+	"(" BooleanExpr ")",
+}
+
+// TODO: Define if block struct
+IfBlock: () = {
+	"if" "(" BooleanExpr ")" "{" <Stmt+> "}" ElseBlock?,
+}
+
+#[inline]
+ElseBlock: () = {
+	"else" "{" <Stmt+> "}"
 }
 
 Arg: Argument = {

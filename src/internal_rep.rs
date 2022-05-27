@@ -1676,6 +1676,12 @@ impl<'a> ValidatedStatement<'a> {
                     Ok(BTreeSet::default())
                 }
             }
+            Statement::IfBlock => {
+                // TODO, but silently skip for now
+                // The plan would be to recurse and grab the ifs, store both variants
+                // and then resolve the bools later
+                Ok(BTreeSet::default())
+            }
         }
     }
 }

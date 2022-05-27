@@ -498,6 +498,23 @@ mod tests {
         );
     }
 
+    // TODO:  This test doesn't do much yet.  With just parser support the
+    // conditionals just ignore both blocks and generate no policy
+    // Once conditionals are actually working, we should add a bunch more
+    // cases and add positive checks for the arms that should be included
+    // and negative for the ones that shouldn't (and for runtime conditionals
+    // we'll need to see both since the condition gets passed through to the
+    // final policy in the form of booleans and cil conditionals
+    // For now, this confirms that conditionals parse correctly
+    #[test]
+    fn conditional_test() {
+        valid_policy_test(
+            "conditional.cas",
+            &[], // TODO
+            &[],
+        );
+    }
+
     #[test]
     fn makelist_test() {
         let policy_file = [POLICIES_DIR, "makelist.cas"].concat();

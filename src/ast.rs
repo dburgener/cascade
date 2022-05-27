@@ -303,6 +303,7 @@ impl Virtualable for FuncDecl {
 pub enum Statement {
     Call(Box<FuncCall>),
     LetBinding(Box<LetBinding>),
+    IfBlock, // TODO
 }
 
 impl Statement {
@@ -310,6 +311,7 @@ impl Statement {
         match self {
             Statement::Call(c) => c.add_annotation(annotation),
             Statement::LetBinding(l) => l.add_annotation(annotation),
+            Statement::IfBlock => todo!(),
         }
     }
 }
