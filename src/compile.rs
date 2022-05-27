@@ -165,12 +165,14 @@ pub fn get_built_in_types_map() -> TypeMap {
     built_in_types
 }
 
+// TODO: Rewrite entirely with context.  Clones are temporary
 pub fn get_global_bindings(
     p: &PolicyFile,
     types: &mut TypeMap,
     classlist: &mut ClassList,
     file: &SimpleFile<String, String>,
 ) -> Result<(), CascadeErrors> {
+    let tm_clone = &types.clone(); // Temporary workaround to get it compiling
     for e in &p.policy.exprs {
         if let Expression::Stmt(Statement::LetBinding(l)) = e {
             let let_rvalue = ArgForValidation::from(&l.value);
@@ -180,7 +182,7 @@ pub fn get_global_bindings(
                         &v,
                         types,
                         classlist,
-                        &BlockContext::default(),
+                        &BlockContext::new(tm_clone),
                         file,
                     )?;
                     let variant = type_slice_to_variant(&ti_vec, types)?;
@@ -190,8 +192,13 @@ pub fn get_global_bindings(
                     )
                 }
                 a => {
-                    let ti =
-                        argument_to_typeinfo(&a, types, classlist, &BlockContext::default(), file)?;
+                    let ti = argument_to_typeinfo(
+                        &a,
+                        types,
+                        classlist,
+                        &BlockContext::new(tm_clone),
+                        file,
+                    )?;
                     if ti.name.as_ref() == "perm" {
                         (
                             "perm",
@@ -794,19 +801,20 @@ fn do_rules_pass<'a>(
 ) -> Result<BTreeSet<ValidatedStatement<'a>>, CascadeErrors> {
     let mut ret = BTreeSet::new();
     let mut errors = CascadeErrors::new();
+    let func_args = match parent_type {
+        Some(t) => vec![FunctionArgument::new_this_argument(t)],
+        None => Vec::new(),
+    };
+    let mut local_context = BlockContext::new_from_args(&func_args, types);
     for e in exprs {
         match e {
             Expression::Stmt(s) => {
-                let func_args = match parent_type {
-                    Some(t) => vec![FunctionArgument::new_this_argument(t)],
-                    None => Vec::new(),
-                };
                 match ValidatedStatement::new(
                     s,
                     funcs,
                     types,
                     class_perms,
-                    BlockContext::from(&func_args),
+                    &mut local_context,
                     parent_type,
                     file,
                 ) {
