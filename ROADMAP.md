@@ -26,7 +26,6 @@ Associate resources with resources
 Associate types via nesting in a block
 Parse networking rules
 Parse filesystem and ephemeral object rules
-Parse conditionals
 Extend keyword - Allows to extend a type block initially declared elsewhere
 Syntax to call parent class version of functions
 
