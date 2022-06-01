@@ -935,14 +935,13 @@ mod tests {
 
     #[test]
     fn extend_type_map_test() {
-        let mut exprs = Vec::new();
-        exprs.push(Expression::Decl(Declaration::Type(Box::new(
+        let exprs = vec![Expression::Decl(Declaration::Type(Box::new(
             TypeDecl::new(
                 CascadeString::from("foo"),
                 vec![CascadeString::from(constants::DOMAIN)],
                 Vec::new(),
             ),
-        ))));
+        )))];
         let p = Policy::new(exprs);
         let pf = PolicyFile::new(p, SimpleFile::new(String::new(), String::new()));
         let mut types = get_built_in_types_map();
