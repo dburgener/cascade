@@ -511,7 +511,7 @@ mod tests {
         assert!(named_range1.get_range().is_none());
         let named_range2 = Argument::Named(
             CascadeString::new("foo".into(), Range { start: 3, end: 4 }),
-            Box::new(var_range.clone()),
+            Box::new(var_range),
         );
         assert!(matches!(
             named_range2.get_range(),
@@ -539,7 +539,7 @@ mod tests {
 
         let named_range3 = Argument::Named(
             CascadeString::new("foo".into(), Range { start: 13, end: 14 }),
-            Box::new(list_range.clone()),
+            Box::new(list_range),
         );
         assert!(matches!(
             named_range3.get_range(),

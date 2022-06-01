@@ -212,7 +212,7 @@ fn generate_cil(v: Vec<sexp::Sexp>) -> String {
 
 #[cfg(test)]
 mod tests {
-    lalrpop_mod!(pub parser);
+    lalrpop_mod!(#[allow(clippy::all)] pub parser);
 
     use crate::error::{CompileError, Diag, ParseError};
     use codespan_reporting::diagnostic::Diagnostic;
