@@ -252,7 +252,7 @@ mod tests {
                 Ok(c) => c,
                 Err(e) => match fs::read_to_string(&cil_path) {
                     Ok(_) => panic!(
-                        "Failed to compile '{}' whereas there is a reference CIL file: {}",
+                        "Failed to compile '{}', but there is a reference CIL file: {}",
                         policy_path.to_string_lossy(),
                         e
                     ),
