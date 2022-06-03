@@ -96,6 +96,19 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::Ca
 
     errors = errors.into_result_self()?;
 
+    // Generate type aliases
+    let t_aliases = compile::collect_aliases(type_map.iter());
+    type_map.set_aliases(t_aliases);
+
+    for p in &policies {
+        match compile::verify_extends(p, &type_map) {
+            Ok(()) => (),
+            Err(e) => errors.append(e),
+        }
+    }
+
+    errors = errors.into_result_self()?;
+
     // Applies annotations
     {
         let mut tmp_func_map = FunctionMap::new();
@@ -130,10 +143,6 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::Ca
     }
     // Stops if something went wrong for this major step.
     errors = errors.into_result_self()?;
-
-    // Generate type aliases
-    let t_aliases = compile::collect_aliases(type_map.iter());
-    type_map.set_aliases(t_aliases);
 
     // Collect all function declarations
     for p in &policies {
@@ -552,6 +561,19 @@ mod tests {
     }
 
     #[test]
+    fn extend_test() {
+        valid_policy_test(
+            "extend.cas",
+            &[
+                "(allow bar foo (file (getattr)))",
+                "(allow bar foo (file (write)))",
+                "(macro foo-my_func ((type this) (type source)) (allow source foo (file (read))))",
+            ],
+            &[],
+        );
+    }
+
+    #[test]
     fn makelist_test() {
         let policy_file = [POLICIES_DIR, "makelist.cas"].concat();
 
@@ -721,6 +743,11 @@ mod tests {
     #[test]
     fn module_cycle_error() {
         error_policy_test!("module_cycle.cas", 1, ErrorItem::Compile(_));
+    }
+
+    #[test]
+    fn extend_without_declaration_error() {
+        error_policy_test!("extend_no_decl.cas", 1, ErrorItem::Compile(_));
     }
 
     #[test]
