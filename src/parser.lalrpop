@@ -52,17 +52,25 @@ Decl: Declaration = {
 }
 
 TypeDecl: Box<TypeDecl> = {
-	<dr:BuiltInType> <n:NameDecl> <i:InheritList?> "{" <mut v:Expr*> "}" => {
-		let inherits = match i {
-			None => vec![dr],
-			Some(mut i) => {
-				i.push(dr);
-				i
-			}
-		};
+	<keyword: BuiltInOrExtend> <n:NameDecl> <i:InheritList?> "{" <mut v:Expr*> "}" => {
+		let mut inherits = i.unwrap_or_else(|| Vec::new());
+		let mut is_extend = false;
+		match keyword {
+			Some(dr) => inherits.push(dr),
+			None => is_extend = true,
+		}
 		v.iter_mut().for_each(|e| e.set_class_name_if_decl(n.clone()));
-		Box::new(TypeDecl::new(n, inherits, v))
+		let mut td = TypeDecl::new(n, inherits, v);
+		if is_extend {
+			td.set_extend();
+		}
+		Box::new(td)
 	},
+}
+
+BuiltInOrExtend: Option<CascadeString> = {
+	BuiltInType => Some(<>),
+	"extend" => None,
 }
 
 InheritList: Vec<CascadeString> = {

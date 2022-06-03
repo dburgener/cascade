@@ -63,6 +63,24 @@ in certain contexts (e.g. the filesystem associate permission).  In Cascade we
 enforce the rule that only domains may be subjects and handle situations where
 resources are subjects through another mechanism (to be determined).
 
+### Extending types
+A type that has been declared elsewhere can be extended using the keyword
+`extend`.  The contents of an extend block are identical to a normal block, but
+instead of creating a new type, it adds rules and declarations to a previously
+declared type.
+
+This can be used for source code organization, for example adding local
+modifications to an open source policy while maintaining source compatibility
+with the open source policy to simplify pulling in the latest changes from
+upstream.
+
+```
+// foo has been declared elsewhere
+extend foo {
+	// Some rules
+}
+```
+
 ### Functions
 
 Policy authors can define functions using the keyword 'fn'.  Functions defined
