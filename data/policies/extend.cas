@@ -1,0 +1,15 @@
+resource foo {
+	allow(bar, this, file, getattr);
+}
+
+extend foo {
+	fn my_func(domain source) {
+		allow(source, this, file, read);
+	}
+
+	allow(bar, this, file, write);
+}
+
+domain bar {
+	foo.my_func(this);
+}

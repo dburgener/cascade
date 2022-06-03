@@ -104,12 +104,33 @@ pub fn extend_type_map(p: &PolicyFile, type_map: &mut TypeMap) -> Result<(), Cas
             _ => continue,
         };
         match d {
-            Declaration::Type(t) => match TypeInfo::new(*t.clone(), &p.file) {
-                Ok(new_type) => type_map.insert(t.name.to_string(), new_type),
-                Err(e) => errors.append(e),
-            },
+            Declaration::Type(t) => {
+                if !t.is_extension {
+                    match TypeInfo::new(*t.clone(), &p.file) {
+                        Ok(new_type) => type_map.insert(t.name.to_string(), new_type),
+                        Err(e) => errors.append(e),
+                    }
+                }
+            }
             _ => continue,
         };
+    }
+    errors.into_result(())
+}
+
+// Verify that all uses of the extend keyword correspond to types declared elsewhere
+pub fn verify_extends(p: &PolicyFile, type_map: &TypeMap) -> Result<(), CascadeErrors> {
+    let mut errors = CascadeErrors::new();
+    for e in &p.policy.exprs {
+        if let Expression::Decl(Declaration::Type(td)) = e {
+            if td.is_extension && type_map.get(td.name.as_ref()).is_none() {
+                errors.append(CompileError::new(
+                        &format!("{} is undeclared", td.name),
+                        &p.file,
+                        td.name.get_range(),
+                        "In order to extend this type, it must be declared elsewhere (maybe you want to declare it instead?)").into());
+            }
+        }
     }
     errors.into_result(())
 }
