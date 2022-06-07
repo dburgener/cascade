@@ -189,7 +189,7 @@ pub fn get_global_bindings(
                             "perm",
                             match a {
                                 ArgForValidation::Var(s) => BoundTypeInfo::Single(s.to_string()),
-                                _ => return Err(InternalError {}.into()),
+                                _ => return Err(InternalError::new().into()),
                             },
                         )
                     } else {
@@ -234,7 +234,7 @@ pub fn build_func_map<'a>(
             Declaration::Type(t) => {
                 let type_being_parsed = match types.get(&t.name.to_string()) {
                     Some(t) => t,
-                    None => return Err(ErrorItem::Internal(InternalError {}).into()),
+                    None => return Err(ErrorItem::Internal(InternalError::new()).into()),
                 };
                 decl_map.extend(build_func_map(
                     &t.expressions,
@@ -360,7 +360,7 @@ fn generate_type_no_parent_errors(missed_types: Vec<&TypeInfo>, types: &TypeMap)
     for t in &missed_types {
         match find_cycles_or_bad_types(t, types, HashSet::new()) {
             Ok(()) => {
-                ret.add_error(InternalError {});
+                ret.add_error(InternalError::new());
                 return ret;
             }
             Err(e) => ret.append(e),
@@ -391,7 +391,7 @@ fn create_synthetic_resource(
             dom_info
                 .declaration_file
                 .as_ref()
-                .ok_or(ErrorItem::Internal(InternalError {}))?,
+                .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?,
             class_string.get_range(),
             "This should be a resource, not a domain.",
         )
@@ -399,7 +399,7 @@ fn create_synthetic_resource(
     }
 
     // Creates a synthetic resource declaration.
-    let mut dup_res_decl = class.decl.as_ref().ok_or(InternalError {})?.clone();
+    let mut dup_res_decl = class.decl.as_ref().ok_or_else(InternalError::new)?.clone();
     let res_name = get_synthetic_resource_name(dom_info, &class.name);
     dup_res_decl.name = res_name.clone();
     // See TypeDecl::new() in parser.lalrpop for resource inheritance.
@@ -424,7 +424,7 @@ fn create_synthetic_resource(
         .filter(|e| dup_res_is_virtual || !e.is_virtual_function())
         .collect();
     if !global_exprs.insert(Expression::Decl(Declaration::Type(Box::new(dup_res_decl)))) {
-        return Err(InternalError {}.into());
+        return Err(InternalError::new().into());
     }
     Ok(res_name)
 }
@@ -486,7 +486,7 @@ fn interpret_associate(
                     vec![Argument::Var("this".into())],
                 ))));
                 if !local_exprs.insert(new_call) {
-                    return Err(ErrorItem::Internal(InternalError {}).into());
+                    return Err(ErrorItem::Internal(InternalError::new()).into());
                 }
             }
         }
@@ -512,7 +512,7 @@ fn interpret_associate(
                 dom_info
                     .declaration_file
                     .as_ref()
-                    .ok_or(ErrorItem::Internal(InternalError {}))?,
+                    .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?,
                 res.get_range(),
                 "didn't find this resource in the policy",
             )),
@@ -667,10 +667,10 @@ pub fn apply_associate_annotations<'a>(
             // TODO: Avoid cloning all expressions.
             let mut new_domain = types
                 .get(&k.to_string())
-                .ok_or(ErrorItem::Internal(InternalError {}))?
+                .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
                 .decl
                 .as_ref()
-                .ok_or(ErrorItem::Internal(InternalError {}))?
+                .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
                 .clone();
             new_domain.expressions = v.into_iter().collect();
             Ok(Expression::Decl(Declaration::Type(Box::new(new_domain))))
@@ -809,7 +809,7 @@ fn do_rules_pass<'a>(
             Expression::Decl(Declaration::Type(t)) => {
                 let type_being_parsed = match types.get(&t.name.to_string()) {
                     Some(t) => t,
-                    None => return Err(ErrorItem::Internal(InternalError {}).into()),
+                    None => return Err(ErrorItem::Internal(InternalError::new()).into()),
                 };
                 match do_rules_pass(
                     &t.expressions,
