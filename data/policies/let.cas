@@ -14,10 +14,12 @@ resource bar {}
 domain foo {
 
 	let internal_binding = entrypoint;
+	let nested_binding = [ internal_binding setattr ];
 
 	allow(foo, bar, file, read_file_perms);
 	auditallow(foo, bar, file, read_file_perms);
 	allow(foo, bar, file, binding_with_annotation);
 	allow(this, bar, file, internal_binding);
+	allow(this, bar, file, nested_binding);
 	//allow(foo, baz, file, write);
 }

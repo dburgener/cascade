@@ -122,6 +122,7 @@
 (roletype object_r unlabeled_sid)
 (typeattributeset resource (unlabeled_sid))
 (allow foo bar (file (entrypoint)))
+(allow foo bar (file (entrypoint setattr)))
 (allow foo bar (file (read)))
 (allow foo bar (file (read open getattr)))
 (auditallow foo bar (file (read open getattr)))
