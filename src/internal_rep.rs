@@ -318,7 +318,7 @@ pub fn type_slice_to_variant<'a>(
     let first_type_variant = match type_slice.first() {
         Some(t) => match t.get_built_in_variant(types) {
             Some(v) => v,
-            None => return Err(ErrorItem::Internal(InternalError {}).into()),
+            None => return Err(ErrorItem::Internal(InternalError::new()).into()),
         },
         None => todo!(), // TODO: Return error
     };
@@ -326,7 +326,7 @@ pub fn type_slice_to_variant<'a>(
     for ti in type_slice {
         let ti_variant = match ti.get_built_in_variant(types) {
             Some(v) => v,
-            None => return Err(ErrorItem::Internal(InternalError {}).into()),
+            None => return Err(ErrorItem::Internal(InternalError::new()).into()),
         };
         if ti_variant != first_type_variant {
             todo!() // TODO: Return error
@@ -334,7 +334,7 @@ pub fn type_slice_to_variant<'a>(
     }
     match types.get(first_type_variant) {
         Some(t) => Ok(t),
-        None => Err(ErrorItem::Internal(InternalError {}).into()),
+        None => Err(ErrorItem::Internal(InternalError::new()).into()),
     }
 }
 
@@ -927,7 +927,7 @@ fn call_to_av_rule<'a>(
         constants::DONTAUDIT_FUNCTION_NAME => AvRuleFlavor::Dontaudit,
         constants::AUDITALLOW_FUNCTION_NAME => AvRuleFlavor::Auditallow,
         constants::NEVERALLOW_FUNCTION_NAME => AvRuleFlavor::Neverallow,
-        _ => return Err(ErrorItem::Internal(InternalError {}).into()),
+        _ => return Err(ErrorItem::Internal(InternalError::new()).into()),
     };
 
     let target_args = vec![
@@ -978,23 +978,23 @@ fn call_to_av_rule<'a>(
 
     let source = args_iter
         .next()
-        .ok_or(ErrorItem::Internal(InternalError {}))?
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
         .get_name_or_string()?;
     let target = args_iter
         .next()
-        .ok_or(ErrorItem::Internal(InternalError {}))?
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
         .get_name_or_string()?;
     let class = args_iter
         .next()
-        .ok_or(ErrorItem::Internal(InternalError {}))?
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
         .get_name_or_string()?;
     let perms = args_iter
         .next()
-        .ok_or(ErrorItem::Internal(InternalError {}))?
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
         .get_list()?;
 
     if args_iter.next().is_some() {
-        return Err(ErrorItem::Internal(InternalError {}).into());
+        return Err(ErrorItem::Internal(InternalError::new()).into());
     }
 
     for p in &perms {
@@ -1124,16 +1124,16 @@ fn call_to_fc_rules<'a>(
 
     let regex_string = args_iter
         .next()
-        .ok_or(ErrorItem::Internal(InternalError {}))?
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
         .get_name_or_string()?
         .to_string();
     let file_types = args_iter
         .next()
-        .ok_or(ErrorItem::Internal(InternalError {}))?
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
         .get_list()?;
     let context_str = args_iter
         .next()
-        .ok_or(ErrorItem::Internal(InternalError {}))?
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
         .get_name_or_string()?;
     let context = match Context::try_from(context_str.to_string()) {
         Ok(c) => c,
@@ -1234,19 +1234,19 @@ fn call_to_domain_transition<'a>(
 
     let source = args_iter
         .next()
-        .ok_or(ErrorItem::Internal(InternalError {}))?
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
         .type_info;
     let executable = args_iter
         .next()
-        .ok_or(ErrorItem::Internal(InternalError {}))?
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
         .type_info;
     let target = args_iter
         .next()
-        .ok_or(ErrorItem::Internal(InternalError {}))?
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
         .type_info;
 
     if args_iter.next().is_some() {
-        return Err(ErrorItem::Internal(InternalError {}).into());
+        return Err(ErrorItem::Internal(InternalError::new()).into());
     }
 
     Ok(DomtransRule {
@@ -1515,7 +1515,7 @@ impl TryFrom<&FunctionInfo<'_>> for sexp::Sexp {
             Sexp::List(f.args.iter().map(Sexp::from).collect()),
         ];
         match &f.body {
-            None => return Err(InternalError {}.into()),
+            None => return Err(InternalError::new().into()),
             Some(statements) => {
                 for statement in statements {
                     match statement {
@@ -1789,7 +1789,7 @@ fn convert_class_name_if_this<'a>(
     }
     match parent_type {
         Some(t) => Ok(&t.name),
-        None => Err(InternalError {}.into()),
+        None => Err(InternalError::new().into()),
     }
 }
 
@@ -2096,7 +2096,7 @@ fn validate_argument<'a>(
             }
             let target_ti = match types.get(&target_argument.param_type.name.to_string()) {
                 Some(t) => t,
-                None => return Err(InternalError {}.into()),
+                None => return Err(InternalError::new().into()),
             };
             let arg_typeinfo_vec = argument_to_typeinfo_vec(v, types, class_perms, args, file)?;
 

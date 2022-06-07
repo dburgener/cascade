@@ -1,5 +1,12 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
+
+// If this is named "Backtrace", thiserror assumes its the std::backtrace
+// which is only available in nightly, which causes errors on stable.
+// https://github.com/dtolnay/thiserror/issues/130
+// If Cascade moves to nightly or std::backtrace comes to stable, then
+// thiserror can handle backtraces for us with minimal effort
+use backtrace::Backtrace as BacktraceCrate;
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
@@ -68,8 +75,18 @@ impl CompileError {
 }
 
 #[derive(Error, Clone, Debug)]
-#[error("TODO")]
-pub struct InternalError {}
+#[error("{backtrace:?}")]
+pub struct InternalError {
+    backtrace: BacktraceCrate,
+}
+
+impl InternalError {
+    pub fn new() -> Self {
+        InternalError {
+            backtrace: BacktraceCrate::new(),
+        }
+    }
+}
 
 #[derive(Error, Clone, Debug)]
 #[error("{diagnostic}")]
@@ -182,7 +199,7 @@ impl ErrorItem {
     ) -> Self {
         match file {
             Some(f) => ErrorItem::Compile(CompileError::new(msg, f, range, help)),
-            None => ErrorItem::Internal(InternalError {}),
+            None => ErrorItem::Internal(InternalError::new()),
         }
     }
 }
