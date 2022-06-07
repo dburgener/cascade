@@ -6,8 +6,8 @@ use codespan_reporting::files::SimpleFile;
 
 use crate::ast::{Argument, CascadeString};
 use crate::internal_rep::{
-    argument_to_typeinfo, argument_to_typeinfo_vec, ArgForValidation, ClassList, FunctionArgument,
-    TypeInfo, TypeInstance, TypeMap,
+    argument_to_typeinfo, argument_to_typeinfo_vec, type_slice_to_variant, ArgForValidation,
+    ClassList, FunctionArgument, TypeInfo, TypeInstance, TypeMap,
 };
 use crate::CascadeErrors;
 
@@ -110,6 +110,37 @@ impl<'a> Context<'a> {
         self.symbols.insert(name, binding);
     }
 
+    // Resolve internal symbols based on the existing symbol table with one layer of indirection
+    // This is always done on insertion with the resolved symbols stored, so the single layer
+    // always resolves all the way down to the "real" objects, meaning there is no need for
+    // recursion to handle symbols bound to other symbols bound to some real object
+    // TODO: Make sure the resolved symbols are the same sort of symbol and error otherwise
+    fn resolve_internal_symbols(&self, binding: BindableObject<'a>) -> BindableObject<'a> {
+        match binding {
+            BindableObject::Type(_) | BindableObject::TypeList(_) | BindableObject::Argument(_) => {
+                binding
+            }
+            BindableObject::PermList(p) => BindableObject::PermList(
+                p.iter()
+                    .flat_map(|s| self.get_list(s.as_ref()))
+                    .map(|s| s.to_string())
+                    .collect(),
+            ),
+            BindableObject::ClassList(c) => BindableObject::ClassList(
+                c.iter()
+                    .flat_map(|s| self.get_list(s.as_ref()))
+                    .map(|s| s.to_string())
+                    .collect(),
+            ),
+            BindableObject::Class(c) => match self.get_name_or_string(&c) {
+                Some(s) => BindableObject::Class(s.to_string()),
+                None => BindableObject::ClassList(
+                    self.get_list(&c).iter().map(|s| s.to_string()).collect(),
+                ),
+            },
+        }
+    }
+
     pub fn insert_from_argument(
         &mut self,
         name: &CascadeString,
@@ -118,20 +149,24 @@ impl<'a> Context<'a> {
         file: &SimpleFile<String, String>,
     ) -> Result<(), CascadeErrors> {
         let arg = ArgForValidation::from(arg);
-        match &arg {
+        let obj = match &arg {
             ArgForValidation::List(v) => {
                 let arg_typeinfo_vec =
                     argument_to_typeinfo_vec(v, self.type_map, class_perms, &*self, file)?;
-                // TODO: classes and perms
-                let obj = BindableObject::TypeList(arg_typeinfo_vec);
-                self.insert_binding(name.clone(), obj);
+                // TODO: classes
+                let variant = type_slice_to_variant(&arg_typeinfo_vec, self.type_map)?;
+                if variant.is_perm(self.type_map) {
+                    BindableObject::PermList(v.iter().map(|s| s.to_string()).collect())
+                } else {
+                    BindableObject::TypeList(arg_typeinfo_vec)
+                }
             }
             _ => {
                 let arg_typeinfo =
                     argument_to_typeinfo(&arg, self.type_map, class_perms, &*self, file)?;
                 let arg_typeinstance = TypeInstance::new(&arg, arg_typeinfo, file);
                 // TODO: classes
-                let obj = if arg_typeinfo.is_perm(self.type_map) {
+                if arg_typeinfo.is_perm(self.type_map) {
                     BindableObject::PermList(vec![arg_typeinstance
                         .get_name_or_string(&*self)?
                         .to_string()])
@@ -139,10 +174,10 @@ impl<'a> Context<'a> {
                     BindableObject::Class(arg_typeinstance.get_name_or_string(&*self)?.to_string())
                 } else {
                     BindableObject::Type(arg_typeinfo)
-                };
-                self.insert_binding(name.clone(), obj);
+                }
             }
-        }
+        };
+        self.insert_binding(name.clone(), self.resolve_internal_symbols(obj));
         Ok(())
     }
 }
@@ -175,5 +210,36 @@ mod tests {
             .symbol_in_context("baz")
             .expect("Symbol baz not found in context");
         assert_eq!(type_symbol.name.to_string(), "domain".to_string());
+    }
+
+    #[test]
+    fn test_insert_from_argument() {
+        let tm = compile::get_built_in_types_map();
+        let mut context = Context::new(&tm);
+        let cl = ClassList::new();
+        let file = SimpleFile::<String, String>::new("name".to_string(), "source".to_string());
+
+        context
+            .insert_from_argument(
+                &CascadeString::from("foo"),
+                &Argument::Var(CascadeString::from("resource")),
+                &cl,
+                &file,
+            )
+            .expect("Insert 'let foo = resource' failed");
+
+        context
+            .insert_from_argument(
+                &CascadeString::from("bar"),
+                &Argument::Var(CascadeString::from("foo")),
+                &cl,
+                &file,
+            )
+            .expect("Insert 'let bar = foo' failed");
+
+        let val = context
+            .symbol_in_context("bar")
+            .expect("Bar not found in context");
+        assert_eq!(val.name.to_string(), "resource".to_string());
     }
 }
