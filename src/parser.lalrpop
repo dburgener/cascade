@@ -165,7 +165,7 @@ Symbol: CascadeString = {
 }
 
 List: Vec<CascadeString> = {
-	"[" <Symbol+> "]"
+	"[" <TypeName+> "]"
 }
 
 // TODO: Define boolean struct
@@ -187,8 +187,8 @@ ElseBlock: () = {
 }
 
 Arg: Argument = {
-	Symbol => Argument::Var(<>),
-	<s:Symbol> "=" <a: Arg> => Argument::Named(s, Box::new(a)),
+	TypeName => Argument::Var(<>),
+	<s:TypeName> "=" <a: Arg> => Argument::Named(s, Box::new(a)),
 	List => Argument::List(<>),
 	Quoted_String => Argument::Quote(<>),
 }
