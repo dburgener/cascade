@@ -61,4 +61,7 @@ domain qux {
 	foo.tmp.associated_call_from_tmp(this);
 	bar.tmp.associated_call_from_tmp(this);
 	baz.tmp.associated_call_from_tmp(this);
+
+	// Explicit reference
+	allow(this, bar.bin, file, write);
 }
