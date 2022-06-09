@@ -390,7 +390,10 @@ impl From<&TypeInfo> for Option<sexp::Sexp> {
             Some(f) => f,
             None => return None,
         };
-        Some(list(&[atom_s(flavor), atom_s(typeinfo.name.as_ref())]))
+        Some(list(&[
+            atom_s(flavor),
+            atom_s(typeinfo.name.get_cil_name().as_ref()),
+        ]))
     }
 }
 
@@ -651,15 +654,15 @@ impl From<&AvRule<'_>> for sexp::Sexp {
             }
         });
 
-        ret.push(atom_s(rule.source.as_ref().as_ref()));
-        ret.push(atom_s(rule.target.as_ref().as_ref()));
+        ret.push(atom_s(rule.source.get_cil_name().as_ref()));
+        ret.push(atom_s(rule.target.get_cil_name().as_ref()));
 
-        let mut classpermset = vec![Sexp::Atom(Atom::S(rule.class.to_string()))];
+        let mut classpermset = vec![Sexp::Atom(Atom::S(rule.class.get_cil_name()))];
 
         let perms = rule
             .perms
             .iter()
-            .map(|p| Sexp::Atom(Atom::S(p.to_string())))
+            .map(|p| Sexp::Atom(Atom::S(p.get_cil_name())))
             .collect();
 
         classpermset.push(Sexp::List(perms));
@@ -1256,10 +1259,10 @@ impl From<&DomtransRule<'_>> for sexp::Sexp {
     fn from(d: &DomtransRule) -> Self {
         list(&[
             atom_s("typetransition"),
-            atom_s(d.source.name.as_ref()),
-            atom_s(d.executable.name.as_ref()),
+            atom_s(&d.source.name.get_cil_name()),
+            atom_s(&d.executable.name.get_cil_name()),
             atom_s("process"),
-            atom_s(d.target.name.as_ref()),
+            atom_s(&d.target.name.get_cil_name()),
         ])
     }
 }
