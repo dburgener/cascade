@@ -1330,11 +1330,11 @@ pub struct FunctionInfo<'a> {
     pub is_virtual: bool,
     pub args: Vec<FunctionArgument<'a>>,
     pub annotations: BTreeSet<AnnotationInfo>,
-    original_body: &'a Vec<Statement>,
+    original_body: &'a [Statement],
     pub body: Option<BTreeSet<ValidatedStatement<'a>>>,
     pub declaration_file: &'a SimpleFile<String, String>,
     pub is_associated_call: bool,
-    decl: &'a FuncDecl,
+    decl: Option<&'a FuncDecl>,
 }
 
 impl<'a> FunctionInfo<'a> {
@@ -1456,12 +1456,18 @@ impl<'a> FunctionInfo<'a> {
             body: None,
             declaration_file,
             is_associated_call,
-            decl: funcdecl,
+            decl: Some(funcdecl),
         })
     }
 
     pub fn get_cil_name(&self) -> String {
-        self.decl.get_cil_name()
+        match self.decl {
+            Some(decl) => decl.get_cil_name(),
+            None => get_cil_name(
+                self.class.map(|c| &c.name),
+                &CascadeString::from(self.name.as_ref()),
+            ),
+        }
     }
 
     pub fn validate_body(
@@ -1510,7 +1516,10 @@ impl<'a> FunctionInfo<'a> {
     }
 
     pub fn get_declaration_range(&self) -> Option<Range<usize>> {
-        self.decl.name.get_range()
+        match self.decl {
+            Some(decl) => decl.name.get_range(),
+            None => None,
+        }
     }
 }
 
@@ -2374,6 +2383,41 @@ mod tests {
                 .message
                 .contains("cap_bar is not defined for")),
         }
+    }
+
+    #[test]
+    fn function_info_get_cil_name_test() {
+        let some_file = SimpleFile::new("bar".to_string(), "bar".to_string());
+        let mut fi = FunctionInfo {
+            name: "foo".to_string(),
+            class: None,
+            is_virtual: false,
+            args: Vec::new(),
+            annotations: BTreeSet::new(),
+            original_body: &[],
+            body: None,
+            declaration_file: &some_file,
+            is_associated_call: false,
+            decl: None,
+        };
+
+        assert_eq!(&fi.get_cil_name(), "foo");
+
+        let ti = TypeInfo::new(
+            TypeDecl {
+                name: CascadeString::from("bar"),
+                inherits: Vec::new(),
+                is_virtual: false,
+                expressions: Vec::new(),
+                annotations: Annotations::new(),
+            },
+            &some_file,
+        )
+        .unwrap();
+
+        fi.class = Some(&ti);
+
+        assert_eq!(&fi.get_cil_name(), "bar-foo");
     }
 
     #[test]
