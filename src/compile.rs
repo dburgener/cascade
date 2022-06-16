@@ -989,7 +989,7 @@ fn interpret_associate(
                     errors.add_error(ErrorItem::Compile(CompileError::new(
                         "multiple @associated_call in the same resource",
                         func_info.declaration_file,
-                        func_info.decl.name.get_range(),
+                        func_info.get_declaration_range(),
                         "Only one function in the same resource can be annotated with @associated_call.",
                     )));
                     continue;
