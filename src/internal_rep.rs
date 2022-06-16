@@ -1330,11 +1330,11 @@ pub struct FunctionInfo<'a> {
     pub is_virtual: bool,
     pub args: Vec<FunctionArgument<'a>>,
     pub annotations: BTreeSet<AnnotationInfo>,
-    pub original_body: &'a Vec<Statement>,
+    original_body: &'a Vec<Statement>,
     pub body: Option<BTreeSet<ValidatedStatement<'a>>>,
     pub declaration_file: &'a SimpleFile<String, String>,
     pub is_associated_call: bool,
-    pub decl: &'a FuncDecl,
+    decl: &'a FuncDecl,
 }
 
 impl<'a> FunctionInfo<'a> {
@@ -1507,6 +1507,10 @@ impl<'a> FunctionInfo<'a> {
             Sexp::List(self.args.iter().map(Sexp::from).collect()),
             Sexp::from(&call),
         ])
+    }
+
+    pub fn get_declaration_range(&self) -> Option<Range<usize>> {
+        self.decl.name.get_range()
     }
 }
 
