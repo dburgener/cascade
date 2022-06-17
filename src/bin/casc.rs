@@ -14,6 +14,8 @@ struct Args {
     /// List of input files to process.  Directories are searched recursively.
     #[clap(required(true))]
     input_file: Vec<String>,
+    #[clap(default_value = "out.cil", short)]
+    out_filename: String,
 }
 
 fn main() -> std::io::Result<()> {
@@ -38,7 +40,7 @@ fn main() -> std::io::Result<()> {
             "No policy source files found",
         ));
     }
-    let mut out_file = File::create("out.cil")?;
+    let mut out_file = File::create(args.out_filename)?;
     let res = compile_system_policy(policies.iter().map(|s| s as &str).collect());
     match res {
         Err(error_list) => {
