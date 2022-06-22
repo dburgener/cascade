@@ -563,13 +563,14 @@ fn typeinfo_from_string<'a>(
     s: &str,
     types: &'a TypeMap,
     class_perms: &ClassList,
+    context: &BlockContext<'a>,
 ) -> Option<&'a TypeInfo> {
     if class_perms.is_class(s) {
         types.get("obj_class")
     } else if class_perms.is_perm(s) {
         types.get("perm")
     } else {
-        types.get(s)
+        types.get(&context.convert_arg_this(s))
     }
 }
 
@@ -583,7 +584,7 @@ pub fn argument_to_typeinfo<'a>(
     let t: Option<&TypeInfo> = match a {
         ArgForValidation::Var(s) => match context.symbol_in_context(s.as_ref()) {
             Some(res) => Some(res),
-            None => typeinfo_from_string(s.as_ref(), types, class_perms),
+            None => typeinfo_from_string(s.as_ref(), types, class_perms, context),
         },
         ArgForValidation::Quote(s) => types.get(&type_name_from_string(s.as_ref())),
         ArgForValidation::List(_) => None,
@@ -1556,7 +1557,7 @@ impl<'a> FunctionInfo<'a> {
     ) -> Result<(), CascadeErrors> {
         let mut new_body = BTreeSet::new();
         let mut errors = CascadeErrors::new();
-        let mut local_context = BlockContext::new_from_args(&self.args, types);
+        let mut local_context = BlockContext::new_from_args(&self.args, types, self.class);
 
         for statement in self.original_body {
             // TODO: This needs to become global in a bit
@@ -2100,10 +2101,11 @@ impl<'a> TypeInstance<'a> {
         arg: &ArgForValidation,
         ti: &'a TypeInfo,
         file: &'a SimpleFile<String, String>,
+        context: &BlockContext,
     ) -> Self {
         let instance_value = match arg {
             ArgForValidation::Var(s) => {
-                if s == &&ti.name {
+                if ti.name == context.convert_arg_this(s.as_ref()) {
                     TypeValue::SEType(s.get_range())
                 } else {
                     TypeValue::Str((*s).clone())
@@ -2326,7 +2328,7 @@ fn validate_argument<'a>(
     target_argument: &FunctionArgument,
     types: &'a TypeMap,
     class_perms: &ClassList,
-    args: &BlockContext<'a>,
+    context: &BlockContext<'a>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<TypeInstance<'a>, ErrorItem> {
     match &arg {
@@ -2343,7 +2345,7 @@ fn validate_argument<'a>(
                 Some(t) => t,
                 None => return Err(InternalError::new().into()),
             };
-            let arg_typeinfo_vec = argument_to_typeinfo_vec(v, types, class_perms, args, file)?;
+            let arg_typeinfo_vec = argument_to_typeinfo_vec(v, types, class_perms, context, file)?;
 
             for arg in arg_typeinfo_vec {
                 if !arg.is_child_or_actual_type(target_argument.param_type, types) {
@@ -2355,10 +2357,10 @@ fn validate_argument<'a>(
                     )));
                 }
             }
-            Ok(TypeInstance::new(&arg, target_ti, file))
+            Ok(TypeInstance::new(&arg, target_ti, file, context))
         }
         _ => {
-            let arg_typeinfo = argument_to_typeinfo(&arg, types, class_perms, args, file)?;
+            let arg_typeinfo = argument_to_typeinfo(&arg, types, class_perms, context, file)?;
             if target_argument.is_list_param {
                 if arg_typeinfo.list_coercion
                     || matches!(arg_typeinfo.bound_type, BoundTypeInfo::List(_))
@@ -2368,7 +2370,7 @@ fn validate_argument<'a>(
                         target_argument,
                         types,
                         class_perms,
-                        args,
+                        context,
                         file,
                     );
                     // TODO: Do we handle bound lists here?
@@ -2382,7 +2384,7 @@ fn validate_argument<'a>(
             }
 
             if arg_typeinfo.is_child_or_actual_type(target_argument.param_type, types) {
-                Ok(TypeInstance::new(&arg, arg_typeinfo, file))
+                Ok(TypeInstance::new(&arg, arg_typeinfo, file, context))
             } else {
                 Err(ErrorItem::Compile(CompileError::new(
                     &format!("Expected type inheriting {}", arg_typeinfo.name),

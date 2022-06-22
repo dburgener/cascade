@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
 use std::collections::BTreeMap;
+use std::iter;
 
 use codespan_reporting::files::SimpleFile;
 
@@ -28,18 +29,24 @@ pub enum BindableObject<'a> {
 pub struct Context<'a> {
     symbols: BTreeMap<CascadeString, BindableObject<'a>>,
     type_map: &'a TypeMap,
+    parent_type: Option<&'a TypeInfo>,
 }
 
 impl<'a> Context<'a> {
-    pub fn new(types: &'a TypeMap) -> Self {
+    pub fn new(types: &'a TypeMap, parent_type: Option<&'a TypeInfo>) -> Self {
         Context {
             symbols: BTreeMap::new(),
             type_map: types,
+            parent_type,
         }
     }
 
-    pub fn new_from_args(args: &[FunctionArgument<'a>], types: &'a TypeMap) -> Self {
-        let mut context = Context::new(types);
+    pub fn new_from_args(
+        args: &[FunctionArgument<'a>],
+        types: &'a TypeMap,
+        parent_type: Option<&'a TypeInfo>,
+    ) -> Self {
+        let mut context = Context::new(types, parent_type);
         context.insert_function_args(args);
         context
     }
@@ -55,6 +62,7 @@ impl<'a> Context<'a> {
     }
 
     pub fn symbol_in_context(&self, arg: &str) -> Option<&'a TypeInfo> {
+        let arg = self.convert_arg_this(arg);
         match self.symbols.get(&CascadeString::from(arg)) {
             Some(b) => match b {
                 BindableObject::Type(t) => Some(t),
@@ -67,6 +75,24 @@ impl<'a> Context<'a> {
                 BindableObject::Argument(a) => Some(a.param_type),
             },
             None => None,
+        }
+    }
+
+    pub fn convert_arg_this(&self, arg: &str) -> String {
+        match self.parent_type {
+            Some(parent) => {
+                let mut arg_parts = arg.split('.').peekable();
+                if arg_parts.next() == Some("this") && arg_parts.peek().is_some() {
+                    // TODO: rewrite with iterators
+                    iter::once(parent.name.as_ref())
+                        .chain(arg_parts)
+                        .collect::<Vec<&str>>()
+                        .join(".")
+                } else {
+                    arg.to_string()
+                }
+            }
+            None => arg.to_string(),
         }
     }
 
@@ -164,7 +190,7 @@ impl<'a> Context<'a> {
             _ => {
                 let arg_typeinfo =
                     argument_to_typeinfo(&arg, self.type_map, class_perms, &*self, file)?;
-                let arg_typeinstance = TypeInstance::new(&arg, arg_typeinfo, file);
+                let arg_typeinstance = TypeInstance::new(&arg, arg_typeinfo, file, &*self);
                 // TODO: classes
                 if arg_typeinfo.is_perm(self.type_map) {
                     BindableObject::PermList(vec![arg_typeinstance
@@ -190,7 +216,7 @@ mod tests {
     #[test]
     fn test_symbol_in_context() {
         let tm = compile::get_built_in_types_map().unwrap();
-        let mut context = Context::new(&tm);
+        let mut context = Context::new(&tm, None);
 
         context.insert_binding(
             CascadeString::from("foo"),
@@ -215,7 +241,7 @@ mod tests {
     #[test]
     fn test_insert_from_argument() {
         let tm = compile::get_built_in_types_map().unwrap();
-        let mut context = Context::new(&tm);
+        let mut context = Context::new(&tm, None);
         let cl = ClassList::new();
         let file = SimpleFile::<String, String>::new("name".to_string(), "source".to_string());
 
@@ -241,5 +267,14 @@ mod tests {
             .symbol_in_context("bar")
             .expect("Bar not found in context");
         assert_eq!(val.name.to_string(), "resource".to_string());
+    }
+
+    #[test]
+    fn test_convert_arg_this() {
+        let tm = compile::get_built_in_types_map().unwrap();
+        let context = Context::new(&tm, tm.get("domain"));
+        assert_eq!(&context.convert_arg_this("foo"), "foo");
+        assert_eq!(&context.convert_arg_this("this"), "this");
+        assert_eq!(&context.convert_arg_this("this.foo"), "domain.foo");
     }
 }
