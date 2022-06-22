@@ -107,7 +107,7 @@ pub fn extend_type_map(p: &PolicyFile, type_map: &mut TypeMap) -> Result<(), Cas
             Declaration::Type(t) => {
                 if !t.is_extension {
                     match TypeInfo::new(*t.clone(), &p.file) {
-                        Ok(new_type) => type_map.insert(t.name.to_string(), new_type),
+                        Ok(new_type) => type_map.insert(t.name.to_string(), new_type)?,
                         Err(e) => errors.append(e),
                     }
                 }
@@ -135,7 +135,7 @@ pub fn verify_extends(p: &PolicyFile, type_map: &TypeMap) -> Result<(), CascadeE
     errors.into_result(())
 }
 
-pub fn get_built_in_types_map() -> TypeMap {
+pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
     let mut built_in_types = TypeMap::new();
     let list_coercions = constants::BUILT_IN_TYPES.iter().map(|t| *t == "perm");
 
@@ -144,7 +144,7 @@ pub fn get_built_in_types_map() -> TypeMap {
         built_in_types.insert(
             built_in.clone(),
             TypeInfo::make_built_in(built_in, list_coercion),
-        );
+        )?;
     }
 
     //Special handling for sids.  These are temporary built in types that are handled differently
@@ -182,10 +182,10 @@ pub fn get_built_in_types_map() -> TypeMap {
     };
 
     for sid in [kernel_sid, security_sid, unlabeled_sid] {
-        built_in_types.insert(sid.name.to_string(), sid);
+        built_in_types.insert(sid.name.to_string(), sid)?;
     }
 
-    built_in_types
+    Ok(built_in_types)
 }
 
 // TODO: Rewrite entirely with context.  Clones are temporary
@@ -248,7 +248,7 @@ pub fn get_global_bindings(
                     bound_type,
                     &l.annotations,
                 )?;
-                types.insert(l.name.to_string(), new_type);
+                types.insert(l.name.to_string(), new_type)?;
             }
         }
     }
@@ -274,19 +274,18 @@ pub fn build_func_map<'a>(
                     Some(t) => t,
                     None => return Err(ErrorItem::Internal(InternalError::new()).into()),
                 };
-                decl_map.extend(build_func_map(
+                decl_map.try_extend(build_func_map(
                     &t.expressions,
                     types,
                     Some(type_being_parsed),
                     file,
-                )?);
+                )?)?;
             }
             Declaration::Func(f) => {
-                // FIXME: error out for duplicate entries
                 decl_map.insert(
                     f.get_cil_name(),
                     FunctionInfo::new(&**f, types, parent_type, file)?,
-                );
+                )?;
             }
             Declaration::Mod(_) => continue,
         };
@@ -414,10 +413,13 @@ pub fn validate_modules<'a, 'b>(
                 child_modules.insert(m);
             }
         }
-        all_validated_modules.insert(
+        match all_validated_modules.insert(
             module.name.to_string(),
             ValidatedModule::new(module.name.clone(), type_infos, child_modules, module, file)?,
-        );
+        ) {
+            Ok(()) => {}
+            Err(e) => errors.append(e),
+        }
     }
     errors.into_result(())
 }
@@ -879,6 +881,7 @@ pub fn apply_associate_annotations<'a>(
                 .as_ref()
                 .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
                 .clone();
+            new_domain.set_extend();
             new_domain.expressions = v.into_iter().collect();
             Ok(Expression::Decl(Declaration::Type(Box::new(new_domain))))
         })
@@ -1152,7 +1155,7 @@ mod tests {
         )))];
         let p = Policy::new(exprs);
         let pf = PolicyFile::new(p, SimpleFile::new(String::new(), String::new()));
-        let mut types = get_built_in_types_map();
+        let mut types = get_built_in_types_map().unwrap();
         extend_type_map(&pf, &mut types).unwrap();
         match types.get("foo") {
             Some(foo) => assert_eq!(foo.name, "foo"),
@@ -1166,7 +1169,7 @@ mod tests {
 
     #[test]
     fn organize_type_map_test() {
-        let mut types = get_built_in_types_map();
+        let mut types = get_built_in_types_map().unwrap();
         let mut foo_type = TypeInfo::new(
             TypeDecl::new(
                 CascadeString::from("foo"),
@@ -1206,9 +1209,9 @@ mod tests {
         )
         .unwrap();
 
-        types.insert("foo".to_string(), foo_type);
-        types.insert("bar".to_string(), bar_type);
-        types.insert("baz".to_string(), baz_type);
+        types.insert("foo".to_string(), foo_type).unwrap();
+        types.insert("bar".to_string(), bar_type).unwrap();
+        types.insert("baz".to_string(), baz_type).unwrap();
 
         let _type_vec = organize_type_map(&types).unwrap();
 

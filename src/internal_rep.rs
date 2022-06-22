@@ -38,7 +38,7 @@ pub type AliasMapValues<'a, T> = std::collections::btree_map::Values<'a, String,
 pub type AliasMapValuesMut<'a, T> = std::collections::btree_map::ValuesMut<'a, String, T>;
 pub type AliasMapIntoIter<T> = std::collections::btree_map::IntoIter<String, T>;
 
-impl<T> AliasMap<T> {
+impl<T: Declared> AliasMap<T> {
     fn get_type_name<'a>(aliases: &'a BTreeMap<String, String>, key: &'a str) -> &'a str {
         if aliases.contains_key(key) {
             &aliases[key]
@@ -64,8 +64,41 @@ impl<T> AliasMap<T> {
         }
     }
 
-    pub fn insert(&mut self, key: String, value: T) {
+    pub fn insert(&mut self, key: String, value: T) -> Result<(), CascadeErrors> {
+        // try_insert() is nightly only.  Convert once stable.
+        if let Some(orig_decl) = self.get(&key) {
+            // If the file is None, this is a synthetic type, and we should have handled
+            // the error earlier.
+            let mut error = ErrorItem::make_compile_or_internal_error(
+                "Duplicate declaration",
+                value.get_file().as_ref(),
+                value.get_name_range(),
+                &format!(
+                    "A {} named {} already exists",
+                    value.get_generic_name(),
+                    key
+                ),
+            );
+            if let ErrorItem::Compile(e) = error {
+                let (file, range) = match (orig_decl.get_file(), orig_decl.get_name_range()) {
+                    (Some(file), Some(range)) => (file, range),
+                    _ => {
+                        // The previous one was a synthetic type.  We should have already errored
+                        // out
+                        return Err(ErrorItem::Internal(InternalError::new()).into());
+                    }
+                };
+                error = ErrorItem::Compile(e.add_additional_message(
+                    &file,
+                    range,
+                    "Already defined here",
+                ));
+            }
+            return Err(error.into());
+        }
+
         self.declarations.insert(key, value);
+        Ok(())
     }
 
     pub fn values(&self) -> AliasMapValues<'_, T> {
@@ -87,6 +120,17 @@ impl<T> AliasMap<T> {
 
     pub fn set_aliases(&mut self, aliases: BTreeMap<String, String>) {
         self.aliases = aliases
+    }
+
+    // fallible extend, reject duplicates
+    pub fn try_extend<I: IntoIterator<Item = (String, T)>>(
+        &mut self,
+        iter: I,
+    ) -> Result<(), CascadeErrors> {
+        for item in iter {
+            self.insert(item.0, item.1)?;
+        }
+        Ok(())
     }
 }
 
@@ -138,6 +182,12 @@ pub trait Annotated {
     fn get_annotations(&self) -> std::collections::btree_set::Iter<AnnotationInfo>;
 }
 
+pub trait Declared {
+    fn get_file(&self) -> Option<SimpleFile<String, String>>;
+    fn get_name_range(&self) -> Option<Range<usize>>;
+    fn get_generic_name(&self) -> String;
+}
+
 #[derive(Clone, Debug)]
 pub struct TypeInfo {
     pub name: CascadeString,
@@ -175,6 +225,23 @@ impl Ord for TypeInfo {
 impl Annotated for &TypeInfo {
     fn get_annotations(&self) -> std::collections::btree_set::Iter<AnnotationInfo> {
         self.annotations.iter()
+    }
+}
+
+impl Declared for TypeInfo {
+    fn get_file(&self) -> Option<SimpleFile<String, String>> {
+        self.declaration_file.clone()
+    }
+
+    fn get_name_range(&self) -> Option<Range<usize>> {
+        match &self.decl {
+            Some(decl) => decl.name.get_range(),
+            None => None,
+        }
+    }
+
+    fn get_generic_name(&self) -> String {
+        String::from("type")
     }
 }
 
@@ -1336,6 +1403,20 @@ pub struct FunctionInfo<'a> {
     pub decl: &'a FuncDecl,
 }
 
+impl Declared for FunctionInfo<'_> {
+    fn get_file(&self) -> Option<SimpleFile<String, String>> {
+        Some(self.declaration_file.clone())
+    }
+
+    fn get_name_range(&self) -> Option<Range<usize>> {
+        self.decl.name.get_range()
+    }
+
+    fn get_generic_name(&self) -> String {
+        String::from("function")
+    }
+}
+
 impl<'a> FunctionInfo<'a> {
     pub fn new(
         funcdecl: &'a FuncDecl,
@@ -1787,6 +1868,21 @@ pub struct ValidatedModule<'a> {
     pub annotations: BTreeSet<AnnotationInfo>,
     pub types: BTreeSet<&'a TypeInfo>,
     pub validated_modules: BTreeSet<&'a CascadeString>,
+    declaration_file: &'a SimpleFile<String, String>,
+}
+
+impl Declared for ValidatedModule<'_> {
+    fn get_file(&self) -> Option<SimpleFile<String, String>> {
+        Some(self.declaration_file.clone())
+    }
+
+    fn get_name_range(&self) -> Option<Range<usize>> {
+        self.name.get_range()
+    }
+
+    fn get_generic_name(&self) -> String {
+        String::from("module")
+    }
 }
 
 impl<'a> Annotated for &ValidatedModule<'a> {
@@ -1808,6 +1904,7 @@ impl<'a> ValidatedModule<'a> {
             annotations: get_module_annotations(declaration_file, &mod_decl.annotations)?,
             types,
             validated_modules,
+            declaration_file,
         })
     }
 }
