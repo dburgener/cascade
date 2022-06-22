@@ -65,7 +65,7 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::Ca
 
     // Generic initialization
     let mut classlist = obj_class::make_classlist();
-    let mut type_map = compile::get_built_in_types_map();
+    let mut type_map = compile::get_built_in_types_map()?;
     let mut func_map = FunctionMap::new();
     let mut module_map = ModuleMap::new();
     let mut policy_rules = BTreeSet::new();
@@ -748,6 +748,11 @@ mod tests {
     #[test]
     fn extend_without_declaration_error() {
         error_policy_test!("extend_no_decl.cas", 1, ErrorItem::Compile(_));
+    }
+
+    #[test]
+    fn extend_double_declaration_error() {
+        error_policy_test!("extend_double_decl.cas", 1, ErrorItem::Compile(_));
     }
 
     #[test]
