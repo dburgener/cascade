@@ -1,0 +1,16 @@
+resource foo {
+	fn my_func(domain source) {
+		allow(source, this, file, read);
+	}
+}
+
+extend foo {
+	// Illegal double-declaration
+	fn my_func(domain source) {
+		allow(source, this, file, write);
+	}
+}
+
+domain bar {
+	foo.my_func(this);
+}
