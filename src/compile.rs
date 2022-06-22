@@ -185,7 +185,7 @@ pub fn get_global_bindings(
                         &v,
                         types,
                         classlist,
-                        &BlockContext::new(tm_clone),
+                        &BlockContext::new(tm_clone, None),
                         file,
                     )?;
                     let variant = type_slice_to_variant(&ti_vec, types)?;
@@ -199,7 +199,7 @@ pub fn get_global_bindings(
                         &a,
                         types,
                         classlist,
-                        &BlockContext::new(tm_clone),
+                        &BlockContext::new(tm_clone, None),
                         file,
                     )?;
                     if ti.name.as_ref() == "perm" {
@@ -989,7 +989,7 @@ fn do_rules_pass<'a>(
         Some(t) => vec![FunctionArgument::new_this_argument(t)],
         None => Vec::new(),
     };
-    let mut local_context = BlockContext::new_from_args(&func_args, types);
+    let mut local_context = BlockContext::new_from_args(&func_args, types, parent_type);
     for e in exprs {
         match e {
             Expression::Stmt(s) => {

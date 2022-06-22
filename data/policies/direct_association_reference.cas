@@ -1,0 +1,7 @@
+virtual resource associated {}
+
+@associate([associated])
+domain foo {
+	allow(this, foo.associated, file, read);
+	allow(this, this.associated, file, read);
+}
