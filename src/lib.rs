@@ -868,4 +868,13 @@ mod tests {
             &[]
         );
     }
+
+    #[test]
+    fn direct_association_reference_test() {
+        valid_policy_test(
+            "direct_association_reference.cas",
+            &["foo-associated"],
+            &["this.associated", "foo.associated", "this-associated"],
+        );
+    }
 }
