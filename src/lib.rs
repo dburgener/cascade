@@ -826,7 +826,9 @@ mod tests {
     fn derive_test() {
         valid_policy_test("derive.cas", &["(macro strategy_union-read ((type this) (type source)) (allow source this (dir (read))) (allow source this (file (read))))",
         "(macro strategy_foo-read ((type this) (type source)) (allow source this (file (read))))",
-        "(macro custom_define-read ((type this) (type source)) (allow source this (lnk_file (read))))"],
+        "(macro custom_define-read ((type this) (type source)) (allow source this (lnk_file (read))))",
+        "(macro derive_all-read ((type this) (type source)) (allow source this (dir (read))) (allow source this (file (read))))",
+        "(macro derive_all-write ((type this) (type source)) (allow source this (dir (write))))"],
         &[]);
     }
 

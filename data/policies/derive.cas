@@ -8,6 +8,10 @@ virtual resource bar {
 	fn read(domain source) {
 		allow(source, this, dir, read);
 	}
+
+	fn write(domain source) {
+		allow(source, this, dir, write);
+	}
 }
 
 resource custom_define inherits foo, bar {
@@ -21,6 +25,9 @@ resource strategy_union inherits foo, bar {}
 
 @derive([read], strategy=foo)
 resource strategy_foo inherits foo, bar {}
+
+@derive([all], strategy=union)
+resource derive_all inherits foo, bar {}
 
 domain some_domain {
 	strategy_union.read(this);

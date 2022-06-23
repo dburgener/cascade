@@ -393,7 +393,7 @@ fn handle_derive<'a>(
 ) -> Result<(), CascadeErrors> {
     // TODO: Determine what file actually makes sense here
     // TODO: I added unwrap() so now this is more important
-    let (strategy, func_names) = validate_derive_args(
+    let (strategy, mut func_names) = validate_derive_args(
         target_type,
         derive_args,
         types,
@@ -407,7 +407,7 @@ fn handle_derive<'a>(
     };
 
     if vec![CascadeString::from("all")] == func_names {
-        unimplemented!();
+        func_names = get_all_function_names(&parents, &*functions);
     }
 
     for f in func_names {
@@ -894,6 +894,23 @@ pub fn get_policy_rules<'a>(
     }
     // Stops if something went wrong for this major step.
     ret.into_result(reduced_policy_rules)
+}
+
+fn get_all_function_names(
+    type_names: &BTreeSet<&CascadeString>,
+    functions: &FunctionMap,
+) -> Vec<CascadeString> {
+    let mut ret = Vec::new();
+    for f in functions.values() {
+        if let Some(class) = f.class {
+            if type_names.contains(&&class.name)
+                && !ret.contains(&CascadeString::from(&f.name as &str))
+            {
+                ret.push(CascadeString::from(&f.name as &str));
+            }
+        }
+    }
+    ret
 }
 
 // If a type couldn't be organized, it is either a cycle or a non-existant parent somewhere
