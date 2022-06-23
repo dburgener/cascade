@@ -1,6 +1,6 @@
 [package]
 name = "selinux-cascade"
-version = "0.0.1"
+version = "0.0.2"
 description = "A High Level Language for specifying SELinux policy"
 authors = ["Daniel Burgener <dburgener@linux.microsoft.com>", "Mickael Salaun <mic@linux.microsoft.com>"]
 edition = "2018"
