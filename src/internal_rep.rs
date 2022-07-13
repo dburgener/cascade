@@ -270,6 +270,10 @@ impl TypeInfo {
         self.is_type_by_name(types, constants::RESOURCE)
     }
 
+    pub fn is_domain(&self, types: &TypeMap) -> bool {
+        self.is_type_by_name(types, constants::DOMAIN)
+    }
+
     // All types must inherit from some built in.  Get one for this type.
     // It's possible to inherit from multiple built-ins, so order matters here.  We return the
     // first type in order of preference.
@@ -1774,6 +1778,27 @@ impl ValidatedCall {
         }
 
         Ok(ValidatedCall { cil_name, args })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ValidatedModule {
+    pub name: CascadeString,
+    type_infos: Vec<TypeInfo>,
+    validated_modules: Vec<ValidatedModule>,
+}
+
+impl ValidatedModule {
+    pub fn new(
+        name: CascadeString,
+        type_infos: Vec<TypeInfo>,
+        validated_modules: Vec<ValidatedModule>,
+    ) -> Self {
+        ValidatedModule {
+            name,
+            type_infos,
+            validated_modules,
+        }
     }
 }
 
