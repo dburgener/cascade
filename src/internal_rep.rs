@@ -39,13 +39,22 @@ pub type AliasMapValuesMut<'a, T> = std::collections::btree_map::ValuesMut<'a, S
 pub type AliasMapIntoIter<T> = std::collections::btree_map::IntoIter<String, T>;
 
 impl<T> AliasMap<T> {
-    pub fn get(&self, key: &str) -> Option<&T> {
-        let type_name = if self.aliases.contains_key(key) {
-            &self.aliases[key]
+    fn get_type_name<'a>(aliases: &'a BTreeMap<String, String>, key: &'a str) -> &'a str {
+        if aliases.contains_key(key) {
+            &aliases[key]
         } else {
             key
-        };
+        }
+    }
+
+    pub fn get(&self, key: &str) -> Option<&T> {
+        let type_name = Self::get_type_name(&self.aliases, key);
         self.declarations.get(type_name)
+    }
+
+    pub fn get_mut(&mut self, key: &str) -> Option<&mut T> {
+        let type_name = Self::get_type_name(&self.aliases, key);
+        self.declarations.get_mut(type_name)
     }
 
     pub fn new() -> Self {
@@ -277,6 +286,10 @@ impl TypeInfo {
 
     pub fn is_class(&self, types: &TypeMap) -> bool {
         self.is_type_by_name(types, constants::CLASS)
+    }
+
+    pub fn is_domain(&self, types: &TypeMap) -> bool {
+        self.is_type_by_name(types, constants::DOMAIN)
     }
 
     // All types must inherit from some built in.  Get one for this type.
@@ -1763,6 +1776,29 @@ impl ValidatedCall {
         }
 
         Ok(ValidatedCall { cil_name, args })
+    }
+}
+
+pub type ModuleMap<'a> = AliasMap<ValidatedModule<'a>>;
+
+#[derive(Debug, Clone)]
+pub struct ValidatedModule<'a> {
+    pub name: CascadeString,
+    pub types: BTreeSet<&'a TypeInfo>,
+    pub validated_modules: BTreeSet<&'a CascadeString>,
+}
+
+impl<'a> ValidatedModule<'a> {
+    pub fn new(
+        name: CascadeString,
+        types: BTreeSet<&'a TypeInfo>,
+        validated_modules: BTreeSet<&'a CascadeString>,
+    ) -> Self {
+        ValidatedModule {
+            name,
+            types,
+            validated_modules,
+        }
     }
 }
 

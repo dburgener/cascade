@@ -1,0 +1,11 @@
+module foo {
+    module bar;
+}
+
+module bar {
+    module foobar;
+}
+
+module foobar {
+    module foo;
+}

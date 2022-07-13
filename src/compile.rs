@@ -7,7 +7,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::TryFrom;
 
 use crate::ast::{
-    Annotations, Argument, CascadeString, Declaration, Expression, FuncCall, PolicyFile, Statement,
+    Annotations, Argument, CascadeString, Declaration, Expression, FuncCall, Module, PolicyFile,
+    Statement,
 };
 use crate::constants;
 use crate::context::Context as BlockContext;
@@ -15,7 +16,8 @@ use crate::error::{CascadeErrors, CompileError, ErrorItem, InternalError};
 use crate::internal_rep::{
     argument_to_typeinfo, argument_to_typeinfo_vec, generate_sid_rules, type_slice_to_variant,
     Annotated, AnnotationInfo, ArgForValidation, Associated, BoundTypeInfo, ClassList, Context,
-    FunctionArgument, FunctionInfo, FunctionMap, Sid, TypeInfo, TypeMap, ValidatedStatement,
+    FunctionArgument, FunctionInfo, FunctionMap, ModuleMap, Sid, TypeInfo, TypeMap,
+    ValidatedModule, ValidatedStatement,
 };
 
 use codespan_reporting::files::SimpleFile;
@@ -106,8 +108,7 @@ pub fn extend_type_map(p: &PolicyFile, type_map: &mut TypeMap) -> Result<(), Cas
                 Ok(new_type) => type_map.insert(t.name.to_string(), new_type),
                 Err(e) => errors.append(e),
             },
-            Declaration::Func(_) => continue,
-            Declaration::Mod(_) => continue,
+            _ => continue,
         };
     }
     errors.into_result(())
@@ -320,6 +321,162 @@ pub fn validate_functions<'a, 'b>(
     }
 
     errors.into_result(())
+}
+
+pub fn validate_modules<'a>(
+    policies: &'a [PolicyFile],
+    types: &'a TypeMap,
+    all_validated_modules: &'a mut ModuleMap<'a>,
+) -> Result<(), CascadeErrors> {
+    let mut errors = CascadeErrors::new();
+
+    // Store all modules across files in a vector
+    let mut modules_vec: Vec<(&SimpleFile<String, String>, &Module)> = Vec::new();
+    for p in policies {
+        for e in &p.policy.exprs {
+            if let Expression::Decl(Declaration::Mod(m)) = e {
+                modules_vec.push((&p.file, m));
+            }
+        }
+    }
+
+    // Make sure there are no cycles in the modules
+    for m in &modules_vec {
+        match find_module_cycles(m.1, &modules_vec, HashSet::new()) {
+            Ok(()) => (),
+            Err(e) => errors.append(e),
+        }
+        errors = errors.into_result_self()?;
+    }
+
+    // Validate that module contents exist and create validated modules
+    for (file, module) in &modules_vec {
+        let mut type_infos = BTreeSet::new();
+        let mut child_modules = BTreeSet::new();
+        type_infos.append(&mut validate_module_contents(
+            constants::DOMAIN.to_string(),
+            &module.domains,
+            file,
+            types,
+            &mut errors,
+        ));
+        type_infos.append(&mut validate_module_contents(
+            constants::RESOURCE.to_string(),
+            &module.resources,
+            file,
+            types,
+            &mut errors,
+        ));
+        for m in &module.modules {
+            if !&modules_vec.iter().any(|&x| x.1.name == m.as_ref()) {
+                errors.append(CascadeErrors::from(
+                    ErrorItem::make_compile_or_internal_error(
+                        &format!("Module {} does not exist", m.as_ref()),
+                        Some(file),
+                        m.get_range(),
+                        "modules within modules must be declared elsewhere",
+                    ),
+                ))
+            } else {
+                child_modules.insert(m);
+            }
+        }
+        all_validated_modules.insert(
+            module.name.to_string(),
+            ValidatedModule::new(module.name.clone(), type_infos, child_modules),
+        );
+    }
+    errors.into_result(())
+}
+
+fn find_module_cycles<'a>(
+    module_to_check: &Module,
+    modules_vec: &[(&SimpleFile<String, String>, &'a Module)],
+    visited_modules: HashSet<&str>,
+) -> Result<(), CascadeErrors> {
+    let mut ret = CascadeErrors::new();
+    for m in &module_to_check.modules {
+        if let Some(module_info) = modules_vec
+            .iter()
+            .find(|&module_info| module_info.1.name == m.as_ref())
+        {
+            if visited_modules.contains(m.as_ref()) || *m == module_to_check.name {
+                // Cycle
+                return Err(CascadeErrors::from(
+                    ErrorItem::make_compile_or_internal_error(
+                        "Cycle detected",
+                        Some(module_info.0),
+                        m.get_range(),
+                        "This module contains itself or has a descendent that contains it",
+                    ),
+                ));
+            }
+            let child_module = module_info.1;
+
+            let mut new_visited_modules = visited_modules.clone();
+            new_visited_modules.insert(module_to_check.name.as_ref());
+
+            match find_module_cycles(child_module, modules_vec, new_visited_modules) {
+                Ok(()) => (),
+                Err(e) => ret.append(e),
+            }
+        }
+    }
+    ret.into_result(())
+}
+
+fn validate_module_contents<'a>(
+    content_type: String,
+    module_contents: &[CascadeString],
+    file: &SimpleFile<String, String>,
+    types: &'a TypeMap,
+    errors: &mut CascadeErrors,
+) -> BTreeSet<&'a TypeInfo> {
+    let mut ret = BTreeSet::new();
+    for content in module_contents {
+        match types.get(content.as_ref()) {
+            Some(x) => {
+                let mut err: bool = false;
+                if content_type == constants::DOMAIN {
+                    err = !x.is_domain(types);
+                } else if content_type == constants::RESOURCE {
+                    err = !x.is_resource(types);
+                } else {
+                    errors.append(InternalError::new().into());
+                }
+                if err {
+                    errors.append(CascadeErrors::from(
+                        ErrorItem::make_compile_or_internal_error(
+                            &format!(
+                                "A declaration of {} exists, but is not a {}",
+                                content.as_ref(),
+                                content_type
+                            ),
+                            Some(file),
+                            content.get_range(),
+                            &format!(
+                                "{}s within modules must be declared elsewhere",
+                                content_type
+                            ),
+                        ),
+                    ))
+                }
+                ret.insert(x);
+            }
+            None => errors.append(CascadeErrors::from(
+                ErrorItem::make_compile_or_internal_error(
+                    &format!("{} {} does not exist", content_type, content.as_ref()),
+                    Some(file),
+                    content.get_range(),
+                    &format!(
+                        "{}s within modules must be declared elsewhere",
+                        content_type
+                    ),
+                ),
+            )),
+        }
+    }
+    ret
 }
 
 // If a type couldn't be organized, it is either a cycle or a non-existant parent somewhere

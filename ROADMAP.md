@@ -34,9 +34,8 @@ Documentation Comments
 Port labeling implementation
 Conditionals - Combining both tunables and booleans into a single feature with configurability for runtime vs compiletime resolution
 Ephemeral object and filesystem labeling implementation
-Module blocks - Defines a collection of types that are collectively grouped into a module
 System compilation - Assemble a collection of modules into a full system policy
-Build policy modeules
+Build individual policy modules and systems
 Ergonomic compiler front end for selecting build targets
 Enhanced file_context path support - Treat paths as though they are actual paths, rather than just strings/regexes
 Compiler warnings support

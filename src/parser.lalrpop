@@ -103,10 +103,9 @@ ModuleDecl: Module = {
 	"module" <n: NameDecl> "{" <x: ModuleBody*> "}" => Module::new(n).set_fields(x),
 }
 
-ModuleBody: CascadeString = {
-	<start: @L> <s: "domain"> <n: NameDecl> <end: @R> ";" => CascadeString::new(format!("{} {}", s.to_string(), n), start..end),
-	<start: @L> <s: "resource"> <n: NameDecl> <end: @R> ";" => CascadeString::new(format!("{} {}", s.to_string(), n), start..end),
-	<start: @L> <s: "module"> <n: NameDecl> <end: @R> ";" => CascadeString::new(format!("{} {}", s.to_string(), n), start..end),
+ModuleBody: (CascadeString, CascadeString) = {
+	<s: BuiltInType> <n: NameDecl> ";" => (s, n),
+	<start: @L> <s: "module"> <end: @R> <n: NameDecl> ";" => (CascadeString::new(s.to_string(), start..end), n),
 }
 
 Ann: Annotation = {

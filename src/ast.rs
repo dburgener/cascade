@@ -521,27 +521,23 @@ impl Module {
         }
     }
 
-    pub fn set_fields(mut self, input: Vec<CascadeString>) -> Self {
-        for mut i in input {
-            let clone_i = i.clone();
-            let mut iter = clone_i.as_ref().split_whitespace();
-            let declared_type = iter.next();
-            match iter.next() {
-                Some(x) => i.string = x.to_string(),
-                None => continue,
-            }
-            if declared_type == Some(constants::DOMAIN) {
-                self.domains.push(i);
-            } else if declared_type == Some(constants::RESOURCE) {
-                self.resources.push(i);
-            } else if declared_type == Some(constants::MODULE) {
-                self.modules.push(i);
+    pub fn set_fields(mut self, input: Vec<(CascadeString, CascadeString)>) -> Self {
+        for i in input {
+            let declared_type = i.0.to_string();
+            if declared_type == constants::DOMAIN {
+                self.domains.push(i.1);
+            } else if declared_type == constants::RESOURCE {
+                self.resources.push(i.1);
+            } else if declared_type == constants::MODULE {
+                self.modules.push(i.1);
             }
         }
         self
     }
 }
 
+// Virtual modules cannot be compile targets
+// Please see doc/modules.md for more info
 impl Virtualable for Module {
     fn set_virtual(&mut self) {
         self.is_virtual = true;
@@ -605,11 +601,11 @@ mod tests {
     #[test]
     fn set_module_fields() {
         let mut fields = Vec::new();
-        fields.push(CascadeString::from("domain a"));
-        fields.push(CascadeString::from("resource b"));
-        fields.push(CascadeString::from("module x"));
-        fields.push(CascadeString::from("module y"));
-        fields.push(CascadeString::from("module z"));
+        fields.push((CascadeString::from("domain"), CascadeString::from("a")));
+        fields.push((CascadeString::from("resource"), CascadeString::from("b")));
+        fields.push((CascadeString::from("module"), CascadeString::from("x")));
+        fields.push((CascadeString::from("module"), CascadeString::from("y")));
+        fields.push((CascadeString::from("module"), CascadeString::from("z")));
         let m = Module::new(CascadeString::from("module_name")).set_fields(fields);
         assert_eq!(m.domains.len(), 1);
         assert_eq!(m.resources.len(), 1);

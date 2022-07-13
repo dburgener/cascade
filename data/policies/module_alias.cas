@@ -18,7 +18,7 @@ domain quz {
 domain babble {}
 
 module qux {
-    resource baz;
-    domain quz;
+	resource baz;
+	domain quz;
 	domain thud;
 }
