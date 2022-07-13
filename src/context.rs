@@ -38,13 +38,13 @@ impl<'a> Context<'a> {
         }
     }
 
-    pub fn new_from_args(args: &Vec<FunctionArgument<'a>>, types: &'a TypeMap) -> Self {
+    pub fn new_from_args(args: &[FunctionArgument<'a>], types: &'a TypeMap) -> Self {
         let mut context = Context::new(types);
         context.insert_function_args(args);
         context
     }
 
-    pub fn insert_function_args(&mut self, args: &Vec<FunctionArgument<'a>>) {
+    pub fn insert_function_args(&mut self, args: &[FunctionArgument<'a>]) {
         for a in args {
             // a.name really should be an CascadeString rather than a String
             self.symbols.insert(

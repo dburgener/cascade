@@ -16,13 +16,12 @@ mod obj_class;
 mod sexp_internal;
 
 use std::collections::BTreeSet;
-use std::path::Path;
 
-use ast::{Policy, PolicyFile};
-use internal_rep::FunctionMap;
+use crate::ast::{Policy, PolicyFile};
+use crate::error::CascadeErrors;
+use crate::internal_rep::{FunctionMap, ModuleMap};
 
 use codespan_reporting::files::SimpleFile;
-use error::CascadeErrors;
 use lalrpop_util::ParseError as LalrpopParseError;
 
 #[cfg(test)]
@@ -68,6 +67,7 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::Ca
     let mut classlist = obj_class::make_classlist();
     let mut type_map = compile::get_built_in_types_map();
     let mut func_map = FunctionMap::new();
+    let mut module_map = ModuleMap::new();
     let mut policy_rules = BTreeSet::new();
 
     // Collect all type declarations
@@ -80,6 +80,7 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::Ca
             }
         }
     }
+
     // Stops if something went wrong for this major step.
     errors = errors.into_result_self()?;
 
@@ -167,6 +168,9 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::Ca
     }
     // Stops if something went wrong for this major step.
     errors = errors.into_result_self()?;
+
+    // Validate modules
+    compile::validate_modules(&policies, &type_map, &mut module_map)?;
 
     let cil_tree = compile::generate_sexp(&type_map, &classlist, policy_rules, &func_map)?;
 
@@ -302,9 +306,6 @@ mod tests {
                 query
             );
         }
-        if filename.contains("modules") && !Path::new("modules").is_dir() {
-            fs::create_dir("modules").unwrap();
-        }
         let file_out_path = &[filename, "_test.cil"].concat();
         let cil_out_path = &[filename, "_test_out_policy"].concat();
         let mut out_file = fs::File::create(&file_out_path).unwrap();
@@ -323,17 +324,11 @@ mod tests {
             str::from_utf8(&output.stderr).unwrap()
         );
 
-        if filename.contains("modules") {
-            if Path::new("modules").is_dir() {
-                fs::remove_dir_all("modules").unwrap();
-            }
-        } else {
-            let mut err = false;
-            for f in &[file_out_path, cil_out_path] {
-                err |= fs::remove_file(f).is_err();
-            }
-            assert!(!err, "Error removing generated policy files");
+        let mut err = false;
+        for f in &[file_out_path, cil_out_path] {
+            err |= fs::remove_file(f).is_err();
         }
+        assert!(!err, "Error removing generated policy files");
     }
 
     macro_rules! error_policy_test {
@@ -716,6 +711,16 @@ mod tests {
     #[test]
     fn virtual_function_associate_error() {
         error_policy_test!("virtual_function_association.cas", 1, ErrorItem::Compile(_));
+    }
+
+    #[test]
+    fn invalid_module_error() {
+        error_policy_test!("module_invalid.cas", 3, ErrorItem::Compile(_));
+    }
+
+    #[test]
+    fn module_cycle_error() {
+        error_policy_test!("module_cycle.cas", 1, ErrorItem::Compile(_));
     }
 
     #[test]
