@@ -7,7 +7,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::TryFrom;
 
 use crate::ast::{
-    Annotations, Argument, CascadeString, Declaration, Expression, FuncCall, PolicyFile, Statement,
+    Annotations, Argument, CascadeString, Declaration, Expression, FuncCall, Module, PolicyFile,
+    Statement,
 };
 use crate::constants;
 use crate::context::Context as BlockContext;
@@ -15,7 +16,8 @@ use crate::error::{CascadeErrors, CompileError, ErrorItem, InternalError};
 use crate::internal_rep::{
     argument_to_typeinfo, argument_to_typeinfo_vec, generate_sid_rules, type_slice_to_variant,
     Annotated, AnnotationInfo, ArgForValidation, Associated, BoundTypeInfo, ClassList, Context,
-    FunctionArgument, FunctionInfo, FunctionMap, Sid, TypeInfo, TypeMap, ValidatedStatement,
+    FunctionArgument, FunctionInfo, FunctionMap, Sid, TypeInfo, TypeMap, ValidatedModule,
+    ValidatedStatement,
 };
 
 use codespan_reporting::files::SimpleFile;
@@ -320,6 +322,205 @@ pub fn validate_functions<'a, 'b>(
     }
 
     errors.into_result(())
+}
+
+pub fn validate_modules(policies: &Vec<PolicyFile>, types: &TypeMap) -> Result<(), CascadeErrors> {
+    let mut errors = CascadeErrors::new();
+
+    // Store all modules across files in a vector
+    let mut modules_vec: Vec<(&SimpleFile<String, String>, &Module)> = Vec::new();
+    for p in policies {
+        for e in &p.policy.exprs {
+            let d = match e {
+                Expression::Decl(d) => d,
+                _ => continue,
+            };
+            match d {
+                Declaration::Type(_) => continue,
+                Declaration::Func(_) => continue,
+                Declaration::Mod(m) => {
+                    modules_vec.push((&p.file, m));
+                }
+            };
+        }
+    }
+
+    // Validate that module contents exist
+    for (file, module) in &modules_vec {
+        for domain in &module.domains {
+            match types.get(domain.as_ref()) {
+                Some(x) => {
+                    if !x.is_domain(types) {
+                        errors.append(CascadeErrors::from(
+                            ErrorItem::make_compile_or_internal_error(
+                                &format!(
+                                    "A declaration of {} exists, but is not a domain",
+                                    domain.as_ref()
+                                ),
+                                Some(file),
+                                domain.get_range(),
+                                &format!("Domains within modules must be declared elsewhere"),
+                            ),
+                        ))
+                    }
+                }
+                None => errors.append(CascadeErrors::from(
+                    ErrorItem::make_compile_or_internal_error(
+                        &format!("Domain {} does not exist", domain.as_ref()),
+                        Some(file),
+                        domain.get_range(),
+                        &format!("Domains within modules must be declared elsewhere"),
+                    ),
+                )),
+            }
+        }
+        for resource in &module.resources {
+            match types.get(resource.as_ref()) {
+                Some(x) => {
+                    if !x.is_resource(types) {
+                        errors.append(CascadeErrors::from(
+                            ErrorItem::make_compile_or_internal_error(
+                                &format!(
+                                    "A declaration of {} exists, but is not a resource",
+                                    resource.as_ref()
+                                ),
+                                Some(file),
+                                resource.get_range(),
+                                &format!("Resources within modules must be declared elsewhere"),
+                            ),
+                        ))
+                    }
+                }
+                None => errors.append(CascadeErrors::from(
+                    ErrorItem::make_compile_or_internal_error(
+                        &format!("Resource {} does not exist", resource.as_ref()),
+                        Some(file),
+                        resource.get_range(),
+                        &format!("Resources within modules must be declared elsewhere"),
+                    ),
+                )),
+            }
+        }
+
+        for m in &module.modules {
+            if !&modules_vec.iter().any(|&x| x.1.name == m.as_ref()) {
+                errors.append(CascadeErrors::from(
+                    ErrorItem::make_compile_or_internal_error(
+                        &format!("Module {} does not exist", m.as_ref()),
+                        Some(file),
+                        m.get_range(),
+                        &format!("Modules within modules must be declared elsewhere"),
+                    ),
+                ))
+            }
+        }
+    }
+    errors = errors.into_result_self()?;
+
+    // Make sure there are no cycles in the modules
+    for m in &modules_vec {
+        match find_module_cycles(m.1, &modules_vec, HashSet::new()) {
+            Ok(()) => (),
+            Err(e) => errors.append(e),
+        }
+        errors = errors.into_result_self()?;
+    }
+
+    // Create Validated Modules
+    let mut validated_modules: Vec<ValidatedModule> = Vec::new();
+    for m in &modules_vec {
+        if !&validated_modules.iter().any(|x| x.name == m.1.name) {
+            validated_modules =
+                create_validated_modules(m.1, validated_modules.clone(), &modules_vec, types);
+        }
+    }
+    errors.into_result(())
+}
+
+fn find_module_cycles<'a>(
+    module_to_check: &Module,
+    modules_vec: &Vec<(&SimpleFile<String, String>, &'a Module)>,
+    visited_modules: HashSet<&str>,
+) -> Result<(), CascadeErrors> {
+    let mut ret = CascadeErrors::new();
+    for m in &module_to_check.modules {
+        match modules_vec
+            .iter()
+            .find(|&module_info| module_info.1.name == m.as_ref())
+        {
+            Some(module_info) => {
+                if visited_modules.contains(m.as_ref()) || *m == module_to_check.name {
+                    // Cycle
+                    return Err(CascadeErrors::from(
+                        ErrorItem::make_compile_or_internal_error(
+                            "Cycle detected",
+                            Some(module_info.0),
+                            m.get_range(),
+                            "This module contains itself or has a descendent that contains it",
+                        ),
+                    ));
+                }
+                let inner_module = module_info.1;
+
+                let mut new_visited_modules = visited_modules.clone();
+                new_visited_modules.insert(module_to_check.name.as_ref());
+
+                match find_module_cycles(inner_module, modules_vec, new_visited_modules) {
+                    Ok(()) => (),
+                    Err(e) => ret.append(e),
+                }
+            }
+            None => (),
+        }
+    }
+    ret.into_result(())
+}
+
+fn create_validated_modules<'a>(
+    curr_module: &'a Module,
+    mut created_modules: Vec<ValidatedModule>,
+    modules_vec: &Vec<(&SimpleFile<String, String>, &'a Module)>,
+    types: &'a TypeMap,
+) -> Vec<ValidatedModule> {
+    let mut other_modules: Vec<ValidatedModule> = Vec::new();
+    let mut type_infos: Vec<TypeInfo> = Vec::new();
+    if curr_module.modules.len() != 0 {
+        for m in &curr_module.modules {
+            if !&created_modules.iter().any(|x| x.name == m.as_ref()) {
+                match modules_vec.iter().find(|&x| x.1.name == m.as_ref()) {
+                    Some(x) => {
+                        created_modules = create_validated_modules(
+                            x.1,
+                            created_modules.clone(),
+                            modules_vec,
+                            types,
+                        );
+                    }
+                    None => (),
+                }
+            }
+            match &created_modules.iter().find(|x| x.name == m.as_ref()) {
+                Some(x) => other_modules.push((**x).clone()),
+                None => (),
+            }
+        }
+    }
+    let name = &curr_module.name;
+    for d in &curr_module.domains {
+        match types.get(d.as_ref()) {
+            Some(x) => type_infos.push((*x).clone()),
+            None => (),
+        }
+    }
+    for r in &curr_module.resources {
+        match types.get(r.as_ref()) {
+            Some(x) => type_infos.push((*x).clone()),
+            None => (),
+        }
+    }
+    let vm = ValidatedModule::new((*name).clone(), type_infos, other_modules);
+    created_modules.push(vm);
+    return created_modules;
 }
 
 // If a type couldn't be organized, it is either a cycle or a non-existant parent somewhere

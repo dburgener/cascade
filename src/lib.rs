@@ -80,6 +80,7 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::Ca
             }
         }
     }
+
     // Stops if something went wrong for this major step.
     errors = errors.into_result_self()?;
 
@@ -167,6 +168,9 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::Ca
     }
     // Stops if something went wrong for this major step.
     errors = errors.into_result_self()?;
+
+    // Validate modules
+    compile::validate_modules(&policies, &type_map)?;
 
     let cil_tree = compile::generate_sexp(&type_map, &classlist, policy_rules, &func_map)?;
 
@@ -716,6 +720,16 @@ mod tests {
     #[test]
     fn virtual_function_associate_error() {
         error_policy_test!("virtual_function_association.cas", 1, ErrorItem::Compile(_));
+    }
+
+    #[test]
+    fn invalid_module_error() {
+        error_policy_test!("module_invalid.cas", 2, ErrorItem::Compile(_));
+    }
+
+    #[test]
+    fn module_cycle_error() {
+        error_policy_test!("module_cycle.cas", 1, ErrorItem::Compile(_));
     }
 
     #[test]

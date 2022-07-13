@@ -271,6 +271,10 @@ impl TypeInfo {
         self.is_type_by_name(types, constants::RESOURCE)
     }
 
+    pub fn is_domain(&self, types: &TypeMap) -> bool {
+        self.is_type_by_name(types, constants::DOMAIN)
+    }
+     
     pub fn is_perm(&self, types: &TypeMap) -> bool {
         self.is_type_by_name(types, constants::PERM)
     }
@@ -1763,6 +1767,27 @@ impl ValidatedCall {
         }
 
         Ok(ValidatedCall { cil_name, args })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ValidatedModule {
+    pub name: CascadeString,
+    type_infos: Vec<TypeInfo>,
+    validated_modules: Vec<ValidatedModule>,
+}
+
+impl ValidatedModule {
+    pub fn new(
+        name: CascadeString,
+        type_infos: Vec<TypeInfo>,
+        validated_modules: Vec<ValidatedModule>,
+    ) -> Self {
+        ValidatedModule {
+            name,
+            type_infos,
+            validated_modules,
+        }
     }
 }
 

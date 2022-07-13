@@ -1,0 +1,13 @@
+resource all_files {}
+
+domain all_processes {
+}
+
+module mod {
+    resource all_files;
+}
+
+module modmod {
+    domain all_files;
+    module mods;
+}
