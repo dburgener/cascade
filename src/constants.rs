@@ -16,7 +16,22 @@ pub const AV_RULES: &[&str] = &[
 
 pub const DOMAIN: &str = "domain";
 pub const RESOURCE: &str = "resource";
+pub const MODULE: &str = "module";
+<<<<<<< HEAD
 pub const PERM: &str = "perm";
 pub const CLASS: &str = "obj_class";
 
-pub const BUILT_IN_TYPES: &[&str] = &[DOMAIN, RESOURCE, "path", "string", CLASS, PERM, "context"];
+pub const BUILT_IN_TYPES: &[&str] = &[DOMAIN, RESOURCE, MODULE, "path", "string", CLASS, PERM, "context"];
+=======
+
+pub const BUILT_IN_TYPES: &[&str] = &[
+    DOMAIN,
+    RESOURCE,
+    MODULE,
+    "path",
+    "string",
+    "obj_class",
+    "perm",
+    "context",
+];
+>>>>>>> 0072903... Update parser for module blocks and add tests for parsing modules
