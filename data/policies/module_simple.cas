@@ -1,0 +1,14 @@
+resource all_files {}
+
+domain all_processes {
+	allow(all_processes, all_files, file, [read write open getattr append]);
+}
+
+module mod {
+    resource all_files;
+}
+
+module modmod {
+    domain all_processes;
+    module mod;
+}

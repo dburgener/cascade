@@ -386,7 +386,7 @@ baz(bar); // Converts to [bar] because of annotation.  Would be a compiler error
 The alias annotation tells the compiler to provide an alternate name for
 referrering to the same item.
 
-This is often used for interoperability.  For example, if one is renaming a
+This is often used for interoperability. For example, if one is renaming a
 type or function in an already deployed policy, one can provide an alias to the
 old name for backwards compatibility during a transition period until labels or
 callers have been updated.
