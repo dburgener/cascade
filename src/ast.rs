@@ -191,6 +191,7 @@ pub trait Virtualable {
 pub enum Declaration {
     Type(Box<TypeDecl>),
     Func(Box<FuncDecl>),
+    Mod(Module),
 }
 
 impl Virtualable for Declaration {
@@ -198,6 +199,7 @@ impl Virtualable for Declaration {
         match self {
             Declaration::Type(t) => t.set_virtual(),
             Declaration::Func(f) => f.set_virtual(),
+            Declaration::Mod(m) => m.set_virtual(),
         }
     }
 }
@@ -207,6 +209,7 @@ impl Declaration {
         match self {
             Declaration::Type(t) => t.annotations.push(annotation),
             Declaration::Func(f) => f.annotations.push(annotation),
+            Declaration::Mod(m) => m.annotations.push(annotation),
         }
     }
 }
@@ -496,6 +499,55 @@ pub struct DeclaredArgument {
     pub default: Option<Argument>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Module {
+    pub name: CascadeString,
+    pub is_virtual: bool,
+    pub annotations: Annotations,
+    pub domains: Vec<CascadeString>,
+    pub resources: Vec<CascadeString>,
+    pub modules: Vec<CascadeString>,
+}
+
+impl Module {
+    pub fn new(name: CascadeString) -> Self {
+        Module {
+            name,
+            is_virtual: false,
+            annotations: Annotations::new(),
+            domains: Vec::new(),
+            resources: Vec::new(),
+            modules: Vec::new(),
+        }
+    }
+
+    pub fn set_fields(mut self, input: Vec<CascadeString>) -> Self {
+        for mut i in input {
+            let clone_i = i.clone();
+            let mut iter = clone_i.as_ref().split_whitespace();
+            let declared_type = iter.next();
+            match iter.next() {
+                Some(x) => i.string = x.to_string(),
+                None => continue,
+            }
+            if declared_type == Some(constants::DOMAIN) {
+                self.domains.push(i);
+            } else if declared_type == Some(constants::RESOURCE) {
+                self.resources.push(i);
+            } else if declared_type == Some(constants::MODULE) {
+                self.modules.push(i);
+            }
+        }
+        self
+    }
+}
+
+impl Virtualable for Module {
+    fn set_virtual(&mut self) {
+        self.is_virtual = true;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -548,5 +600,24 @@ mod tests {
             named_range3.get_range(),
             Some(Range { start: 13, end: 10 })
         ));
+    }
+
+    #[test]
+    fn set_module_fields() {
+        let mut fields = Vec::new();
+        fields.push(CascadeString::from("domain a"));
+        fields.push(CascadeString::from("resource b"));
+        fields.push(CascadeString::from("module x"));
+        fields.push(CascadeString::from("module y"));
+        fields.push(CascadeString::from("module z"));
+        let m = Module::new(CascadeString::from("module_name")).set_fields(fields);
+        assert_eq!(m.domains.len(), 1);
+        assert_eq!(m.resources.len(), 1);
+        assert_eq!(m.modules.len(), 3);
+        assert_eq!(m.domains[0].string, "a");
+        assert_eq!(m.resources[0].string, "b");
+        assert_eq!(m.modules[0].string, "x");
+        assert_eq!(m.modules[1].string, "y");
+        assert_eq!(m.modules[2].string, "z");
     }
 }
