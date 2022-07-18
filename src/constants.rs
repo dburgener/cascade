@@ -18,11 +18,14 @@ pub const DOMAIN: &str = "domain";
 pub const RESOURCE: &str = "resource";
 pub const MODULE: &str = "module";
 <<<<<<< HEAD
+<<<<<<< HEAD
 pub const PERM: &str = "perm";
 pub const CLASS: &str = "obj_class";
 
 pub const BUILT_IN_TYPES: &[&str] = &[DOMAIN, RESOURCE, MODULE, "path", "string", CLASS, PERM, "context"];
 =======
+=======
+>>>>>>> 4aaf21a063a208249343acf92e65a2608784682a
 
 pub const BUILT_IN_TYPES: &[&str] = &[
     DOMAIN,
