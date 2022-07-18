@@ -106,6 +106,7 @@ pub fn extend_type_map(p: &PolicyFile, type_map: &mut TypeMap) -> Result<(), Cas
                 Err(e) => errors.append(e),
             },
             Declaration::Func(_) => continue,
+            Declaration::Mod(_) => continue,
         };
     }
     errors.into_result(())
@@ -250,6 +251,7 @@ pub fn build_func_map<'a>(
                     FunctionInfo::new(&**f, types, parent_type, file)?,
                 );
             }
+            Declaration::Mod(_) => continue,
         };
     }
 

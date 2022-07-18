@@ -1,0 +1,14 @@
+resource foobar {
+	fn some_func(path a, string b, foobar c, domain d) {
+		allow(d, c, file, [read]);
+	}
+}
+
+domain xyzzy {
+	foobar.some_func("/test", "test", foobar, xyzzy);
+}
+
+module quux {
+    resource foobar;
+    domain xyzzy;
+}

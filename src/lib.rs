@@ -15,6 +15,7 @@ mod obj_class;
 mod sexp_internal;
 
 use std::collections::BTreeSet;
+use std::path::Path;
 
 use ast::{Policy, PolicyFile};
 use internal_rep::FunctionMap;
@@ -300,6 +301,9 @@ mod tests {
                 query
             );
         }
+        if filename.contains("modules") && !Path::new("modules").is_dir() {
+            fs::create_dir("modules").unwrap();
+        }
         let file_out_path = &[filename, "_test.cil"].concat();
         let cil_out_path = &[filename, "_test_out_policy"].concat();
         let mut out_file = fs::File::create(&file_out_path).unwrap();
@@ -318,11 +322,17 @@ mod tests {
             str::from_utf8(&output.stderr).unwrap()
         );
 
-        let mut err = false;
-        for f in &[file_out_path, cil_out_path] {
-            err |= fs::remove_file(f).is_err();
+        if filename.contains("modules") {
+            if Path::new("modules").is_dir() {
+                fs::remove_dir_all("modules").unwrap();
+            }
+        } else {
+            let mut err = false;
+            for f in &[file_out_path, cil_out_path] {
+                err |= fs::remove_file(f).is_err();
+            }
+            assert!(!err, "Error removing generated policy files");
         }
-        assert!(!err, "Error removing generated policy files");
     }
 
     macro_rules! error_policy_test {
@@ -522,6 +532,27 @@ mod tests {
             &["(call foo-read (foo bar))", "(call foo-read (foo baz))"],
             &[],
         );
+    }
+
+    // TODO: Add expected contents list to tests that contain modules
+    // after module implementation is complete.
+    #[test]
+    fn alias_module_test() {
+        valid_policy_test(
+            "module_alias.cas",
+            &["(typealias thud)", "(typealiasactual thud babble)"],
+            &[],
+        )
+    }
+
+    #[test]
+    fn arguments_module_test() {
+        valid_policy_test("module_arguments.cas", &[], &[])
+    }
+
+    #[test]
+    fn simple_module_test() {
+        valid_policy_test("module_simple.cas", &[], &[])
     }
 
     #[test]

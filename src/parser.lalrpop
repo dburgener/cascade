@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
-use crate::ast::{CascadeString, Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, LetBinding, Virtualable, FuncCall, DeclaredArgument};
+use crate::ast::{CascadeString, Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, LetBinding, Virtualable, FuncCall, DeclaredArgument, Module};
 use lalrpop_util::ErrorRecovery;
 
 grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, &'static str>>);
@@ -48,6 +48,7 @@ BaseExpr: Expression = {
 Decl: Declaration = {
 	TypeDecl => Declaration::Type(<>),
 	FuncDecl => Declaration::Func(<>),
+	ModuleDecl => Declaration::Mod(<>),
 }
 
 TypeDecl: Box<TypeDecl> = {
@@ -96,6 +97,16 @@ StmtBody: Statement = {
 	<c:Symbol> "." <n:Symbol> "(" <a:Comma<Arg>> ")" => Statement::Call(Box::new(FuncCall::new(Some(c), n, a))),
 	<n:Symbol> "(" <a:Comma<Arg>> ")" => Statement::Call(Box::new(FuncCall::new(None, n, a))),
 	"let" <n:Symbol> "=" <a:Arg> => Statement::LetBinding(Box::new(LetBinding::new(n, a))),
+}
+
+ModuleDecl: Module = {
+	"module" <n: NameDecl> "{" <x: ModuleBody*> "}" => Module::new(n).set_fields(x),
+}
+
+ModuleBody: CascadeString = {
+	<start: @L> <s: "domain"> <n: NameDecl> <end: @R> ";" => CascadeString::new(format!("{} {}", s.to_string(), n), start..end),
+	<start: @L> <s: "resource"> <n: NameDecl> <end: @R> ";" => CascadeString::new(format!("{} {}", s.to_string(), n), start..end),
+	<start: @L> <s: "module"> <n: NameDecl> <end: @R> ";" => CascadeString::new(format!("{} {}", s.to_string(), n), start..end),
 }
 
 Ann: Annotation = {
