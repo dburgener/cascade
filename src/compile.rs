@@ -222,7 +222,7 @@ pub fn get_global_bindings(
                         types,
                         classlist,
                         &BlockContext::new(BlockType::Global, tm_clone, None),
-                        file,
+                        Some(file),
                     )?;
                     let variant = type_slice_to_variant(&ti_vec, types)?;
                     (
@@ -236,7 +236,7 @@ pub fn get_global_bindings(
                         types,
                         classlist,
                         &BlockContext::new(BlockType::Global, tm_clone, None),
-                        file,
+                        Some(file),
                     )?;
                     if ti.name.as_ref() == "perm" {
                         (
@@ -391,15 +391,8 @@ fn handle_derive<'a>(
     types: &TypeMap,
     class_perms: &ClassList,
 ) -> Result<(), CascadeErrors> {
-    // TODO: Determine what file actually makes sense here
-    // TODO: I added unwrap() so now this is more important
-    let (strategy, mut func_names) = validate_derive_args(
-        target_type,
-        derive_args,
-        types,
-        class_perms,
-        target_type.declaration_file.as_ref().unwrap(),
-    )?;
+    let (strategy, mut func_names) =
+        validate_derive_args(target_type, derive_args, types, class_perms)?;
 
     let parents = match &strategy {
         DeriveStrategy::Union => target_type.get_all_parent_names(types),

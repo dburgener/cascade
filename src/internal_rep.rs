@@ -597,10 +597,10 @@ pub fn validate_derive_args(
     arguments: &[Argument],
     types: &TypeMap,
     class_perms: &ClassList,
-    file: &SimpleFile<String, String>,
 ) -> Result<(DeriveStrategy, Vec<CascadeString>), CascadeErrors> {
     // TODO: We might actually be in a context here, once nested type declarations are supported
     let local_context = BlockContext::new(BlockType::Annotation, types, None);
+    let file = target_type.declaration_file.as_ref();
     let target_args = vec![
         FunctionArgument::new(
             &DeclaredArgument {
@@ -658,7 +658,7 @@ pub fn validate_derive_args(
         "union" => DeriveStrategy::Union,
         name => {
             let parent_ti = types.get(name).ok_or_else(|| {
-                CompileError::new(
+                ErrorItem::make_compile_or_internal_error(
                     "No such type",
                     file,
                     strategy.get_range(),
@@ -666,7 +666,7 @@ pub fn validate_derive_args(
                 )
             })?;
             if target_type.name == name {
-                return Err(CompileError::new(
+                return Err(ErrorItem::make_compile_or_internal_error(
                     "Cannot derive from self",
                     file,
                     strategy.get_range(),
@@ -675,7 +675,7 @@ pub fn validate_derive_args(
                 .into());
             }
             if !target_type.is_child_or_actual_type(parent_ti, types) {
-                return Err(CompileError::new(
+                return Err(ErrorItem::make_compile_or_internal_error(
                     &format!("{} is not a parent of {}", name, target_type.name),
                     file,
                     strategy.get_range(),
@@ -722,7 +722,7 @@ pub fn argument_to_typeinfo<'a>(
     types: &'a TypeMap,
     class_perms: &ClassList,
     context: &BlockContext<'a>,
-    file: &SimpleFile<String, String>,
+    file: Option<&SimpleFile<String, String>>,
 ) -> Result<&'a TypeInfo, ErrorItem> {
     let t: Option<&TypeInfo> = match a {
         ArgForValidation::Var(s) => match context.symbol_in_context(s.as_ref()) {
@@ -743,12 +743,7 @@ pub fn argument_to_typeinfo<'a>(
     };
 
     t.ok_or_else(|| {
-        ErrorItem::Compile(CompileError::new(
-            "Not a valid type",
-            file,
-            a.get_range(),
-            "",
-        ))
+        ErrorItem::make_compile_or_internal_error("Not a valid type", file, a.get_range(), "")
     })
 }
 
@@ -757,7 +752,7 @@ pub fn argument_to_typeinfo_vec<'a>(
     types: &'a TypeMap,
     class_perms: &ClassList,
     context: &BlockContext<'a>,
-    file: &SimpleFile<String, String>,
+    file: Option<&SimpleFile<String, String>>,
 ) -> Result<Vec<&'a TypeInfo>, ErrorItem> {
     let mut ret = Vec::new();
     for s in arg {
@@ -1232,7 +1227,8 @@ fn call_to_av_rule<'a>(
         )?,
     ];
 
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
+    let validated_args =
+        validate_arguments(c, &target_args, types, class_perms, context, Some(file))?;
     let mut args_iter = validated_args.iter();
 
     let source = args_iter
@@ -1418,7 +1414,8 @@ fn call_to_fc_rules<'a>(
         )?,
     ];
 
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
+    let validated_args =
+        validate_arguments(c, &target_args, types, class_perms, context, Some(file))?;
     let mut args_iter = validated_args.iter();
     let mut ret = Vec::new();
 
@@ -1529,7 +1526,8 @@ fn call_to_domain_transition<'a>(
         )?,
     ];
 
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
+    let validated_args =
+        validate_arguments(c, &target_args, types, class_perms, context, Some(file))?;
     let mut args_iter = validated_args.into_iter();
 
     let source = args_iter
@@ -2161,8 +2159,14 @@ impl ValidatedCall {
             None => Vec::new(),
         };
 
-        for arg in validate_arguments(call, &function_info.args, types, class_perms, context, file)?
-        {
+        for arg in validate_arguments(
+            call,
+            &function_info.args,
+            types,
+            class_perms,
+            context,
+            Some(file),
+        )? {
             args.push(arg.get_name_or_string(context)?.to_string()); // TODO: Handle lists
         }
 
@@ -2354,7 +2358,7 @@ enum TypeValue {
 pub struct TypeInstance<'a> {
     instance_value: TypeValue,
     pub type_info: Cow<'a, TypeInfo>,
-    file: &'a SimpleFile<String, String>,
+    file: Option<&'a SimpleFile<String, String>>,
 }
 
 impl<'a> TypeInstance<'a> {
@@ -2379,12 +2383,12 @@ impl<'a> TypeInstance<'a> {
                         .ok_or_else(|| InternalError::new().into())
                 }
             }
-            TypeValue::Vector(_) => Err(ErrorItem::Compile(CompileError::new(
+            TypeValue::Vector(_) => Err(ErrorItem::make_compile_or_internal_error(
                 "Unexpected list",
                 self.file,
                 self.get_range(),
                 "Expected scalar value here",
-            ))),
+            )),
             TypeValue::SEType(_) => {
                 let ret_string = self.type_info.name.to_string();
                 match self.get_range() {
@@ -2404,12 +2408,12 @@ impl<'a> TypeInstance<'a> {
                 }
                 Ok(out_vec)
             }
-            _ => Err(ErrorItem::Compile(CompileError::new(
+            _ => Err(ErrorItem::make_compile_or_internal_error(
                 "Expected list",
                 self.file,
                 self.get_range(),
                 "Expected list here",
-            ))),
+            )),
         }
     }
 
@@ -2426,7 +2430,7 @@ impl<'a> TypeInstance<'a> {
     pub fn new(
         arg: &ArgForValidation,
         ti: &'a TypeInfo,
-        file: &'a SimpleFile<String, String>,
+        file: Option<&'a SimpleFile<String, String>>,
         context: &BlockContext,
     ) -> Self {
         let instance_value = match arg {
@@ -2453,7 +2457,7 @@ impl<'a> TypeInstance<'a> {
     pub fn new_cast_instance(
         arg: &ArgForValidation,
         type_info: Cow<'a, TypeInfo>,
-        file: &'a SimpleFile<String, String>,
+        file: Option<&'a SimpleFile<String, String>>,
     ) -> Self {
         let instance_value = match arg {
             ArgForValidation::List(vec) => {
@@ -2490,7 +2494,7 @@ fn validate_arguments<'a>(
     types: &'a TypeMap,
     class_perms: &ClassList,
     context: &BlockContext<'a>,
-    file: &'a SimpleFile<String, String>,
+    file: Option<&'a SimpleFile<String, String>>,
 ) -> Result<Vec<TypeInstance<'a>>, CascadeErrors> {
     // Some functions start with an implicit "this" argument.  If it does, skip it
     let function_args_iter = function_args.iter().skip_while(|a| a.name == "this");
@@ -2506,17 +2510,19 @@ fn validate_arguments<'a>(
         } else {
             function_args.len()
         };
-        return Err(CascadeErrors::from(ErrorItem::Compile(CompileError::new(
-            &format!(
-                "Function {} expected {} arguments, got {}",
-                call.get_display_name(),
-                function_args_len,
-                call.args.len()
+        return Err(CascadeErrors::from(
+            ErrorItem::make_compile_or_internal_error(
+                &format!(
+                    "Function {} expected {} arguments, got {}",
+                    call.get_display_name(),
+                    function_args_len,
+                    call.args.len()
+                ),
+                file,
+                call.get_name_range(), // TODO: this may not be the cleanest way to report this error
+                "",
             ),
-            file,
-            call.get_name_range(), // TODO: this may not be the cleanest way to report this error
-            "",
-        ))));
+        ));
     }
 
     let mut args = Vec::new();
@@ -2554,12 +2560,12 @@ fn validate_arguments<'a>(
                 {
                     Some(i) => i,
                     None => {
-                        return Err(ErrorItem::Compile(CompileError::new(
+                        return Err(ErrorItem::make_compile_or_internal_error(
                             "No such argument",
                             file,
                             n.get_range(),
                             "The function does not have an argument with this name",
-                        ))
+                        )
                         .into());
                     }
                 };
@@ -2575,12 +2581,12 @@ fn validate_arguments<'a>(
                 args[index].provided_arg = Some(validated_arg);
             }
             _ => {
-                return Err(ErrorItem::Compile(
-                    CompileError::new(
+                return Err(
+                        ErrorItem::make_compile_or_internal_error(
                         "Cannot specify anonymous argument after named argument",
                         file,
                         a.0.get_range(),
-                        "This argument is anonymous, but named arguments occurred previously.  All anonymous arguments must come before any named arguments")).into());
+                        "This argument is anonymous, but named arguments occurred previously.  All anonymous arguments must come before any named arguments").into());
             }
         }
     }
@@ -2603,7 +2609,7 @@ fn validate_arguments<'a>(
                         file,
                     )?,
                     None => {
-                        return Err(ErrorItem::Compile(CompileError::new(
+                        return Err(ErrorItem::make_compile_or_internal_error(
                             &format!("No value supplied for {}", a.function_arg.name),
                             file,
                             call.get_name_range(),
@@ -2611,7 +2617,7 @@ fn validate_arguments<'a>(
                                 "{} has no default value, and was not supplied by this call",
                                 a.function_arg.name
                             ),
-                        ))
+                        )
                         .into());
                     }
                 }
@@ -2677,15 +2683,15 @@ impl<'a> ArgForValidation<'a> {
         &self,
         _cast_ti: &TypeInfo,
         types: &TypeMap,
-        file: &SimpleFile<String, String>,
+        file: Option<&SimpleFile<String, String>>,
     ) -> Result<(), ErrorItem> {
         let err_ret = |s: &CascadeString| {
-            ErrorItem::Compile(CompileError::new(
+            ErrorItem::make_compile_or_internal_error(
                 "Cannot typecast",
                 file,
                 s.get_range(),
                 "This is not something that can be typecast",
-            ))
+            )
         };
 
         match self {
@@ -2718,7 +2724,7 @@ fn validate_argument<'a>(
     types: &'a TypeMap,
     class_perms: &ClassList,
     context: &BlockContext<'a>,
-    file: &'a SimpleFile<String, String>,
+    file: Option<&'a SimpleFile<String, String>>,
 ) -> Result<TypeInstance<'a>, ErrorItem> {
     // If there is a cast, we first validate that regardless of whether the actual value is a list
     if let Some(cast_name) = cast_name {
@@ -2734,12 +2740,12 @@ fn validate_argument<'a>(
             file,
         )?;
         if !matches!(cast_ti.instance_value, TypeValue::SEType(_)) {
-            return Err(ErrorItem::Compile(CompileError::new(
+            return Err(ErrorItem::make_compile_or_internal_error(
                 "Not something we can cast to",
                 file,
                 cast_name.get_range(),
                 "This must be a domain, resource or trait that exists in this policy",
-            )));
+            ));
         }
         arg.verify_cast(cast_ti.type_info.borrow(), types, file)?;
 
@@ -2752,12 +2758,12 @@ fn validate_argument<'a>(
     match &arg {
         ArgForValidation::List(v) => {
             if !target_argument.is_list_param {
-                return Err(ErrorItem::Compile(CompileError::new(
+                return Err(ErrorItem::make_compile_or_internal_error(
                     "Unexpected list",
                     file,
                     CascadeString::slice_to_range(v),
                     "This function requires a non-list value here",
-                )));
+                ));
             }
             let target_ti = match types.get(target_argument.param_type.name.as_ref()) {
                 Some(t) => t,
@@ -2767,12 +2773,12 @@ fn validate_argument<'a>(
 
             for arg in arg_typeinfo_vec {
                 if !arg.is_child_or_actual_type(target_argument.param_type, types) {
-                    return Err(ErrorItem::Compile(CompileError::new(
+                    return Err(ErrorItem::make_compile_or_internal_error(
                         &format!("Expected type inheriting {}", target_ti.name),
                         file,
                         arg.name.get_range(),
                         &format!("This type should inherit {}", target_ti.name),
-                    )));
+                    ));
                 }
             }
             Ok(TypeInstance::new(&arg, target_ti, file, context))
@@ -2794,18 +2800,18 @@ fn validate_argument<'a>(
                     );
                     // TODO: Do we handle bound lists here?
                 }
-                return Err(ErrorItem::Compile(CompileError::new(
+                return Err(ErrorItem::make_compile_or_internal_error(
                     "Expected list",
                     file,
                     arg.get_range(),
                     "This function requires a list value here",
-                )));
+                ));
             }
 
             if arg_typeinfo.is_child_or_actual_type(target_argument.param_type, types) {
                 Ok(TypeInstance::new(&arg, arg_typeinfo, file, context))
             } else {
-                Err(ErrorItem::Compile(CompileError::new(
+                Err(ErrorItem::make_compile_or_internal_error(
                     &format!(
                         "Expected type inheriting {}",
                         target_argument.param_type.name
@@ -2816,7 +2822,7 @@ fn validate_argument<'a>(
                         "This type should inherit {}",
                         target_argument.param_type.name
                     ),
-                )))
+                ))
             }
         }
     }
@@ -2848,7 +2854,7 @@ mod tests {
         let type_instance = TypeInstance {
             instance_value: TypeValue::SEType(Some(2..4)),
             type_info: Cow::Borrowed(&type_info),
-            file: &file,
+            file: Some(&file),
         };
 
         assert_eq!(
