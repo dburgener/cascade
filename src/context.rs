@@ -193,7 +193,7 @@ impl<'a> Context<'a> {
         let obj = match &arg {
             ArgForValidation::List(v) => {
                 let arg_typeinfo_vec =
-                    argument_to_typeinfo_vec(v, self.type_map, class_perms, &*self, file)?;
+                    argument_to_typeinfo_vec(v, self.type_map, class_perms, &*self, Some(file))?;
                 // TODO: classes
                 let variant = type_slice_to_variant(&arg_typeinfo_vec, self.type_map)?;
                 if variant.is_perm(self.type_map) {
@@ -204,8 +204,8 @@ impl<'a> Context<'a> {
             }
             _ => {
                 let arg_typeinfo =
-                    argument_to_typeinfo(&arg, self.type_map, class_perms, &*self, file)?;
-                let arg_typeinstance = TypeInstance::new(&arg, arg_typeinfo, file, &*self);
+                    argument_to_typeinfo(&arg, self.type_map, class_perms, &*self, Some(file))?;
+                let arg_typeinstance = TypeInstance::new(&arg, arg_typeinfo, Some(file), &*self);
                 // TODO: classes
                 if arg_typeinfo.is_perm(self.type_map) {
                     BindableObject::PermList(vec![arg_typeinstance
