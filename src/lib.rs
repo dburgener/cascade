@@ -828,7 +828,8 @@ mod tests {
         "(macro strategy_foo-read ((type this) (type source)) (allow source this (file (read))))",
         "(macro custom_define-read ((type this) (type source)) (allow source this (lnk_file (read))))",
         "(macro derive_all-read ((type this) (type source)) (allow source this (dir (read))) (allow source this (file (read))))",
-        "(macro derive_all-write ((type this) (type source)) (allow source this (dir (write))))"],
+        "(macro derive_all-write ((type this) (type source)) (allow source this (dir (write))))",
+        "(call associates-to_associate-some_associated_call"],
         &[]);
     }
 
