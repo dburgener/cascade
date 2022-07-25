@@ -1417,7 +1417,7 @@ fn check_associated_call(
     match func_args.next() {
         None => {
             return Err(CompileError::new(
-                "Invalid method signature for @associated_call annotation: missing firth argument",
+                "Invalid method signature for @associated_call annotation: missing first argument",
                 file,
                 funcdecl.name.get_range(),
                 "Add a 'domain' argument.",
@@ -1431,7 +1431,7 @@ fn check_associated_call(
         }) => {
             if param_type.as_ref() != constants::DOMAIN || *is_list_param {
                 return Err(CompileError::new(
-                    "Invalid method signature for @associated_call annotation: invalid firth argument",
+                    "Invalid method signature for @associated_call annotation: invalid first argument",
                     file,
                     param_type.get_range(),
                     "The type of the first method argument must be 'domain'.",
@@ -1441,7 +1441,7 @@ fn check_associated_call(
     }
     if let Some(a) = func_args.next() {
         return Err(CompileError::new(
-            "Invalid method signature for @associated_call annotation: too much arguments",
+            "Invalid method signature for @associated_call annotation: too many arguments",
             file,
             a.param_type.get_range(),
             "Only one argument of type 'domain' is accepted.",
@@ -1464,6 +1464,7 @@ pub struct FunctionInfo<'a> {
     pub body: Option<BTreeSet<ValidatedStatement<'a>>>,
     pub declaration_file: &'a SimpleFile<String, String>,
     pub is_associated_call: bool,
+    pub is_derived: bool,
     decl: Option<&'a FuncDecl>,
 }
 
@@ -1586,6 +1587,7 @@ impl<'a> FunctionInfo<'a> {
             body: None,
             declaration_file,
             is_associated_call,
+            is_derived: false,
             decl: Some(funcdecl),
         })
     }
@@ -1603,6 +1605,8 @@ impl<'a> FunctionInfo<'a> {
     ) -> Result<FunctionInfo<'a>, CascadeErrors> {
         let mut first_parent = None;
         let mut derived_body = BTreeSet::new();
+        // Becomes true if *any* parent has marked the call as associated
+        let mut derived_is_associated_call = false;
         for parent in derive_classes {
             // The parent may or may not have such a function implemented.
             // As long as at least one parent has it, that's fine
@@ -1610,6 +1614,10 @@ impl<'a> FunctionInfo<'a> {
                 Some(f) => f,
                 None => continue,
             };
+
+            if parent_function.is_associated_call {
+                derived_is_associated_call = true;
+            }
 
             // All parent functions must have the same prototype.  If this is the first function we
             // are looking at, we save that prototype.  Otherwise, we compare to ensure they are
@@ -1652,7 +1660,8 @@ impl<'a> FunctionInfo<'a> {
             original_body: &[], // Unused after validation
             body: Some(derived_body),
             declaration_file: file,
-            is_associated_call: false, // I *think* the behavior should be that this is the true if it's true for *any* parent.  TODO: check/document that
+            is_associated_call: derived_is_associated_call,
+            is_derived: true,
             decl: None,
         })
     }
@@ -1944,7 +1953,7 @@ pub struct ValidatedCall {
 }
 
 impl ValidatedCall {
-    fn new(
+    pub fn new(
         call: &FuncCall,
         functions: &FunctionMap<'_>,
         types: &TypeMap,
@@ -2624,6 +2633,7 @@ mod tests {
             body: None,
             declaration_file: &some_file,
             is_associated_call: false,
+            is_derived: false,
             decl: None,
         };
 

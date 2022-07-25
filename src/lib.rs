@@ -156,6 +156,10 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::Ca
     let func_map_copy = func_map.clone(); // In order to read function info while mutating
     let func_map = compile::validate_functions(func_map, &type_map, &classlist, &func_map_copy)?;
 
+    // Add derived associated calls
+    let mut calls = compile::call_derived_associated_calls(&type_map, &func_map, &classlist)?;
+    policy_rules.append(&mut calls);
+
     for p in &policies {
         let mut r = match compile::compile_rules_one_file(p, &classlist, &type_map, &func_map) {
             Ok(r) => r,
@@ -594,7 +598,8 @@ mod tests {
         "(macro strategy_foo-read ((type this) (type source)) (allow source this (file (read))))",
         "(macro custom_define-read ((type this) (type source)) (allow source this (lnk_file (read))))",
         "(macro derive_all-read ((type this) (type source)) (allow source this (dir (read))) (allow source this (file (read))))",
-        "(macro derive_all-write ((type this) (type source)) (allow source this (dir (write))))"],
+        "(macro derive_all-write ((type this) (type source)) (allow source this (dir (write))))",
+        "(call to_associate-some_associated_call (to_associate associates))"],
         &[]);
     }
 

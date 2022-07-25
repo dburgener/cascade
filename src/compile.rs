@@ -18,7 +18,7 @@ use crate::internal_rep::{
     argument_to_typeinfo, argument_to_typeinfo_vec, generate_sid_rules, type_slice_to_variant,
     validate_derive_args, Annotated, AnnotationInfo, ArgForValidation, Associated, BoundTypeInfo,
     ClassList, Context, DeriveStrategy, FunctionArgument, FunctionInfo, FunctionMap, ModuleMap,
-    Sid, TypeInfo, TypeMap, ValidatedModule, ValidatedStatement,
+    Sid, TypeInfo, TypeMap, ValidatedCall, ValidatedModule, ValidatedStatement,
 };
 
 use codespan_reporting::files::SimpleFile;
@@ -746,12 +746,8 @@ fn interpret_associate(
                 };
 
                 // Creates a synthetic call.
-                let new_call = Expression::Stmt(Statement::Call(Box::new(FuncCall::new(
-                    Some(res_name),
-                    func_info.name.clone().into(),
-                    vec![Argument::Var("this".into())],
-                ))));
-                if !local_exprs.insert(new_call) {
+                let new_call = make_associated_call(res_name, func_info);
+                if !local_exprs.insert(Expression::Stmt(Statement::Call(Box::new(new_call)))) {
                     return Err(ErrorItem::Internal(InternalError::new()).into());
                 }
             }
@@ -786,6 +782,14 @@ fn interpret_associate(
     }
 
     errors.into_result(())
+}
+
+fn make_associated_call(resource_name: CascadeString, func_info: &FunctionInfo) -> FuncCall {
+    FuncCall::new(
+        Some(resource_name),
+        func_info.name.clone().into(),
+        vec![Argument::Var("this".into())],
+    )
 }
 
 // domain -> related expressions
@@ -1040,6 +1044,59 @@ where
     }
 
     aliases
+}
+
+pub fn call_derived_associated_calls<'a>(
+    types: &TypeMap,
+    funcs: &FunctionMap<'a>,
+    class_perms: &ClassList,
+) -> Result<BTreeSet<ValidatedStatement<'a>>, CascadeErrors> {
+    let mut ret = BTreeSet::new();
+    let mut errors = CascadeErrors::new();
+    for t in types.values() {
+        if !t.is_domain(types) {
+            continue;
+        }
+        for a in &t.annotations {
+            if let AnnotationInfo::Associate(associations) = a {
+                for f in funcs.values() {
+                    if f.is_derived && f.is_associated_call {
+                        let resource_name = match f.class {
+                            Some(n) => n.name.clone(),
+                            None => {
+                                continue;
+                            }
+                        };
+                        if associations.resources.iter().any(|r| r == &resource_name) {
+                            let call = make_associated_call(resource_name, f);
+                            let args = vec![FunctionArgument::new_this_argument(t)];
+                            let mut local_context = BlockContext::new(BlockType::Domain, types);
+                            local_context.insert_function_args(&args);
+
+                            let validated_call = match ValidatedCall::new(
+                                &call,
+                                funcs,
+                                types,
+                                class_perms,
+                                None,
+                                &local_context,
+                                f.declaration_file,
+                            ) {
+                                Ok(c) => c,
+                                Err(e) => {
+                                    errors.append(e);
+                                    continue;
+                                }
+                            };
+
+                            ret.insert(ValidatedStatement::Call(Box::new(validated_call)));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    errors.into_result(ret)
 }
 
 fn do_rules_pass<'a>(
