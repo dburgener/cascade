@@ -7,8 +7,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::TryFrom;
 
 use crate::ast::{
-    Annotations, Argument, CascadeString, Declaration, Expression, FuncCall, LetBinding, Module,
-    PolicyFile, Statement, System,
+    Argument, CascadeString, Declaration, Expression, FuncCall, LetBinding, Module, PolicyFile,
+    Statement, System,
 };
 use crate::constants;
 use crate::context::{BlockType, Context as BlockContext};
@@ -17,7 +17,8 @@ use crate::internal_rep::{
     argument_to_typeinfo, argument_to_typeinfo_vec, generate_sid_rules, type_slice_to_variant,
     validate_derive_args, Annotated, AnnotationInfo, ArgForValidation, Associated, BoundTypeInfo,
     ClassList, Context, DeriveStrategy, FunctionArgument, FunctionInfo, FunctionMap, ModuleMap,
-    Sid, SystemMap, TypeInfo, TypeMap, ValidatedModule, ValidatedStatement, ValidatedSystem,
+    Sid, SystemMap, TypeInfo, TypeMap, ValidatedCall, ValidatedModule, ValidatedStatement,
+    ValidatedSystem,
 };
 
 use codespan_reporting::files::SimpleFile;
@@ -875,6 +876,11 @@ pub fn get_policy_rules<'a>(
 ) -> Result<BTreeSet<ValidatedStatement<'a>>, CascadeErrors> {
     let mut ret = CascadeErrors::new();
     let mut reduced_policy_rules = BTreeSet::new();
+
+    // Add derived associated calls
+    let mut calls = call_derived_associated_calls(reduced_type_map, reduced_func_map, classlist)?;
+    reduced_policy_rules.append(&mut calls);
+
     for p in policies {
         let mut r = match compile_rules_one_file(p, classlist, reduced_type_map, reduced_func_map) {
             Ok(r) => r,
@@ -1012,7 +1018,13 @@ fn create_synthetic_resource(
     // Virtual resources become concrete when associated to concrete types
     dup_res_decl.is_virtual = dup_res_decl.is_virtual && dom_info.is_virtual;
     let dup_res_is_virtual = dup_res_decl.is_virtual;
-    dup_res_decl.annotations = Annotations::new();
+    // The synthetic resource keeps some, but not all annotations from its parent.
+    // Specifically, Makelist and derive are kept from the parent
+    dup_res_decl
+        .annotations
+        .annotations
+        .retain(|a| a.name.as_ref() == "makelist" || a.name.as_ref() == "derive");
+
     dup_res_decl
         .expressions
         .iter_mut()
@@ -1079,12 +1091,8 @@ fn interpret_associate(
                 };
 
                 // Creates a synthetic call.
-                let new_call = Expression::Stmt(Statement::Call(Box::new(FuncCall::new(
-                    Some(res_name),
-                    func_info.name.clone().into(),
-                    vec![Argument::Var("this".into())],
-                ))));
-                if !local_exprs.insert(new_call) {
+                let new_call = make_associated_call(res_name, func_info);
+                if !local_exprs.insert(Expression::Stmt(Statement::Call(Box::new(new_call)))) {
                     return Err(ErrorItem::Internal(InternalError::new()).into());
                 }
             }
@@ -1119,6 +1127,14 @@ fn interpret_associate(
     }
 
     errors.into_result(())
+}
+
+fn make_associated_call(resource_name: CascadeString, func_info: &FunctionInfo) -> FuncCall {
+    FuncCall::new(
+        Some(resource_name),
+        func_info.name.clone().into(),
+        vec![Argument::Var("this".into())],
+    )
 }
 
 // domain -> related expressions
@@ -1374,6 +1390,62 @@ where
     }
 
     aliases
+}
+
+pub fn call_derived_associated_calls<'a>(
+    types: &TypeMap,
+    funcs: &FunctionMap<'a>,
+    class_perms: &ClassList,
+) -> Result<BTreeSet<ValidatedStatement<'a>>, CascadeErrors> {
+    let mut ret = BTreeSet::new();
+    let mut errors = CascadeErrors::new();
+    for t in types.values() {
+        if !t.is_domain(types) {
+            continue;
+        }
+        for a in &t.annotations {
+            if let AnnotationInfo::Associate(associations) = a {
+                for f in funcs.values() {
+                    if f.is_derived && f.is_associated_call {
+                        let resource_name = match f.class {
+                            Some(n) => n.name.clone(),
+                            None => {
+                                continue;
+                            }
+                        };
+                        if associations.resources.iter().any(|r| {
+                            [t.name.as_ref(), r.as_ref()].join(".") == resource_name.as_ref()
+                        }) {
+                            let call = make_associated_call(resource_name, f);
+                            let args = vec![FunctionArgument::new_this_argument(t)];
+                            let mut local_context =
+                                BlockContext::new(BlockType::Domain, types, Some(t));
+                            local_context.insert_function_args(&args);
+
+                            let validated_call = match ValidatedCall::new(
+                                &call,
+                                funcs,
+                                types,
+                                class_perms,
+                                None,
+                                &local_context,
+                                f.declaration_file,
+                            ) {
+                                Ok(c) => c,
+                                Err(e) => {
+                                    errors.append(e);
+                                    continue;
+                                }
+                            };
+
+                            ret.insert(ValidatedStatement::Call(Box::new(validated_call)));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    errors.into_result(ret)
 }
 
 fn do_rules_pass<'a>(

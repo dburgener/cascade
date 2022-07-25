@@ -2,6 +2,11 @@ virtual resource foo {
 	fn read(domain source) {
 		allow(source, this, file, read);
 	}
+
+	@associated_call
+	fn some_associated_call(domain source) {
+		allow(source, this, file, link);
+	}
 }
 
 virtual resource bar {
@@ -11,6 +16,10 @@ virtual resource bar {
 
 	fn write(domain source) {
 		allow(source, this, dir, write);
+	}
+
+	fn some_associated_call(domain source) {
+		allow(source, this, dir, add_name);
 	}
 }
 
@@ -34,3 +43,9 @@ domain some_domain {
 	strategy_foo.read(this);
 	custom_define.read(this);
 }
+
+@derive([some_associated_call], strategy=union)
+virtual resource to_associate inherits foo, bar {}
+
+@associate([to_associate])
+domain associates {}
