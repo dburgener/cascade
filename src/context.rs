@@ -23,23 +23,34 @@ pub enum BindableObject<'a> {
     Argument(FunctionArgument<'a>),
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BlockType {
+    Domain,
+    Resource,
+    Function,
+    Annotation,
+    Global,
+}
+
 // Encapsulate all local context in a block's scope
 #[derive(Clone, Debug)]
 pub struct Context<'a> {
     symbols: BTreeMap<CascadeString, BindableObject<'a>>,
     type_map: &'a TypeMap,
+    block_type: BlockType,
 }
 
 impl<'a> Context<'a> {
-    pub fn new(types: &'a TypeMap) -> Self {
+    pub fn new(block_type: BlockType, types: &'a TypeMap) -> Self {
         Context {
             symbols: BTreeMap::new(),
             type_map: types,
+            block_type,
         }
     }
 
     pub fn new_from_args(args: &[FunctionArgument<'a>], types: &'a TypeMap) -> Self {
-        let mut context = Context::new(types);
+        let mut context = Context::new(BlockType::Function, types);
         context.insert_function_args(args);
         context
     }
@@ -152,7 +163,7 @@ impl<'a> Context<'a> {
         let obj = match &arg {
             ArgForValidation::List(v) => {
                 let arg_typeinfo_vec =
-                    argument_to_typeinfo_vec(v, self.type_map, class_perms, &*self, file)?;
+                    argument_to_typeinfo_vec(v, self.type_map, class_perms, &*self, Some(file))?;
                 // TODO: classes
                 let variant = type_slice_to_variant(&arg_typeinfo_vec, self.type_map)?;
                 if variant.is_perm(self.type_map) {
@@ -163,8 +174,8 @@ impl<'a> Context<'a> {
             }
             _ => {
                 let arg_typeinfo =
-                    argument_to_typeinfo(&arg, self.type_map, class_perms, &*self, file)?;
-                let arg_typeinstance = TypeInstance::new(&arg, arg_typeinfo, file);
+                    argument_to_typeinfo(&arg, self.type_map, class_perms, &*self, Some(file))?;
+                let arg_typeinstance = TypeInstance::new(&arg, arg_typeinfo, Some(file));
                 // TODO: classes
                 if arg_typeinfo.is_perm(self.type_map) {
                     BindableObject::PermList(vec![arg_typeinstance
@@ -180,6 +191,14 @@ impl<'a> Context<'a> {
         self.insert_binding(name.clone(), self.resolve_internal_symbols(obj));
         Ok(())
     }
+
+    pub fn in_function_block(&self) -> bool {
+        self.block_type == BlockType::Function
+    }
+
+    pub fn in_annotation(&self) -> bool {
+        self.block_type == BlockType::Annotation
+    }
 }
 
 #[cfg(test)]
@@ -190,7 +209,7 @@ mod tests {
     #[test]
     fn test_symbol_in_context() {
         let tm = compile::get_built_in_types_map();
-        let mut context = Context::new(&tm);
+        let mut context = Context::new(BlockType::Domain, &tm);
 
         context.insert_binding(
             CascadeString::from("foo"),
@@ -215,7 +234,7 @@ mod tests {
     #[test]
     fn test_insert_from_argument() {
         let tm = compile::get_built_in_types_map();
-        let mut context = Context::new(&tm);
+        let mut context = Context::new(BlockType::Domain, &tm);
         let cl = ClassList::new();
         let file = SimpleFile::<String, String>::new("name".to_string(), "source".to_string());
 

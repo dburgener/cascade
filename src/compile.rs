@@ -12,13 +12,13 @@ use crate::ast::{
     Statement,
 };
 use crate::constants;
-use crate::context::Context as BlockContext;
+use crate::context::{BlockType, Context as BlockContext};
 use crate::error::{CascadeErrors, CompileError, ErrorItem, InternalError};
 use crate::internal_rep::{
     argument_to_typeinfo, argument_to_typeinfo_vec, generate_sid_rules, type_slice_to_variant,
-    Annotated, AnnotationInfo, ArgForValidation, Associated, BoundTypeInfo, ClassList, Context,
-    FunctionArgument, FunctionInfo, FunctionMap, ModuleMap, Sid, TypeInfo, TypeMap,
-    ValidatedModule, ValidatedStatement,
+    validate_derive_args, Annotated, AnnotationInfo, ArgForValidation, Associated, BoundTypeInfo,
+    ClassList, Context, DeriveStrategy, FunctionArgument, FunctionInfo, FunctionMap, ModuleMap,
+    Sid, TypeInfo, TypeMap, ValidatedCall, ValidatedModule, ValidatedStatement,
 };
 
 use codespan_reporting::files::SimpleFile;
@@ -185,8 +185,8 @@ pub fn get_global_bindings(
                         &v,
                         types,
                         classlist,
-                        &BlockContext::new(tm_clone),
-                        file,
+                        &BlockContext::new(BlockType::Global, tm_clone),
+                        Some(file),
                     )?;
                     let variant = type_slice_to_variant(&ti_vec, types)?;
                     (
@@ -199,8 +199,8 @@ pub fn get_global_bindings(
                         &a,
                         types,
                         classlist,
-                        &BlockContext::new(tm_clone),
-                        file,
+                        &BlockContext::new(BlockType::Global, tm_clone),
+                        Some(file),
                     )?;
                     if ti.name.as_ref() == "perm" {
                         (
@@ -276,12 +276,12 @@ pub fn build_func_map<'a>(
 }
 
 // Mutate hash map to set the validated body
-pub fn validate_functions<'a, 'b>(
-    functions: &'a mut FunctionMap<'b>,
-    types: &'b TypeMap,
-    class_perms: &'b ClassList,
-    functions_copy: &'b FunctionMap<'b>,
-) -> Result<(), CascadeErrors> {
+pub fn validate_functions<'a>(
+    mut functions: FunctionMap<'a>,
+    types: &'a TypeMap,
+    class_perms: &'a ClassList,
+    functions_copy: &'a FunctionMap<'a>,
+) -> Result<FunctionMap<'a>, CascadeErrors> {
     let mut errors = CascadeErrors::new();
     let mut classes_to_virtual_functions = BTreeMap::new();
     for function in functions.values_mut() {
@@ -299,10 +299,13 @@ pub fn validate_functions<'a, 'b>(
                 classes_to_virtual_functions
                     .entry(&func_class.name)
                     .or_insert(BTreeSet::new())
-                    .insert(&function.name);
+                    .insert(function.name.clone());
             }
         }
     }
+
+    derive_functions(&mut functions, types, class_perms)?;
+
     // Validate that all required functions exist
     for setype in types.values() {
         for parent in &setype.inherits {
@@ -321,7 +324,54 @@ pub fn validate_functions<'a, 'b>(
         }
     }
 
-    errors.into_result(())
+    errors.into_result(functions)
+}
+
+fn derive_functions<'a, 'b>(
+    functions: &'a mut FunctionMap<'b>,
+    types: &'b TypeMap,
+    class_perms: &'b ClassList,
+) -> Result<(), CascadeErrors> {
+    for t in types.values() {
+        for annotation in t.get_annotations() {
+            if let AnnotationInfo::Derive(derive_args) = annotation {
+                handle_derive(t, derive_args, functions, types, class_perms)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn handle_derive<'a>(
+    target_type: &'a TypeInfo,
+    derive_args: &[Argument],
+    functions: &mut FunctionMap<'a>,
+    types: &TypeMap,
+    class_perms: &ClassList,
+) -> Result<(), CascadeErrors> {
+    let (strategy, mut func_names) =
+        validate_derive_args(target_type, derive_args, types, class_perms)?;
+
+    let parents = match &strategy {
+        DeriveStrategy::Union => target_type.get_all_parent_names(types),
+        DeriveStrategy::Parent(parent) => vec![parent],
+    };
+
+    if vec![CascadeString::from("all")] == func_names {
+        func_names = get_all_function_names(&parents, &*functions);
+    }
+
+    for f in func_names {
+        let derived_function = FunctionInfo::new_derived_function(
+            &f,
+            target_type,
+            &parents,
+            functions,
+            target_type.declaration_file.as_ref().unwrap(),
+        )?;
+        functions.insert(derived_function.get_cil_name(), derived_function);
+    }
+    Ok(())
 }
 
 pub fn validate_modules<'a>(
@@ -504,6 +554,23 @@ fn fill_validated_modules<'a>(
     }
 }
 
+fn get_all_function_names(
+    type_names: &[&CascadeString],
+    functions: &FunctionMap,
+) -> Vec<CascadeString> {
+    let mut ret = Vec::new();
+    for f in functions.values() {
+        if let Some(class) = f.class {
+            if type_names.contains(&&class.name)
+                && !ret.contains(&CascadeString::from(&f.name as &str))
+            {
+                ret.push(CascadeString::from(&f.name as &str));
+            }
+        }
+    }
+    ret
+}
+
 // If a type couldn't be organized, it is either a cycle or a non-existant parent somewhere
 // The claim that a type must have at least one parent is enforced by the parser
 // This function walks the tree from a given type and determines which of these cases we are in
@@ -655,7 +722,7 @@ fn interpret_associate(
                     errors.add_error(ErrorItem::Compile(CompileError::new(
                         "multiple @associated_call in the same resource",
                         func_info.declaration_file,
-                        func_info.decl.name.get_range(),
+                        func_info.get_declaration_range(),
                         "Only one function in the same resource can be annotated with @associated_call.",
                     )));
                     continue;
@@ -679,12 +746,8 @@ fn interpret_associate(
                 };
 
                 // Creates a synthetic call.
-                let new_call = Expression::Stmt(Statement::Call(Box::new(FuncCall::new(
-                    Some(res_name),
-                    func_info.name.clone().into(),
-                    vec![Argument::Var("this".into())],
-                ))));
-                if !local_exprs.insert(new_call) {
+                let new_call = make_associated_call(res_name, func_info);
+                if !local_exprs.insert(Expression::Stmt(Statement::Call(Box::new(new_call)))) {
                     return Err(ErrorItem::Internal(InternalError::new()).into());
                 }
             }
@@ -719,6 +782,14 @@ fn interpret_associate(
     }
 
     errors.into_result(())
+}
+
+fn make_associated_call(resource_name: CascadeString, func_info: &FunctionInfo) -> FuncCall {
+    FuncCall::new(
+        Some(resource_name),
+        func_info.name.clone().into(),
+        vec![Argument::Var("this".into())],
+    )
 }
 
 // domain -> related expressions
@@ -975,6 +1046,59 @@ where
     aliases
 }
 
+pub fn call_derived_associated_calls<'a>(
+    types: &TypeMap,
+    funcs: &FunctionMap<'a>,
+    class_perms: &ClassList,
+) -> Result<BTreeSet<ValidatedStatement<'a>>, CascadeErrors> {
+    let mut ret = BTreeSet::new();
+    let mut errors = CascadeErrors::new();
+    for t in types.values() {
+        if !t.is_domain(types) {
+            continue;
+        }
+        for a in &t.annotations {
+            if let AnnotationInfo::Associate(associations) = a {
+                for f in funcs.values() {
+                    if f.is_derived && f.is_associated_call {
+                        let resource_name = match f.class {
+                            Some(n) => n.name.clone(),
+                            None => {
+                                continue;
+                            }
+                        };
+                        if associations.resources.iter().any(|r| r == &resource_name) {
+                            let call = make_associated_call(resource_name, f);
+                            let args = vec![FunctionArgument::new_this_argument(t)];
+                            let mut local_context = BlockContext::new(BlockType::Domain, types);
+                            local_context.insert_function_args(&args);
+
+                            let validated_call = match ValidatedCall::new(
+                                &call,
+                                funcs,
+                                types,
+                                class_perms,
+                                None,
+                                &local_context,
+                                f.declaration_file,
+                            ) {
+                                Ok(c) => c,
+                                Err(e) => {
+                                    errors.append(e);
+                                    continue;
+                                }
+                            };
+
+                            ret.insert(ValidatedStatement::Call(Box::new(validated_call)));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    errors.into_result(ret)
+}
+
 fn do_rules_pass<'a>(
     exprs: &'a [Expression],
     types: &'a TypeMap,
@@ -989,7 +1113,21 @@ fn do_rules_pass<'a>(
         Some(t) => vec![FunctionArgument::new_this_argument(t)],
         None => Vec::new(),
     };
-    let mut local_context = BlockContext::new_from_args(&func_args, types);
+
+    let block_type = match parent_type {
+        Some(parent) => match parent.get_built_in_variant(types) {
+            Some("resource") => BlockType::Resource,
+            Some("domain") => BlockType::Domain,
+            _ => {
+                return Err(ErrorItem::Internal(InternalError::new()).into());
+            }
+        },
+        None => BlockType::Global,
+    };
+
+    let mut local_context = BlockContext::new(block_type, types);
+    local_context.insert_function_args(&func_args);
+
     for e in exprs {
         match e {
             Expression::Stmt(s) => {

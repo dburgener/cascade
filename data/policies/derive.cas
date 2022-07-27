@@ -1,0 +1,51 @@
+virtual resource foo {
+	fn read(domain source) {
+		allow(source, this, file, read);
+	}
+
+	@associated_call
+	fn some_associated_call(domain source) {
+		allow(source, this, file, link);
+	}
+}
+
+virtual resource bar {
+	fn read(domain source) {
+		allow(source, this, dir, read);
+	}
+
+	fn write(domain source) {
+		allow(source, this, dir, write);
+	}
+
+	fn some_associated_call(domain source) {
+		allow(source, this, dir, add_name);
+	}
+}
+
+resource custom_define inherits foo, bar {
+	fn read(domain source) {
+		allow(source, this, lnk_file, read);
+	}
+}
+
+@derive([read], strategy=union)
+resource strategy_union inherits foo, bar {}
+
+@derive([read], strategy=foo)
+resource strategy_foo inherits foo, bar {}
+
+@derive([all], strategy=union)
+resource derive_all inherits foo, bar {}
+
+domain some_domain {
+	strategy_union.read(this);
+	strategy_foo.read(this);
+	custom_define.read(this);
+}
+
+@derive([some_associated_call], strategy=union)
+virtual resource to_associate inherits foo, bar {}
+
+@associate([to_associate])
+domain associates {}
