@@ -8,7 +8,7 @@
 // thiserror can handle backtraces for us with minimal effort
 use backtrace::Backtrace as BacktraceCrate;
 use codespan_reporting::diagnostic::{Diagnostic, Label};
-use codespan_reporting::files::SimpleFile;
+use codespan_reporting::files::{SimpleFile, SimpleFiles};
 use codespan_reporting::term;
 use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
 use lalrpop_util::lexer::Token;
@@ -21,22 +21,22 @@ use thiserror::Error;
 #[derive(Error, Clone, Debug)]
 #[error("{diagnostic}")]
 pub struct CompileError {
-    pub diagnostic: Diag,
-    pub file: SimpleFile<String, String>,
+    pub diagnostic: Diag<usize>,
+    pub files: SimpleFiles<String, String>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Diag {
-    pub inner: Diagnostic<()>,
+pub struct Diag<FileId> {
+    pub inner: Diagnostic<FileId>,
 }
 
-impl From<Diagnostic<()>> for Diag {
-    fn from(d: Diagnostic<()>) -> Self {
+impl<FileId> From<Diagnostic<FileId>> for Diag<FileId> {
+    fn from(d: Diagnostic<FileId>) -> Self {
         Self { inner: d }
     }
 }
 
-impl fmt::Display for Diag {
+impl<FileId> fmt::Display for Diag<FileId> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         //write!(f, "{}:{} {}", self.filename, self.lineno, self.msg)
         write!(f, "{}", self.inner.message)
@@ -50,15 +50,19 @@ impl CompileError {
         range: Option<Range<usize>>,
         help: &str,
     ) -> Self {
+        let mut files = SimpleFiles::new();
+        let file_id = files.add(file.name().clone(), file.source().clone());
+
         let diagnostic = Diagnostic::error().with_message(msg);
 
         let diagnostic = match range {
             None => diagnostic,
-            Some(r) => diagnostic.with_labels(vec![Label::primary((), r).with_message(help)]),
+            Some(r) => diagnostic.with_labels(vec![Label::primary(file_id, r).with_message(help)]),
         };
+
         CompileError {
             diagnostic: diagnostic.into(),
-            file: file.clone(),
+            files,
         }
     }
     pub fn print_diagnostic(&self) {
@@ -68,9 +72,24 @@ impl CompileError {
         let _ = term::emit(
             &mut writer.lock(),
             &config,
-            &self.file,
+            &self.files,
             &self.diagnostic.inner,
         );
+    }
+
+    pub fn add_additional_message(
+        mut self,
+        file: &SimpleFile<String, String>,
+        range: Range<usize>,
+        help: &str,
+    ) -> Self {
+        let file_id = self.files.add(file.name().clone(), file.source().clone());
+
+        self.diagnostic.inner = self
+            .diagnostic
+            .inner
+            .with_labels(vec![Label::primary(file_id, range).with_message(help)]);
+        self
     }
 }
 
@@ -91,7 +110,7 @@ impl InternalError {
 #[derive(Error, Clone, Debug)]
 #[error("{diagnostic}")]
 pub struct ParseError {
-    pub diagnostic: Diag,
+    pub diagnostic: Diag<()>,
     pub file: SimpleFile<String, String>,
 }
 
@@ -313,5 +332,28 @@ impl fmt::Display for CascadeErrors {
             writeln!(f, "{}: {:#?}", i + 1, e)?
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn multi_file_errors() {
+        let file1 = SimpleFile::new("File1.cas".to_string(), "Contents of file 1".to_string());
+        let file2 = SimpleFile::new("File2.cas".to_string(), "Contents of file 2".to_string());
+
+        let mut error = CompileError::new(
+            "This message points at multiple files",
+            &file1,
+            Some(9..11),
+            "This is the word 'of' in file 1",
+        );
+
+        error = error.add_additional_message(&file2, 12..16, "This is the word file in file 2");
+
+        let labels = error.diagnostic.inner.labels;
+        assert_eq!(labels.len(), 2);
     }
 }
