@@ -3,6 +3,7 @@
 use sexp::{atom_s, list, Atom, Sexp};
 
 use std::borrow::Cow;
+use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryFrom;

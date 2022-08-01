@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 use sexp::{atom_s, list, Sexp};
 use std::borrow::Cow;
+use std::cell::RefCell;
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::TryFrom;
