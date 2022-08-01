@@ -521,6 +521,10 @@ impl Module {
         }
     }
 
+    pub fn add_annotation(&mut self, annotation: Annotation) {
+        self.annotations.push(annotation);
+    }
+
     pub fn set_fields(mut self, input: Vec<(CascadeString, CascadeString)>) -> Self {
         for i in input {
             let declared_type = i.0.to_string();

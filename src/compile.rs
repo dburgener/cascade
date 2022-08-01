@@ -323,19 +323,29 @@ pub fn validate_functions<'a, 'b>(
     errors.into_result(())
 }
 
-pub fn validate_modules<'a>(
-    policies: &'a [PolicyFile],
-    types: &'a TypeMap,
-    all_validated_modules: &'a mut ModuleMap<'a>,
+pub fn validate_modules<'a, 'b>(
+    policies: &'b [PolicyFile],
+    types: &'b TypeMap,
+    all_validated_modules: &'a mut ModuleMap<'b>,
 ) -> Result<(), CascadeErrors> {
     let mut errors = CascadeErrors::new();
 
     // Store all modules across files in a vector
     let mut modules_vec: Vec<(&SimpleFile<String, String>, &Module)> = Vec::new();
+    let mut module_aliases = Vec::new();
     for p in policies {
         for e in &p.policy.exprs {
             if let Expression::Decl(Declaration::Mod(m)) = e {
                 modules_vec.push((&p.file, m));
+                for ann in &m.annotations.annotations {
+                    if ann.name == "alias" {
+                        for arg in &ann.arguments {
+                            if let Argument::Var(a) = arg {
+                                module_aliases.push(a);
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -368,7 +378,9 @@ pub fn validate_modules<'a>(
             &mut errors,
         ));
         for m in &module.modules {
-            if !&modules_vec.iter().any(|&x| x.1.name == m.as_ref()) {
+            if !&modules_vec.iter().any(|&x| x.1.name == m.as_ref())
+                && !&module_aliases.iter().any(|x| x.as_ref() == m.as_ref())
+            {
                 errors.append(CascadeErrors::from(
                     ErrorItem::make_compile_or_internal_error(
                         &format!("Module {} does not exist", m.as_ref()),
@@ -383,7 +395,7 @@ pub fn validate_modules<'a>(
         }
         all_validated_modules.insert(
             module.name.to_string(),
-            ValidatedModule::new(module.name.clone(), type_infos, child_modules),
+            ValidatedModule::new(module.name.clone(), type_infos, child_modules, module, file)?,
         );
     }
     errors.into_result(())

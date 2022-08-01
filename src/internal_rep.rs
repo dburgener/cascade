@@ -14,7 +14,7 @@ use codespan_reporting::files::SimpleFile;
 
 use crate::ast::{
     get_cil_name, Annotation, Annotations, Argument, BuiltIns, CascadeString, DeclaredArgument,
-    FuncCall, FuncDecl, Statement, TypeDecl,
+    FuncCall, FuncDecl, Module, Statement, TypeDecl,
 };
 use crate::constants;
 use crate::context::Context as BlockContext;
@@ -1784,8 +1784,15 @@ pub type ModuleMap<'a> = AliasMap<ValidatedModule<'a>>;
 #[derive(Debug, Clone)]
 pub struct ValidatedModule<'a> {
     pub name: CascadeString,
+    pub annotations: BTreeSet<AnnotationInfo>,
     pub types: BTreeSet<&'a TypeInfo>,
     pub validated_modules: BTreeSet<&'a CascadeString>,
+}
+
+impl<'a> Annotated for &ValidatedModule<'a> {
+    fn get_annotations(&self) -> std::collections::btree_set::Iter<AnnotationInfo> {
+        self.annotations.iter()
+    }
 }
 
 impl<'a> ValidatedModule<'a> {
@@ -1793,13 +1800,53 @@ impl<'a> ValidatedModule<'a> {
         name: CascadeString,
         types: BTreeSet<&'a TypeInfo>,
         validated_modules: BTreeSet<&'a CascadeString>,
-    ) -> Self {
-        ValidatedModule {
+        mod_decl: &'a Module,
+        declaration_file: &'a SimpleFile<String, String>,
+    ) -> Result<ValidatedModule<'a>, CascadeErrors> {
+        Ok(ValidatedModule {
             name,
+            annotations: get_module_annotations(declaration_file, &mod_decl.annotations)?,
             types,
             validated_modules,
+        })
+    }
+}
+
+fn get_module_annotations(
+    file: &SimpleFile<String, String>,
+    annotations: &Annotations,
+) -> Result<BTreeSet<AnnotationInfo>, CompileError> {
+    let mut infos = BTreeSet::new();
+    for annotation in annotations.annotations.iter() {
+        match annotation.name.as_ref() {
+            "alias" => {
+                for arg in &annotation.arguments {
+                    match arg {
+                        Argument::Var(a) => {
+                            infos.insert(AnnotationInfo::Alias(a.clone()));
+                        }
+                        _ => {
+                            return Err(CompileError::new(
+                                "Invalid alias",
+                                file,
+                                annotation.name.get_range(),
+                                "Alias name must be a symbol",
+                            ));
+                        }
+                    }
+                }
+            }
+            _ => {
+                return Err(CompileError::new(
+                    "Unknown annotation",
+                    file,
+                    annotation.name.get_range(),
+                    "The only valid annotation for modules is '@alias'",
+                ));
+            }
         }
     }
+    Ok(infos)
 }
 
 // If the class_name is "this", return the parent type name,

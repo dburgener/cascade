@@ -1,24 +1,17 @@
+domain quz {
+	allow(this, baz, file, read);
+}
+
+@alias(baz)
+resource thud {}
+
 @alias(foo)
 @alias(bar)
-resource baz {
-	@alias(list)
-	fn read(domain source) {
-		allow(source, this, dir, read);
-	}
+module babble {
+	resource baz;
 }
-
-domain quz {
-	allow(this, foo, file, read);
-	allow(this, bar, file, write);
-	allow(this, baz, file, open);
-	foo.list(this);
-}
-
-@alias(thud)
-domain babble {}
 
 module qux {
-	resource baz;
 	domain quz;
-	domain thud;
+	module bar;
 }
