@@ -172,6 +172,10 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::Ca
     // Validate modules
     compile::validate_modules(&policies, &type_map, &mut module_map)?;
 
+    // Generate module aliases
+    let m_aliases = compile::collect_aliases(module_map.iter());
+    module_map.set_aliases(m_aliases);
+
     let cil_tree = compile::generate_sexp(&type_map, &classlist, policy_rules, &func_map)?;
 
     errors.into_result(generate_cil(cil_tree))
@@ -534,11 +538,7 @@ mod tests {
     // after module implementation is complete.
     #[test]
     fn alias_module_test() {
-        valid_policy_test(
-            "module_alias.cas",
-            &["(typealias thud)", "(typealiasactual thud babble)"],
-            &[],
-        )
+        valid_policy_test("module_alias.cas", &[], &[])
     }
 
     #[test]
