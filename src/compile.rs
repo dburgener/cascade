@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 use sexp::{atom_s, list, Sexp};
 use std::borrow::Cow;
-use std::cell::RefCell;
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::TryFrom;
@@ -325,7 +324,7 @@ pub fn validate_functions<'a, 'b>(
 }
 
 pub fn validate_modules<'a>(
-    policies: &[PolicyFile],
+    policies: &'a [PolicyFile],
     types: &'a TypeMap,
     all_validated_modules: &'a mut ModuleMap<'a>,
 ) -> Result<(), CascadeErrors> {
@@ -353,6 +352,7 @@ pub fn validate_modules<'a>(
     // Validate that module contents exist and create validated modules
     for (file, module) in &modules_vec {
         let mut type_infos = BTreeSet::new();
+        let mut child_modules = BTreeSet::new();
         type_infos.append(&mut validate_module_contents(
             constants::DOMAIN.to_string(),
             &module.domains,
@@ -377,21 +377,15 @@ pub fn validate_modules<'a>(
                         "modules within modules must be declared elsewhere",
                     ),
                 ))
+            } else {
+                child_modules.insert(m);
             }
         }
         all_validated_modules.insert(
             module.name.to_string(),
-            RefCell::new(ValidatedModule::new(
-                module.name.clone(),
-                type_infos,
-                BTreeSet::new(),
-            )),
+            ValidatedModule::new(module.name.clone(), type_infos, child_modules),
         );
     }
-    errors = errors.into_result_self()?;
-
-    // Add child validated modules to the validated modules
-    fill_validated_modules(all_validated_modules, &modules_vec);
     errors.into_result(())
 }
 
@@ -483,25 +477,6 @@ fn validate_module_contents<'a>(
         }
     }
     ret
-}
-
-fn fill_validated_modules<'a>(
-    all_validated_modules: &'a mut ModuleMap<'a>,
-    modules_vec: &[(&SimpleFile<String, String>, &Module)],
-) {
-    for vm in all_validated_modules.values() {
-        if let Some(module) = modules_vec
-            .iter()
-            .find(|&module| module.1.name == vm.borrow().name)
-        {
-            for m in &module.1.modules {
-                // This unwrap is safe because the existence of all modules has
-                // already been checked by the validate_modules function
-                let child_vm = all_validated_modules.get(m.as_ref()).unwrap();
-                vm.borrow_mut().validated_modules.insert(child_vm);
-            }
-        }
-    }
 }
 
 // If a type couldn't be organized, it is either a cycle or a non-existant parent somewhere
