@@ -1,0 +1,6 @@
+system name {
+    module module_name;
+    let system_type = default;
+    let monolithic = truee;
+    let config = option;
+}

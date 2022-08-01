@@ -7,8 +7,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::TryFrom;
 
 use crate::ast::{
-    Annotations, Argument, CascadeString, Declaration, Expression, FuncCall, Module, PolicyFile,
-    Statement,
+    Annotations, Argument, CascadeString, Declaration, Expression, FuncCall, LetBinding, Module,
+    PolicyFile, Statement, System,
 };
 use crate::constants;
 use crate::context::Context as BlockContext;
@@ -16,8 +16,8 @@ use crate::error::{CascadeErrors, CompileError, ErrorItem, InternalError};
 use crate::internal_rep::{
     argument_to_typeinfo, argument_to_typeinfo_vec, generate_sid_rules, type_slice_to_variant,
     Annotated, AnnotationInfo, ArgForValidation, Associated, BoundTypeInfo, ClassList, Context,
-    FunctionArgument, FunctionInfo, FunctionMap, ModuleMap, Sid, TypeInfo, TypeMap,
-    ValidatedModule, ValidatedStatement,
+    FunctionArgument, FunctionInfo, FunctionMap, ModuleMap, Sid, SystemMap, TypeInfo, TypeMap,
+    ValidatedModule, ValidatedStatement, ValidatedSystem,
 };
 
 use codespan_reporting::files::SimpleFile;
@@ -88,7 +88,6 @@ fn generate_cil_headers(classlist: &ClassList) -> Vec<sexp::Sexp> {
             list(&[list(&[atom_s("s0")]), list(&[atom_s("s0")])]),
         ]),
     ]);
-
     ret
 }
 
@@ -287,7 +286,7 @@ pub fn build_func_map<'a>(
                     FunctionInfo::new(&**f, types, parent_type, file)?,
                 )?;
             }
-            Declaration::Mod(_) => continue,
+            _ => continue,
         };
     }
 
@@ -346,7 +345,7 @@ pub fn validate_functions<'a, 'b>(
 pub fn validate_modules<'a, 'b>(
     policies: &'b [PolicyFile],
     types: &'b TypeMap,
-    all_validated_modules: &'a mut ModuleMap<'b>,
+    module_map: &'a mut ModuleMap<'b>,
 ) -> Result<(), CascadeErrors> {
     let mut errors = CascadeErrors::new();
 
@@ -413,7 +412,7 @@ pub fn validate_modules<'a, 'b>(
                 child_modules.insert(m);
             }
         }
-        match all_validated_modules.insert(
+        match module_map.insert(
             module.name.to_string(),
             ValidatedModule::new(module.name.clone(), type_infos, child_modules, module, file)?,
         ) {
@@ -512,6 +511,172 @@ fn validate_module_contents<'a>(
         }
     }
     ret
+}
+
+pub fn validate_systems<'a, 'b>(
+    policies: &'b [PolicyFile],
+    module_map: &'b ModuleMap,
+    system_map: &'a mut SystemMap<'b>,
+) -> Result<(), CascadeErrors> {
+    let mut errors = CascadeErrors::new();
+
+    // Store all systems across files in a vector
+    let mut systems_vec: Vec<(&SimpleFile<String, String>, &System)> = Vec::new();
+    for p in policies {
+        for e in &p.policy.exprs {
+            if let Expression::Decl(Declaration::System(s)) = e {
+                systems_vec.push((&p.file, s));
+            }
+        }
+    }
+
+    for (file, system) in &systems_vec {
+        let mut system_modules = BTreeSet::new();
+        let mut configs = BTreeMap::new();
+
+        // Check that a system has at least 1 module
+        if system.modules.is_empty() {
+            errors.append(CascadeErrors::from(
+                ErrorItem::make_compile_or_internal_error(
+                    &format!(
+                        "System {} cannot be declared with no modules",
+                        system.name.as_ref()
+                    ),
+                    Some(file),
+                    system.name.get_range(),
+                    "Add a module to the system",
+                ),
+            ));
+        }
+
+        // Validate that the modules of a system exist
+        for m in &system.modules {
+            match module_map.get(m.as_ref()) {
+                Some(module) => {
+                    system_modules.insert(module);
+                }
+                None => errors.append(CascadeErrors::from(
+                    ErrorItem::make_compile_or_internal_error(
+                        &format!("Module {} does not exist", m.as_ref()),
+                        Some(file),
+                        m.get_range(),
+                        "modules within systems must be declared elsewhere",
+                    ),
+                )),
+            }
+        }
+        // Validate the system's configurations
+        for c in &system.configurations {
+            let config = c.name.as_ref();
+            let options = match config {
+                constants::SYSTEM_TYPE => vec!["standard"],
+                constants::MONOLITHIC => vec!["true", "false"],
+                constants::HANDLE_UNKNOWN_PERMS => vec!["allow", "deny", "reject"],
+                _ => {
+                    errors.append(CascadeErrors::from(
+                        ErrorItem::make_compile_or_internal_error(
+                            &format!("{} is not a supprted configuration", c.name.as_ref()),
+                            Some(file),
+                            c.name.get_range(),
+                            &format!(
+                                "The supported configurations are {}, {}, and {}",
+                                constants::SYSTEM_TYPE,
+                                constants::MONOLITHIC,
+                                constants::HANDLE_UNKNOWN_PERMS
+                            ),
+                        ),
+                    ));
+                    continue;
+                }
+            };
+            match insert_config(file, system, &mut configs, c, config, options) {
+                Ok(()) => (),
+                Err(e) => errors.append(e),
+            }
+        }
+        // Check for required configurations
+        match check_required_config(file, system, &configs, constants::HANDLE_UNKNOWN_PERMS) {
+            Ok(()) => (),
+            Err(e) => errors.append(e),
+        }
+
+        system_map.insert(
+            system.name.to_string(),
+            ValidatedSystem::new(system.name.clone(), system_modules, configs),
+        );
+    }
+    errors.into_result(())
+}
+
+fn insert_config<'a>(
+    file: &SimpleFile<String, String>,
+    system: &System,
+    configs: &mut BTreeMap<String, &'a Argument>,
+    config: &'a LetBinding,
+    config_name: &str,
+    valid_values: Vec<&str>,
+) -> Result<(), CascadeErrors> {
+    let mut ret = CascadeErrors::new();
+    if configs.contains_key(&config_name.to_string()) {
+        ret.append(CascadeErrors::from(
+            ErrorItem::make_compile_or_internal_error(
+                &format!(
+                    "The configuration {} is included more than once in system {}",
+                    config_name, system.name
+                ),
+                Some(file),
+                config.name.get_range(),
+                "Each configuration can only be included once in each system",
+            ),
+        ))
+    } else if let std::collections::btree_map::Entry::Vacant(e) =
+        configs.entry(config_name.to_string())
+    {
+        if let Argument::Var(a) = &config.value {
+            if valid_values.contains(&a.as_ref()) {
+                e.insert(&config.value);
+            } else {
+                ret.append(CascadeErrors::from(
+                    ErrorItem::make_compile_or_internal_error(
+                        "Invalid configuration option",
+                        Some(file),
+                        a.get_range(),
+                        &format!(
+                            "The supported options for {} are {:?}",
+                            config_name, valid_values
+                        ),
+                    ),
+                ))
+            }
+        }
+    }
+    ret.into_result(())
+}
+
+fn check_required_config<'a>(
+    file: &SimpleFile<String, String>,
+    system: &System,
+    configs: &BTreeMap<String, &'a Argument>,
+    config_name: &str,
+) -> Result<(), CascadeErrors> {
+    let mut ret = CascadeErrors::new();
+    if !configs.contains_key(&config_name.to_string()) {
+        ret.append(CascadeErrors::from(
+            ErrorItem::make_compile_or_internal_error(
+                &format!(
+                    "{} configuration must be included in the system",
+                    config_name
+                ),
+                Some(file),
+                None,
+                &format!(
+                    "Add a {} configuration to system {}",
+                    config_name, system.name
+                ),
+            ),
+        ));
+    }
+    ret.into_result(())
 }
 
 // If a type couldn't be organized, it is either a cycle or a non-existant parent somewhere

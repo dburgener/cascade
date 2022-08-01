@@ -1,0 +1,16 @@
+system name {
+    module mod;
+    let system_type = standard;
+    let handle_unknown_perms = allow;
+}
+
+module mod {
+    domain foo;
+    resource bar;
+}
+
+domain foo {
+	allow(this, bar, file, read);
+}
+
+resource bar {}

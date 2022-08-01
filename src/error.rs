@@ -154,11 +154,7 @@ impl From<LalrpopParseError<usize, Token<'_>, &str>> for ParseErrorMsg {
                 range: Some(l..r),
                 help: String::new(),
             },
-            LalrpopParseError::User { error } => ParseErrorMsg {
-                issue: error.into(),
-                range: None,
-                help: String::new(),
-            },
+            LalrpopParseError::User { error } => error,
         }
     }
 }

@@ -8,6 +8,7 @@ use std::ops::Range;
 use codespan_reporting::files::SimpleFile;
 
 use crate::constants;
+use crate::error::ParseErrorMsg;
 
 #[derive(Clone, Debug, Eq)]
 pub struct CascadeString {
@@ -192,6 +193,7 @@ pub enum Declaration {
     Type(Box<TypeDecl>),
     Func(Box<FuncDecl>),
     Mod(Module),
+    System(System),
 }
 
 impl Virtualable for Declaration {
@@ -200,6 +202,7 @@ impl Virtualable for Declaration {
             Declaration::Type(t) => t.set_virtual(),
             Declaration::Func(f) => f.set_virtual(),
             Declaration::Mod(m) => m.set_virtual(),
+            Declaration::System(s) => s.set_virtual(),
         }
     }
 }
@@ -210,6 +213,7 @@ impl Declaration {
             Declaration::Type(t) => t.annotations.push(annotation),
             Declaration::Func(f) => f.annotations.push(annotation),
             Declaration::Mod(m) => m.annotations.push(annotation),
+            Declaration::System(s) => s.annotations.push(annotation),
         }
     }
 }
@@ -554,6 +558,61 @@ impl Virtualable for Module {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct System {
+    pub name: CascadeString,
+    pub annotations: Annotations,
+    pub modules: Vec<CascadeString>,
+    pub configurations: Vec<LetBinding>,
+}
+
+impl System {
+    pub fn new(name: CascadeString) -> Self {
+        System {
+            name,
+            annotations: Annotations::new(),
+            modules: Vec::new(),
+            configurations: Vec::new(),
+        }
+    }
+
+    pub fn set_fields(mut self, input: Vec<SystemBody>) -> Self {
+        for i in input {
+            match i {
+                SystemBody::Mod(m) => {
+                    self.modules.push(m);
+                }
+                SystemBody::Config(l) => {
+                    self.configurations.push(l);
+                }
+            }
+        }
+
+        // Insert the default configurations if they were not provided
+        for (config_name, default_value) in constants::SYSTEM_CONFIG_DEFAULTS {
+            if !self.configurations.iter().any(|c| c.name == *config_name) {
+                self.configurations.push(LetBinding::new(
+                    CascadeString::from(*config_name),
+                    Argument::Var(CascadeString::from(default_value.to_string())),
+                ));
+            }
+        }
+        self
+    }
+}
+
+impl Virtualable for System {
+    fn set_virtual(&mut self) {
+        self.is_virtual = true;
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum SystemBody {
+    Mod(CascadeString),
+    Config(LetBinding),
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -625,5 +684,30 @@ mod tests {
         assert_eq!(m.modules[0].string, "x");
         assert_eq!(m.modules[1].string, "y");
         assert_eq!(m.modules[2].string, "z");
+    }
+
+    #[test]
+    fn set_system_fields() {
+        let mut fields: Vec<SystemBody> = Vec::new();
+        fields.push(SystemBody::Mod(CascadeString::from("mod")));
+        fields.push(SystemBody::Config(LetBinding::new(
+            CascadeString::from("system_type"),
+            Argument::Var(CascadeString::from("standard")),
+        )));
+        fields.push(SystemBody::Config(LetBinding::new(
+            CascadeString::from("handle_unknown_perms"),
+            Argument::Var(CascadeString::from("allow")),
+        )));
+        let s = System::new(CascadeString::from("system_name")).set_fields(fields);
+        assert_eq!(s.modules.len(), 1);
+        assert_eq!(s.configurations.len(), 3);
+        assert_eq!(s.modules[0].string, "mod");
+        assert_eq!(s.configurations[0].name.string, "system_type");
+        assert_eq!(s.configurations[1].name.string, "handle_unknown_perms");
+        assert_eq!(s.configurations[2].name.string, "monolithic");
+        assert_eq!(
+            s.configurations[2].value,
+            Argument::Var(CascadeString::from("true"))
+        );
     }
 }

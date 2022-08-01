@@ -1,0 +1,7 @@
+system name {
+    module foo;
+    module bar;
+    let handle_unknown_perms = deny;
+}
+
+module foo {}

@@ -1,0 +1,8 @@
+system name {
+    module mod;
+    let monolithic = true;
+    let handle_unknown_perms = allow;
+    let monolithic = true;
+}
+
+module mod {}
