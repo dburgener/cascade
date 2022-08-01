@@ -1862,7 +1862,7 @@ impl ValidatedCall {
 
 pub type ModuleMap<'a> = AliasMap<ValidatedModule<'a>>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq)]
 pub struct ValidatedModule<'a> {
     pub name: CascadeString,
     pub annotations: BTreeSet<AnnotationInfo>,
@@ -1888,6 +1888,24 @@ impl Declared for ValidatedModule<'_> {
 impl<'a> Annotated for &ValidatedModule<'a> {
     fn get_annotations(&self) -> std::collections::btree_set::Iter<AnnotationInfo> {
         self.annotations.iter()
+    }
+}
+
+impl<'a> Ord for ValidatedModule<'a> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.name.cmp(&other.name)
+    }
+}
+
+impl<'a> PartialOrd for ValidatedModule<'a> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.name.cmp(&other.name))
+    }
+}
+
+impl<'a> PartialEq for ValidatedModule<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
     }
 }
 
@@ -1944,6 +1962,29 @@ fn get_module_annotations(
         }
     }
     Ok(infos)
+}
+
+pub type SystemMap<'a> = AliasMap<ValidatedSystem<'a>>;
+
+#[derive(Debug, Clone)]
+pub struct ValidatedSystem<'a> {
+    pub name: CascadeString,
+    pub modules: BTreeSet<&'a ValidatedModule<'a>>,
+    pub configurations: BTreeMap<String, &'a Argument>,
+}
+
+impl<'a> ValidatedSystem<'a> {
+    pub fn new(
+        name: CascadeString,
+        modules: BTreeSet<&'a ValidatedModule<'a>>,
+        configurations: BTreeMap<String, &'a Argument>,
+    ) -> Self {
+        ValidatedSystem {
+            name,
+            modules,
+            configurations,
+        }
+    }
 }
 
 // If the class_name is "this", return the parent type name,

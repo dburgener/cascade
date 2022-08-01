@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
-use crate::ast::{CascadeString, Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, LetBinding, Virtualable, FuncCall, DeclaredArgument, Module};
+use crate::ast::{CascadeString, Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, LetBinding, Virtualable, FuncCall, DeclaredArgument, Module, System, SystemBody};
 use lalrpop_util::ErrorRecovery;
 
 grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, &'static str>>);
@@ -36,7 +36,7 @@ pub Expr: Expression = {
 
 BaseExpr: Expression = {
 	// TODO: other keywords beside virtual?
-	<v: "virtual"?> <mut d: Decl> => {
+	<start: @L> <v: "virtual"?> <end: @R> <mut d: Decl> =>? {
 		if v.is_some() {
 			d.set_virtual();
 		}
@@ -49,6 +49,7 @@ Decl: Declaration = {
 	TypeDecl => Declaration::Type(<>),
 	FuncDecl => Declaration::Func(<>),
 	ModuleDecl => Declaration::Mod(<>),
+	SystemDecl => Declaration::System(<>),
 }
 
 TypeDecl: Box<TypeDecl> = {
@@ -104,7 +105,11 @@ Stmt: Statement = {
 StmtBody: Statement = {
 	<c:Symbol> "." <n:Symbol> "(" <a:Comma<Arg>> ")" => Statement::Call(Box::new(FuncCall::new(Some(c), n, a))),
 	<n:Symbol> "(" <a:Comma<Arg>> ")" => Statement::Call(Box::new(FuncCall::new(None, n, a))),
-	"let" <n:Symbol> "=" <a:Arg> => Statement::LetBinding(Box::new(LetBinding::new(n, a))),
+	<l:LetBind> => Statement::LetBinding(Box::new(<>)),
+}
+
+LetBind: LetBinding = {
+	"let" <n:Symbol> "=" <a:Arg> => LetBinding::new(n, a),
 }
 
 ModuleDecl: Module = {
@@ -114,6 +119,15 @@ ModuleDecl: Module = {
 ModuleBody: (CascadeString, CascadeString) = {
 	<s: BuiltInType> <n: NameDecl> ";" => (s, n),
 	<start: @L> <s: "module"> <end: @R> <n: NameDecl> ";" => (CascadeString::new(s.to_string(), start..end), n),
+}
+
+SystemDecl: System = {
+	"system" <n: NameDecl> "{" <x: SysBody*> "}" => System::new(n).set_fields(x),
+}
+
+SysBody: SystemBody = {
+	"module" <n: NameDecl> ";" => SystemBody::Mod(n),
+	<l:LetBind> ";" => SystemBody::Config(l),
 }
 
 Ann: Annotation = {
