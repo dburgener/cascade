@@ -3,7 +3,6 @@
 use sexp::{atom_s, list, Atom, Sexp};
 
 use std::borrow::Cow;
-use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryFrom;
@@ -1780,46 +1779,20 @@ impl ValidatedCall {
     }
 }
 
-pub type ModuleMap<'a> = AliasMap<RefCell<ValidatedModule<'a>>>;
+pub type ModuleMap<'a> = AliasMap<ValidatedModule<'a>>;
 
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone)]
 pub struct ValidatedModule<'a> {
     pub name: CascadeString,
     pub types: BTreeSet<&'a TypeInfo>,
-    pub validated_modules: BTreeSet<&'a RefCell<ValidatedModule<'a>>>,
+    pub validated_modules: BTreeSet<&'a CascadeString>,
 }
 
-impl<'a> Ord for ValidatedModule<'a> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.name.cmp(&other.name)
-    }
-}
-
-impl<'a> PartialOrd for ValidatedModule<'a> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.name.cmp(&other.name))
-    }
-}
-
-impl<'a> PartialEq for ValidatedModule<'a> {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-    }
-}
-
-// The silenced warning is due to the interior mutability of validated_modules.
-// Because of the use of RefCell, there can be a mutable borrow while
-// simultaneously having an immutable borrow. This can cause problems if an
-// item is mutated and the ordering of the set is unintentionally changed.
-// The Ord implementation for ValidatedModule avoids this problem by ordering
-// the set alphabetically by name so that it does not depend on the interior
-// mutable type (validated_modules).
-#[allow(clippy::mutable_key_type)]
 impl<'a> ValidatedModule<'a> {
     pub fn new(
         name: CascadeString,
         types: BTreeSet<&'a TypeInfo>,
-        validated_modules: BTreeSet<&'a RefCell<ValidatedModule<'a>>>,
+        validated_modules: BTreeSet<&'a CascadeString>,
     ) -> Self {
         ValidatedModule {
             name,
