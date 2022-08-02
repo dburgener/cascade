@@ -189,7 +189,7 @@ mod tests {
 
     #[test]
     fn test_symbol_in_context() {
-        let tm = compile::get_built_in_types_map();
+        let tm = compile::get_built_in_types_map().unwrap();
         let mut context = Context::new(&tm);
 
         context.insert_binding(
@@ -214,7 +214,7 @@ mod tests {
 
     #[test]
     fn test_insert_from_argument() {
-        let tm = compile::get_built_in_types_map();
+        let tm = compile::get_built_in_types_map().unwrap();
         let mut context = Context::new(&tm);
         let cl = ClassList::new();
         let file = SimpleFile::<String, String>::new("name".to_string(), "source".to_string());

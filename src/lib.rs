@@ -65,7 +65,7 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::Ca
 
     // Generic initialization
     let mut classlist = obj_class::make_classlist();
-    let mut type_map = compile::get_built_in_types_map();
+    let mut type_map = compile::get_built_in_types_map()?;
     let mut func_map = FunctionMap::new();
     let mut module_map = ModuleMap::new();
     let mut policy_rules = BTreeSet::new();
@@ -91,6 +91,19 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::Ca
                 errors.append(e);
                 continue;
             }
+        }
+    }
+
+    errors = errors.into_result_self()?;
+
+    // Generate type aliases
+    let t_aliases = compile::collect_aliases(type_map.iter());
+    type_map.set_aliases(t_aliases);
+
+    for p in &policies {
+        match compile::verify_extends(p, &type_map) {
+            Ok(()) => (),
+            Err(e) => errors.append(e),
         }
     }
 
@@ -130,10 +143,6 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::Ca
     }
     // Stops if something went wrong for this major step.
     errors = errors.into_result_self()?;
-
-    // Generate type aliases
-    let t_aliases = compile::collect_aliases(type_map.iter());
-    type_map.set_aliases(t_aliases);
 
     // Collect all function declarations
     for p in &policies {
@@ -552,6 +561,19 @@ mod tests {
     }
 
     #[test]
+    fn extend_test() {
+        valid_policy_test(
+            "extend.cas",
+            &[
+                "(allow bar foo (file (getattr)))",
+                "(allow bar foo (file (write)))",
+                "(macro foo-my_func ((type this) (type source)) (allow source foo (file (read))))",
+            ],
+            &[],
+        );
+    }
+
+    #[test]
     fn makelist_test() {
         let policy_file = [POLICIES_DIR, "makelist.cas"].concat();
 
@@ -721,6 +743,16 @@ mod tests {
     #[test]
     fn module_cycle_error() {
         error_policy_test!("module_cycle.cas", 1, ErrorItem::Compile(_));
+    }
+
+    #[test]
+    fn extend_without_declaration_error() {
+        error_policy_test!("extend_no_decl.cas", 1, ErrorItem::Compile(_));
+    }
+
+    #[test]
+    fn extend_double_declaration_error() {
+        error_policy_test!("extend_double_decl.cas", 1, ErrorItem::Compile(_));
     }
 
     #[test]
