@@ -11,6 +11,8 @@ keywords = [ "selinux" ]
 
 [build-dependencies]
 lalrpop = "0.19"
+clap = { version = "3", features = ["derive"] }
+clap_mangen = "0.1"
 
 [dependencies]
 backtrace = "0.3"

@@ -3,20 +3,14 @@
 use selinux_cascade::compile_system_policy;
 use selinux_cascade::error::ErrorItem;
 
+mod args;
+
+use args::Args;
+
 use clap::Parser;
 use std::fs::File;
 use std::io::{Error, ErrorKind, Write};
 use walkdir::WalkDir;
-
-#[derive(Parser, Debug)]
-#[clap(author, version, name = "casc", about)]
-struct Args {
-    /// List of input files to process.  Directories are searched recursively.
-    #[clap(required(true))]
-    input_file: Vec<String>,
-    #[clap(default_value = "out.cil", short)]
-    out_filename: String,
-}
 
 fn main() -> std::io::Result<()> {
     let args = Args::parse();
