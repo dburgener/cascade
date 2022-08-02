@@ -184,7 +184,7 @@ pub fn get_global_bindings(
                         &v,
                         types,
                         classlist,
-                        &BlockContext::new(tm_clone),
+                        &BlockContext::new(tm_clone, None),
                         file,
                     )?;
                     let variant = type_slice_to_variant(&ti_vec, types)?;
@@ -198,7 +198,7 @@ pub fn get_global_bindings(
                         &a,
                         types,
                         classlist,
-                        &BlockContext::new(tm_clone),
+                        &BlockContext::new(tm_clone, None),
                         file,
                     )?;
                     if ti.name.as_ref() == "perm" {
@@ -548,7 +548,7 @@ fn get_synthetic_resource_name(
     dom_info: &TypeInfo,
     associated_resource: &CascadeString,
 ) -> CascadeString {
-    format!("{}-{}", dom_info.name, associated_resource).into()
+    format!("{}.{}", dom_info.name, associated_resource).into()
 }
 
 fn create_synthetic_resource(
@@ -964,7 +964,7 @@ fn do_rules_pass<'a>(
         Some(t) => vec![FunctionArgument::new_this_argument(t)],
         None => Vec::new(),
     };
-    let mut local_context = BlockContext::new_from_args(&func_args, types);
+    let mut local_context = BlockContext::new_from_args(&func_args, types, parent_type);
     for e in exprs {
         match e {
             Expression::Stmt(s) => {
@@ -1027,15 +1027,15 @@ fn get_rules_vec_for_type(ti: &TypeInfo, s: sexp::Sexp, type_map: &TypeMap) -> V
         ret.push(list(&[
             atom_s("roletype"),
             atom_s(role_assoc),
-            atom_s(ti.name.as_ref()),
+            atom_s(ti.name.get_cil_name().as_ref()),
         ]));
     }
 
     for i in &ti.inherits {
         ret.push(list(&[
             atom_s("typeattributeset"),
-            atom_s(i.as_ref()),
-            list(&[atom_s(ti.name.as_ref())]),
+            atom_s(i.get_cil_name().as_ref()),
+            list(&[atom_s(ti.name.get_cil_name().as_ref())]),
         ]));
     }
 
@@ -1045,7 +1045,7 @@ fn get_rules_vec_for_type(ti: &TypeInfo, s: sexp::Sexp, type_map: &TypeMap) -> V
             ret.push(list(&[
                 atom_s("typealiasactual"),
                 atom_s(a.as_ref()),
-                atom_s(ti.name.as_ref()),
+                atom_s(ti.name.get_cil_name().as_ref()),
             ]));
         }
     }

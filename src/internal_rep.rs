@@ -323,7 +323,10 @@ impl From<&TypeInfo> for Option<sexp::Sexp> {
             Some(f) => f,
             None => return None,
         };
-        Some(list(&[atom_s(flavor), atom_s(typeinfo.name.as_ref())]))
+        Some(list(&[
+            atom_s(flavor),
+            atom_s(typeinfo.name.get_cil_name().as_ref()),
+        ]))
     }
 }
 
@@ -493,13 +496,14 @@ fn typeinfo_from_string<'a>(
     s: &str,
     types: &'a TypeMap,
     class_perms: &ClassList,
+    context: &BlockContext<'a>,
 ) -> Option<&'a TypeInfo> {
     if class_perms.is_class(s) {
         types.get("obj_class")
     } else if class_perms.is_perm(s) {
         types.get("perm")
     } else {
-        types.get(s)
+        types.get(&context.convert_arg_this(s))
     }
 }
 
@@ -513,7 +517,7 @@ pub fn argument_to_typeinfo<'a>(
     let t: Option<&TypeInfo> = match a {
         ArgForValidation::Var(s) => match context.symbol_in_context(s.as_ref()) {
             Some(res) => Some(res),
-            None => typeinfo_from_string(s.as_ref(), types, class_perms),
+            None => typeinfo_from_string(s.as_ref(), types, class_perms, context),
         },
         ArgForValidation::Quote(s) => types.get(&type_name_from_string(s.as_ref())),
         ArgForValidation::List(_) => None,
@@ -584,15 +588,15 @@ impl From<&AvRule<'_>> for sexp::Sexp {
             }
         });
 
-        ret.push(atom_s(rule.source.as_ref().as_ref()));
-        ret.push(atom_s(rule.target.as_ref().as_ref()));
+        ret.push(atom_s(rule.source.get_cil_name().as_ref()));
+        ret.push(atom_s(rule.target.get_cil_name().as_ref()));
 
-        let mut classpermset = vec![Sexp::Atom(Atom::S(rule.class.to_string()))];
+        let mut classpermset = vec![Sexp::Atom(Atom::S(rule.class.get_cil_name()))];
 
         let perms = rule
             .perms
             .iter()
-            .map(|p| Sexp::Atom(Atom::S(p.to_string())))
+            .map(|p| Sexp::Atom(Atom::S(p.get_cil_name())))
             .collect();
 
         classpermset.push(Sexp::List(perms));
@@ -1189,10 +1193,10 @@ impl From<&DomtransRule<'_>> for sexp::Sexp {
     fn from(d: &DomtransRule) -> Self {
         list(&[
             atom_s("typetransition"),
-            atom_s(&d.source.name.to_string()),
-            atom_s(&d.executable.name.to_string()),
+            atom_s(&d.source.name.get_cil_name()),
+            atom_s(&d.executable.name.get_cil_name()),
             atom_s("process"),
-            atom_s(&d.target.name.to_string()),
+            atom_s(&d.target.name.get_cil_name()),
         ])
     }
 }
@@ -1472,7 +1476,7 @@ impl<'a> FunctionInfo<'a> {
     ) -> Result<(), CascadeErrors> {
         let mut new_body = BTreeSet::new();
         let mut errors = CascadeErrors::new();
-        let mut local_context = BlockContext::new_from_args(&self.args, types);
+        let mut local_context = BlockContext::new_from_args(&self.args, types, self.class);
 
         for statement in self.original_body {
             // TODO: This needs to become global in a bit
@@ -1766,7 +1770,7 @@ impl ValidatedCall {
 
         // Each argument must match the type the function signature expects
         let mut args = match &call.class_name {
-            Some(c) => vec![convert_class_name_if_this(c, parent_type)?.to_string()],
+            Some(c) => vec![convert_class_name_if_this(c, parent_type)?.get_cil_name()],
             None => Vec::new(),
         };
 
@@ -1893,10 +1897,11 @@ impl<'a> TypeInstance<'a> {
         arg: &ArgForValidation,
         ti: &'a TypeInfo,
         file: &'a SimpleFile<String, String>,
+        context: &BlockContext,
     ) -> Self {
         let instance_value = match arg {
             ArgForValidation::Var(s) => {
-                if s == &&ti.name {
+                if ti.name == context.convert_arg_this(s.as_ref()) {
                     TypeValue::SEType(s.get_range())
                 } else {
                     TypeValue::Str((*s).clone())
@@ -2119,7 +2124,7 @@ fn validate_argument<'a>(
     target_argument: &FunctionArgument,
     types: &'a TypeMap,
     class_perms: &ClassList,
-    args: &BlockContext<'a>,
+    context: &BlockContext<'a>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<TypeInstance<'a>, ErrorItem> {
     match &arg {
@@ -2136,7 +2141,7 @@ fn validate_argument<'a>(
                 Some(t) => t,
                 None => return Err(InternalError::new().into()),
             };
-            let arg_typeinfo_vec = argument_to_typeinfo_vec(v, types, class_perms, args, file)?;
+            let arg_typeinfo_vec = argument_to_typeinfo_vec(v, types, class_perms, context, file)?;
 
             for arg in arg_typeinfo_vec {
                 if !arg.is_child_or_actual_type(target_argument.param_type, types) {
@@ -2148,10 +2153,10 @@ fn validate_argument<'a>(
                     )));
                 }
             }
-            Ok(TypeInstance::new(&arg, target_ti, file))
+            Ok(TypeInstance::new(&arg, target_ti, file, context))
         }
         _ => {
-            let arg_typeinfo = argument_to_typeinfo(&arg, types, class_perms, args, file)?;
+            let arg_typeinfo = argument_to_typeinfo(&arg, types, class_perms, context, file)?;
             if target_argument.is_list_param {
                 if arg_typeinfo.list_coercion
                     || matches!(arg_typeinfo.bound_type, BoundTypeInfo::List(_))
@@ -2161,7 +2166,7 @@ fn validate_argument<'a>(
                         target_argument,
                         types,
                         class_perms,
-                        args,
+                        context,
                         file,
                     );
                     // TODO: Do we handle bound lists here?
@@ -2175,7 +2180,7 @@ fn validate_argument<'a>(
             }
 
             if arg_typeinfo.is_child_or_actual_type(target_argument.param_type, types) {
-                Ok(TypeInstance::new(&arg, arg_typeinfo, file))
+                Ok(TypeInstance::new(&arg, arg_typeinfo, file, context))
             } else {
                 Err(ErrorItem::Compile(CompileError::new(
                     &format!("Expected type inheriting {}", arg_typeinfo.name),
