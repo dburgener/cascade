@@ -14,7 +14,7 @@ use codespan_reporting::files::SimpleFile;
 
 use crate::ast::{
     get_cil_name, Annotation, Annotations, Argument, BuiltIns, CascadeString, DeclaredArgument,
-    FuncCall, FuncDecl, Statement, TypeDecl,
+    FuncCall, FuncDecl, LetBinding, Statement, TypeDecl,
 };
 use crate::constants;
 use crate::context::Context as BlockContext;
@@ -1781,11 +1781,29 @@ impl ValidatedCall {
 
 pub type ModuleMap<'a> = AliasMap<ValidatedModule<'a>>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq)]
 pub struct ValidatedModule<'a> {
     pub name: CascadeString,
     pub types: BTreeSet<&'a TypeInfo>,
     pub validated_modules: BTreeSet<&'a CascadeString>,
+}
+
+impl<'a> Ord for ValidatedModule<'a> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.name.cmp(&other.name)
+    }
+}
+
+impl<'a> PartialOrd for ValidatedModule<'a> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.name.cmp(&other.name))
+    }
+}
+
+impl<'a> PartialEq for ValidatedModule<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
 }
 
 impl<'a> ValidatedModule<'a> {
@@ -1798,6 +1816,29 @@ impl<'a> ValidatedModule<'a> {
             name,
             types,
             validated_modules,
+        }
+    }
+}
+
+pub type SystemMap<'a> = AliasMap<ValidatedSystem<'a>>;
+
+#[derive(Debug, Clone)]
+pub struct ValidatedSystem<'a> {
+    pub name: CascadeString,
+    pub modules: BTreeSet<&'a ValidatedModule<'a>>,
+    pub configurations: BTreeMap<String, &'a LetBinding>,
+}
+
+impl<'a> ValidatedSystem<'a> {
+    pub fn new(
+        name: CascadeString,
+        modules: BTreeSet<&'a ValidatedModule<'a>>,
+        configurations: BTreeMap<String, &'a LetBinding>,
+    ) -> Self {
+        ValidatedSystem {
+            name,
+            modules,
+            configurations,
         }
     }
 }

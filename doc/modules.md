@@ -10,3 +10,11 @@ module is to create other modules from it. Since virtual modules cannot have a
 real instantiation, they are ineligible to be compile targets. The addition of
 modules not only simplifies the process of policy building for users, but also
 allows for customizability and scalability.
+
+# Systems
+Systems contain modules and configuration options. There are currently three
+supported configurations: handle_unknown_perms, system_type, and monolithic.
+handle_unknown_perms is a mandatory configuration, which means it must be
+explicitly included in a system. The valid options for handle_unknown_perms are
+allow, deny, and reject. The only currently supprted option for system_type is
+standard. The options for monolithic are true and false.

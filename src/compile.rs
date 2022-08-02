@@ -8,7 +8,7 @@ use std::convert::TryFrom;
 
 use crate::ast::{
     Annotations, Argument, CascadeString, Declaration, Expression, FuncCall, Module, PolicyFile,
-    Statement,
+    Statement, System,
 };
 use crate::constants;
 use crate::context::Context as BlockContext;
@@ -16,8 +16,8 @@ use crate::error::{CascadeErrors, CompileError, ErrorItem, InternalError};
 use crate::internal_rep::{
     argument_to_typeinfo, argument_to_typeinfo_vec, generate_sid_rules, type_slice_to_variant,
     Annotated, AnnotationInfo, ArgForValidation, Associated, BoundTypeInfo, ClassList, Context,
-    FunctionArgument, FunctionInfo, FunctionMap, ModuleMap, Sid, TypeInfo, TypeMap,
-    ValidatedModule, ValidatedStatement,
+    FunctionArgument, FunctionInfo, FunctionMap, ModuleMap, Sid, SystemMap, TypeInfo, TypeMap,
+    ValidatedModule, ValidatedStatement, ValidatedSystem,
 };
 
 use codespan_reporting::files::SimpleFile;
@@ -88,7 +88,6 @@ fn generate_cil_headers(classlist: &ClassList) -> Vec<sexp::Sexp> {
             list(&[list(&[atom_s("s0")]), list(&[atom_s("s0")])]),
         ]),
     ]);
-
     ret
 }
 
@@ -267,7 +266,7 @@ pub fn build_func_map<'a>(
                     FunctionInfo::new(&**f, types, parent_type, file)?,
                 );
             }
-            Declaration::Mod(_) => continue,
+            _ => continue,
         };
     }
 
@@ -323,10 +322,10 @@ pub fn validate_functions<'a, 'b>(
     errors.into_result(())
 }
 
-pub fn validate_modules<'a>(
-    policies: &'a [PolicyFile],
-    types: &'a TypeMap,
-    all_validated_modules: &'a mut ModuleMap<'a>,
+pub fn validate_modules<'a, 'b>(
+    policies: &'b [PolicyFile],
+    types: &'b TypeMap,
+    module_map: &'a mut ModuleMap<'b>,
 ) -> Result<(), CascadeErrors> {
     let mut errors = CascadeErrors::new();
 
@@ -381,7 +380,7 @@ pub fn validate_modules<'a>(
                 child_modules.insert(m);
             }
         }
-        all_validated_modules.insert(
+        module_map.insert(
             module.name.to_string(),
             ValidatedModule::new(module.name.clone(), type_infos, child_modules),
         );
@@ -477,6 +476,145 @@ fn validate_module_contents<'a>(
         }
     }
     ret
+}
+
+pub fn validate_systems<'a, 'b>(
+    policies: &'b [PolicyFile],
+    module_map: &'b ModuleMap,
+    system_map: &'a mut SystemMap<'b>,
+) -> Result<(), CascadeErrors> {
+    let mut errors = CascadeErrors::new();
+
+    // Store all systems across files in a vector
+    let mut systems_vec: Vec<(&SimpleFile<String, String>, &System)> = Vec::new();
+    for p in policies {
+        for e in &p.policy.exprs {
+            if let Expression::Decl(Declaration::System(s)) = e {
+                systems_vec.push((&p.file, s));
+            }
+        }
+    }
+
+    for (file, system) in &systems_vec {
+        let mut system_modules = BTreeSet::new();
+        let mut configs = BTreeMap::new();
+
+        // Validate that the modules of a system exist
+        for m in &system.modules {
+            match module_map.get(m.as_ref()) {
+                Some(module) => {
+                    system_modules.insert(module);
+                }
+                None => errors.append(CascadeErrors::from(
+                    ErrorItem::make_compile_or_internal_error(
+                        &format!("Module {} does not exist", m.as_ref()),
+                        Some(file),
+                        m.get_range(),
+                        "modules within systems must be declared elsewhere",
+                    ),
+                )),
+            }
+        }
+        // Validate the system's configurations
+        for c in &system.configurations {
+            match c.name.as_ref() {
+                constants::SYSTEM_TYPE => {
+                    if let Argument::Var(a) = &c.value {
+                        // mls and mcs are not yet supported
+                        if a.as_ref() == "standard" {
+                            configs.insert(constants::SYSTEM_TYPE.to_string(), c);
+                        } else {
+                            errors.append(CascadeErrors::from(
+                                ErrorItem::make_compile_or_internal_error(
+                                    "Invalid configuration option",
+                                    Some(file),
+                                    a.get_range(),
+                                    &format!(
+                                        "The only currently supported option for {} is standard",
+                                        constants::SYSTEM_TYPE
+                                    ),
+                                ),
+                            ))
+                        }
+                    }
+                }
+                constants::MONOLITHIC => {
+                    if let Argument::Var(a) = &c.value {
+                        if a.as_ref() == "true" || a.as_ref() == "false" {
+                            configs.insert(constants::MONOLITHIC.to_string(), c);
+                        } else {
+                            errors.append(CascadeErrors::from(
+                                ErrorItem::make_compile_or_internal_error(
+                                    "Invalid configuration option",
+                                    Some(file),
+                                    a.get_range(),
+                                    &format!(
+                                        "The valid options for {} are true and false",
+                                        constants::MONOLITHIC
+                                    ),
+                                ),
+                            ))
+                        }
+                    }
+                }
+                constants::HANDLE_UNKNOWN_PERMS => {
+                    if let Argument::Var(a) = &c.value {
+                        if a.as_ref() == "allow" || a.as_ref() == "deny" || a.as_ref() == "reject" {
+                            configs.insert(constants::HANDLE_UNKNOWN_PERMS.to_string(), c);
+                        } else {
+                            errors.append(CascadeErrors::from(
+                                ErrorItem::make_compile_or_internal_error(
+                                    "Invalid configuration option",
+                                    Some(file),
+                                    a.get_range(),
+                                    &format!(
+                                        "The valid options for {} are allow, deny, and reject",
+                                        constants::SYSTEM_TYPE
+                                    ),
+                                ),
+                            ))
+                        }
+                    }
+                }
+                _ => errors.append(CascadeErrors::from(
+                    ErrorItem::make_compile_or_internal_error(
+                        &format!("{} is not a supprted configuration", c.name.as_ref()),
+                        Some(file),
+                        c.name.get_range(),
+                        &format!(
+                            "The supported configurations are {}, {}, and {}",
+                            constants::SYSTEM_TYPE,
+                            constants::MONOLITHIC,
+                            constants::HANDLE_UNKNOWN_PERMS
+                        ),
+                    ),
+                )),
+            }
+        }
+        if !configs.contains_key(&constants::HANDLE_UNKNOWN_PERMS.to_string()) {
+            errors.append(CascadeErrors::from(
+                ErrorItem::make_compile_or_internal_error(
+                    &format!(
+                        "{} configuration must be included in the system",
+                        constants::HANDLE_UNKNOWN_PERMS
+                    ),
+                    Some(file),
+                    None,
+                    &format!(
+                        "Add a {} configuration to system {}",
+                        constants::HANDLE_UNKNOWN_PERMS,
+                        system.name
+                    ),
+                ),
+            ));
+        }
+
+        system_map.insert(
+            system.name.to_string(),
+            ValidatedSystem::new(system.name.clone(), system_modules, configs),
+        );
+    }
+    errors.into_result(())
 }
 
 // If a type couldn't be organized, it is either a cycle or a non-existant parent somewhere

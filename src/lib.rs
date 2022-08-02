@@ -19,7 +19,7 @@ use std::collections::BTreeSet;
 
 use crate::ast::{Policy, PolicyFile};
 use crate::error::CascadeErrors;
-use crate::internal_rep::{FunctionMap, ModuleMap};
+use crate::internal_rep::{FunctionMap, ModuleMap, SystemMap};
 
 use codespan_reporting::files::SimpleFile;
 use lalrpop_util::ParseError as LalrpopParseError;
@@ -68,6 +68,7 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::Ca
     let mut type_map = compile::get_built_in_types_map();
     let mut func_map = FunctionMap::new();
     let mut module_map = ModuleMap::new();
+    let mut system_map = SystemMap::new();
     let mut policy_rules = BTreeSet::new();
 
     // Collect all type declarations
@@ -171,6 +172,9 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::Ca
 
     // Validate modules
     compile::validate_modules(&policies, &type_map, &mut module_map)?;
+
+    // Validate systems
+    compile::validate_systems(&policies, &module_map, &mut system_map)?;
 
     let cil_tree = compile::generate_sexp(&type_map, &classlist, policy_rules, &func_map)?;
 
@@ -310,31 +314,26 @@ mod tests {
         let cil_out_path = &[filename, "_test_out_policy"].concat();
         let mut out_file = fs::File::create(&file_out_path).unwrap();
         out_file.write_all(policy_contents.as_bytes()).unwrap();
-
         let output = Command::new("secilc")
             .arg(["--output=", cil_out_path].concat())
             .arg(file_out_path)
             .output()
             .unwrap();
-
         assert!(
             output.status.success(),
             "secilc compilation of {} failed with {}",
             filename,
             str::from_utf8(&output.stderr).unwrap()
         );
-
         let mut err = false;
         for f in &[file_out_path, cil_out_path] {
             err |= fs::remove_file(f).is_err();
         }
         assert!(!err, "Error removing generated policy files");
     }
-
     macro_rules! error_policy_test {
         ($filename:literal, $expected_error_count:literal, $error_pattern:pat_param $(if $guard:expr)?) => {
             let policy_file = [ERROR_POLICIES_DIR, $filename].concat();
-
             match compile_system_policy(vec![&policy_file]) {
                 Ok(_) => panic!("{} compiled successfully", $filename),
                 Err(e) => {
@@ -721,6 +720,11 @@ mod tests {
     #[test]
     fn module_cycle_error() {
         error_policy_test!("module_cycle.cas", 1, ErrorItem::Compile(_));
+    }
+
+    #[test]
+    fn invalid_system_error() {
+        error_policy_test!("system_invalid.cas", 5, ErrorItem::Compile(_));
     }
 
     #[test]
