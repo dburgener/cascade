@@ -1,0 +1,14 @@
+virtual resource foo {
+	fn do_something(domain source, domain target) {
+		allow(source, target, file, read);
+	}
+}
+
+virtual resource bar {
+	fn do_something(domain source) {
+		allow(source, this, file, read);
+	}
+}
+
+@derive([do_something], union)
+resource baz inherits foo, bar {}
