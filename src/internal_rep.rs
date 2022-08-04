@@ -1799,12 +1799,27 @@ impl<'a> FunctionInfo<'a> {
                 None => first_parent = Some(parent_function),
                 Some(first_parent) => {
                     if parent_function.args != first_parent.args {
-                        return Err(CompileError::new(
-                                &format!("In attempting to derive {}, parent functions do not have matching prototypes.", name),
-                                first_parent.declaration_file,
-                                first_parent.get_declaration_range(),
-                                "This is the first parent", // TODO: We need to expand CompileError to allow it to point at two places int he source, I think?
-                                ).into());
+                        match (
+                            first_parent.get_declaration_range(),
+                            parent_function.get_declaration_range(),
+                        ) {
+                            (Some(first_range), Some(second_range)) => {
+                                return Err(CompileError::new(
+                                        &format!("In attempting to derive {}, parent functions do not have matching prototypes.", name),
+                                        first_parent.declaration_file,
+                                        Some(first_range),
+                                        "This parent prototype...",
+                                        ).add_additional_message(
+                                            parent_function.declaration_file,
+                                            second_range,
+                                            "...needs to match this parent prototype").into());
+                            }
+                            (_, _) => {
+                                // TODO: One of the mismatched parent signatures is synthetic.
+                                // Output an appropriate error message
+                                todo!()
+                            }
+                        }
                     }
                 }
             }
