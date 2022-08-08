@@ -1,0 +1,31 @@
+system foo {
+    module foo_mod1;
+    module foo_mod2;
+    let handle_unknown_perms = reject;
+}
+
+module foo_mod1 {
+    module foo_mod1_mod;
+}
+
+module foo_mod1_mod {
+    domain thud;
+    resource babble;
+    module foo_mod1_mod_mod;
+}
+
+module foo_mod1_mod_mod {
+    domain xyzzy;
+}
+
+domain thud {
+    allow(thud, babble, file, read_file_perms);
+}
+
+resource babble {}
+
+domain xyzzy {}
+
+resource unused {
+    fn do_something(domain source) {}
+}

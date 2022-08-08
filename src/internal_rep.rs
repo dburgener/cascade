@@ -1872,12 +1872,12 @@ pub struct ValidatedModule<'a> {
     pub annotations: BTreeSet<AnnotationInfo>,
     pub types: BTreeSet<&'a TypeInfo>,
     pub validated_modules: BTreeSet<&'a CascadeString>,
-    declaration_file: &'a SimpleFile<String, String>,
+    declaration_file: Option<SimpleFile<String, String>>,
 }
 
 impl Declared for ValidatedModule<'_> {
     fn get_file(&self) -> Option<SimpleFile<String, String>> {
-        Some(self.declaration_file.clone())
+        self.declaration_file.clone()
     }
 
     fn get_name_range(&self) -> Option<Range<usize>> {
@@ -1920,12 +1920,18 @@ impl<'a> ValidatedModule<'a> {
         name: CascadeString,
         types: BTreeSet<&'a TypeInfo>,
         validated_modules: BTreeSet<&'a CascadeString>,
-        mod_decl: &'a Module,
-        declaration_file: &'a SimpleFile<String, String>,
+        mod_decl: Option<&'a Module>,
+        declaration_file: Option<SimpleFile<String, String>>,
     ) -> Result<ValidatedModule<'a>, CascadeErrors> {
+        let mut module_annontations = BTreeSet::new();
+        if let Some(md) = mod_decl {
+            if let Some(ref df) = declaration_file {
+                module_annontations = get_module_annotations(df, &md.annotations)?;
+            }
+        }
         Ok(ValidatedModule {
             name,
-            annotations: get_module_annotations(declaration_file, &mod_decl.annotations)?,
+            annotations: module_annontations,
             types,
             validated_modules,
             declaration_file,
@@ -1977,12 +1983,12 @@ pub struct ValidatedSystem<'a> {
     pub name: CascadeString,
     pub modules: BTreeSet<&'a ValidatedModule<'a>>,
     pub configurations: BTreeMap<String, &'a Argument>,
-    declaration_file: &'a SimpleFile<String, String>,
+    declaration_file: Option<SimpleFile<String, String>>,
 }
 
 impl Declared for ValidatedSystem<'_> {
     fn get_file(&self) -> Option<SimpleFile<String, String>> {
-        Some(self.declaration_file.clone())
+        self.declaration_file.clone()
     }
 
     fn get_name_range(&self) -> Option<Range<usize>> {
@@ -1999,7 +2005,7 @@ impl<'a> ValidatedSystem<'a> {
         name: CascadeString,
         modules: BTreeSet<&'a ValidatedModule<'a>>,
         configurations: BTreeMap<String, &'a Argument>,
-        declaration_file: &'a SimpleFile<String, String>,
+        declaration_file: Option<SimpleFile<String, String>>,
     ) -> Self {
         ValidatedSystem {
             name,

@@ -104,6 +104,7 @@
 (userrole system_u object_r)
 (userlevel system_u (s0))
 (userrange system_u ((s0) (s0)))
+(handleunknown allow)
 (typeattribute domain)
 (typeattribute resource)
 (type foo)

@@ -1,13 +1,13 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
-use selinux_cascade::compile_system_policy;
-use selinux_cascade::error::ErrorItem;
+use selinux_cascade::error::{CascadeErrors, ErrorItem};
+use selinux_cascade::{compile_combined, compile_system_policies, compile_system_policies_all};
 
 mod args;
-
 use args::Args;
 
 use clap::Parser;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Error, ErrorKind, Write};
 use walkdir::WalkDir;
@@ -34,23 +34,56 @@ fn main() -> std::io::Result<()> {
             "No policy source files found",
         ));
     }
-    let mut out_file = File::create(args.out_filename)?;
-    let res = compile_system_policy(policies.iter().map(|s| s as &str).collect());
-    match res {
-        Err(error_list) => {
-            for e in error_list {
-                if let ErrorItem::Parse(p) = e {
-                    p.print_diagnostic();
-                } else if let ErrorItem::Compile(c) = e {
-                    c.print_diagnostic();
-                } else {
-                    eprintln!("{}", e);
-                }
+
+    // If no system names are given, output a single CIL file containing all of the policies,
+    // with the default out file name (out.cil) if an out file name isn't specified.
+    // Else, if the system name given is "all", build all of the systems.
+    // This assumes that "all" is a reserved keyword, so a system cannot be declared with the name "all".
+    // Otherwise, output an individual CIL files for each of the system names given.
+    // In both of the previous two cases, the name of each output CIL file is the name of the system + .cil.
+    let result = if args.system_names.is_empty() {
+        let res = compile_combined(policies.iter().map(|s| s as &str).collect());
+        match res {
+            Err(e) => Err(e),
+            Ok(s) => {
+                let mut hm = HashMap::new();
+                let mut out_filename = args.out_filename;
+                out_filename.truncate(out_filename.len() - 4);
+                hm.insert(out_filename, s);
+                Ok(hm)
             }
-            Err(Error::new(ErrorKind::InvalidData, "Invalid policy"))
         }
-        Ok(s) => out_file.write_all(s.as_bytes()),
+    } else if args.system_names.contains(&"all".to_string()) {
+        compile_system_policies_all(policies.iter().map(|s| s as &str).collect())
+    } else {
+        compile_system_policies(
+            policies.iter().map(|s| s as &str).collect(),
+            args.system_names,
+        )
+    };
+    match result {
+        Err(error_list) => print_error(error_list),
+        Ok(system_hashmap) => {
+            for (system_name, system_cil) in system_hashmap.iter() {
+                let mut out_file = File::create(system_name.to_owned() + ".cil")?;
+                out_file.write_all(system_cil.as_bytes())?;
+            }
+            Ok(())
+        }
     }
+}
+
+fn print_error(error_list: CascadeErrors) -> std::io::Result<()> {
+    for e in error_list {
+        if let ErrorItem::Parse(p) = e {
+            p.print_diagnostic();
+        } else if let ErrorItem::Compile(c) = e {
+            c.print_diagnostic();
+        } else {
+            eprintln!("{}", e);
+        }
+    }
+    Err(Error::new(ErrorKind::InvalidData, "Invalid policy"))
 }
 
 // Create a list of policy files
