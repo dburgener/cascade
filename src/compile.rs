@@ -43,11 +43,12 @@ pub fn generate_sexp(
     classlist: &ClassList,
     policy_rules: BTreeSet<ValidatedStatement>,
     func_map: &FunctionMap<'_>,
+    system_configurations: &Option<&BTreeMap<String, &Argument>>,
 ) -> Result<Vec<sexp::Sexp>, CascadeErrors> {
     let type_decl_list = organize_type_map(type_map)?;
     // TODO: The rest of compilation
     let cil_types = type_list_to_sexp(type_decl_list, type_map);
-    let headers = generate_cil_headers(classlist);
+    let headers = generate_cil_headers(classlist, *system_configurations);
     let cil_rules = rules_list_to_sexp(policy_rules);
     let cil_macros = func_map_to_sexp(func_map)?;
     let sid_statements =
@@ -67,7 +68,10 @@ pub fn generate_sexp(
 // Until we can actually set these things in the language, we need some sensible defaults to make
 // secilc happy. As we add the above listed security models, this should be refactored to set them
 // in accordance with the policy
-fn generate_cil_headers(classlist: &ClassList) -> Vec<sexp::Sexp> {
+fn generate_cil_headers(
+    classlist: &ClassList,
+    system_configurations: Option<&BTreeMap<String, &Argument>>,
+) -> Vec<sexp::Sexp> {
     let mut ret = classlist.generate_class_perm_cil();
     ret.append(&mut vec![
         list(&[atom_s("sensitivity"), atom_s("s0")]),
@@ -88,6 +92,16 @@ fn generate_cil_headers(classlist: &ClassList) -> Vec<sexp::Sexp> {
             list(&[list(&[atom_s("s0")]), list(&[atom_s("s0")])]),
         ]),
     ]);
+    if let Some(c) = system_configurations {
+        if let Some(Argument::Var(handle_unknown)) =
+            c.get(&constants::HANDLE_UNKNOWN_PERMS.to_string())
+        {
+            ret.append(&mut vec![list(&[
+                atom_s("handleunknown"),
+                atom_s(handle_unknown.as_ref()),
+            ])]);
+        }
+    }
     ret
 }
 
@@ -271,7 +285,9 @@ pub fn build_func_map<'a>(
             Declaration::Type(t) => {
                 let type_being_parsed = match types.get(t.name.as_ref()) {
                     Some(t) => t,
-                    None => return Err(ErrorItem::Internal(InternalError::new()).into()),
+                    // If a type exists but is not in the system, skip it for now
+                    // TODO: Add extra validation for types defined, but not in the system
+                    None => continue,
                 };
                 decl_map.try_extend(build_func_map(
                     &t.expressions,
@@ -412,13 +428,16 @@ pub fn validate_modules<'a, 'b>(
                 child_modules.insert(m);
             }
         }
-        match module_map.insert(
+        module_map.insert(
             module.name.to_string(),
-            ValidatedModule::new(module.name.clone(), type_infos, child_modules, module, file)?,
-        ) {
-            Ok(()) => {}
-            Err(e) => errors.append(e),
-        }
+            ValidatedModule::new(
+                module.name.clone(),
+                type_infos,
+                child_modules,
+                Some(module),
+                Some((*file).clone()),
+            )?,
+        )?;
     }
     errors.into_result(())
 }
@@ -602,7 +621,12 @@ pub fn validate_systems<'a, 'b>(
 
         match system_map.insert(
             system.name.to_string(),
-            ValidatedSystem::new(system.name.clone(), system_modules, configs, file),
+            ValidatedSystem::new(
+                system.name.clone(),
+                system_modules,
+                configs,
+                Some((*file).clone()),
+            ),
         ) {
             Ok(()) => {}
             Err(e) => errors.append(e),
@@ -680,6 +704,135 @@ fn check_required_config<'a>(
         ));
     }
     ret.into_result(())
+}
+
+// Get the types, functions, and policy rules for the system.
+pub fn get_reduced_infos<'a>(
+    policies: &'a [PolicyFile],
+    classlist: &'a ClassList,
+    system: &'a ValidatedSystem,
+    type_map: &'a TypeMap,
+    module_map: &'a ModuleMap,
+) -> Result<Vec<sexp::Sexp>, CascadeErrors> {
+    let ret = CascadeErrors::new();
+    let mut new_type_map = get_built_in_types_map()?;
+
+    // Get the reduced type infos
+    for module in &system.modules {
+        get_reduced_types(module, &mut new_type_map, type_map, module_map)?;
+    }
+
+    // Generate type aliases for the new reduced type map
+    let new_t_aliases = collect_aliases(new_type_map.iter());
+    new_type_map.set_aliases(new_t_aliases);
+
+    // Get the function infos
+    let mut new_func_map = get_funcs(policies, &new_type_map)?;
+
+    // Validate functions
+    let new_func_map_copy = new_func_map.clone(); // In order to read function info while mutating
+    validate_functions(
+        &mut new_func_map,
+        &new_type_map,
+        classlist,
+        &new_func_map_copy,
+    )?;
+
+    // Get the policy rules
+    let new_policy_rules = get_policy_rules(policies, &new_type_map, classlist, &new_func_map)?;
+
+    // generate_sexp(...) is called at this step because new_func_map and new_policy_rules,
+    // which are needed for the generate_sexp call, cannot be returned from this function.
+    // This is because they reference the local variable, new_func_map_copy, which cannot be
+    // moved out due to the lifetimes in validate_functions(...).
+    let new_cil_tree = generate_sexp(
+        &new_type_map,
+        classlist,
+        new_policy_rules,
+        &new_func_map,
+        &Some(&system.configurations),
+    )?;
+
+    ret.into_result(new_cil_tree)
+}
+
+// This is a recusive function that gets only the relevant types from the type map.
+// The reduced types are the types in the module and the types in any of that modules' child modules.
+// Parents of those types are also automatically included.
+// The types are cloned so that each system TypeMap can own its own types.
+pub fn get_reduced_types(
+    module: &ValidatedModule,
+    reduced_type_map: &mut TypeMap,
+    type_map: &TypeMap,
+    module_map: &ModuleMap,
+) -> Result<(), CascadeErrors> {
+    for t in &module.types {
+        if let Some(type_info) = type_map.get(t.name.as_ref()) {
+            if !reduced_type_map.iter().any(|(k, _v)| k == t.name.as_ref()) {
+                reduced_type_map.insert(t.name.to_string(), type_info.clone())?;
+            }
+        }
+        for parent in &t.inherits {
+            if let Some(parent_type_info) = type_map.get(parent.as_ref()) {
+                if !reduced_type_map.iter().any(|(k, _v)| k == parent.as_ref()) {
+                    reduced_type_map.insert(parent.to_string(), parent_type_info.clone())?;
+                }
+            }
+        }
+    }
+    for vm in &module.validated_modules {
+        if let Some(child_module) = module_map.get(vm.as_ref()) {
+            get_reduced_types(child_module, reduced_type_map, type_map, module_map)?;
+        }
+    }
+    Ok(())
+}
+
+pub fn get_funcs<'a>(
+    policies: &'a [PolicyFile],
+    reduced_type_map: &'a TypeMap,
+) -> Result<FunctionMap<'a>, CascadeErrors> {
+    let mut ret = CascadeErrors::new();
+    let mut reduced_func_map = FunctionMap::new();
+    // Collect all function declarations
+    for p in policies {
+        let mut m = match build_func_map(&p.policy.exprs, reduced_type_map, None, &p.file) {
+            Ok(m) => m,
+            Err(e) => {
+                ret.append(e);
+                continue;
+            }
+        };
+        reduced_func_map.append(&mut m);
+    }
+    // Stops if something went wrong for this major step.
+    ret = ret.into_result_self()?;
+    // Get function aliases
+    let f_aliases = collect_aliases(reduced_func_map.iter());
+    reduced_func_map.set_aliases(f_aliases);
+    ret.into_result(reduced_func_map)
+}
+
+pub fn get_policy_rules<'a>(
+    policies: &'a [PolicyFile],
+    reduced_type_map: &'a TypeMap,
+    classlist: &'a ClassList<'a>,
+    reduced_func_map: &'a FunctionMap<'a>,
+) -> Result<BTreeSet<ValidatedStatement<'a>>, CascadeErrors> {
+    let mut ret = CascadeErrors::new();
+    let mut reduced_policy_rules = BTreeSet::new();
+    for p in policies {
+        let mut r = match compile_rules_one_file(p, classlist, reduced_type_map, reduced_func_map) {
+            Ok(r) => r,
+            Err(e) => {
+                ret.append(e);
+                continue;
+            }
+        };
+        reduced_policy_rules.append(&mut r);
+    }
+    // Stops if something went wrong for this major step.
+    ret.into_result(reduced_policy_rules)
 }
 
 // If a type couldn't be organized, it is either a cycle or a non-existant parent somewhere
@@ -1188,7 +1341,8 @@ fn do_rules_pass<'a>(
             Expression::Decl(Declaration::Type(t)) => {
                 let type_being_parsed = match types.get(t.name.as_ref()) {
                     Some(t) => t,
-                    None => return Err(ErrorItem::Internal(InternalError::new()).into()),
+                    // If a type exists but is not in the system, skip it for now
+                    None => continue,
                 };
                 match do_rules_pass(
                     &t.expressions,

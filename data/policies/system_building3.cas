@@ -1,0 +1,14 @@
+system foobar {
+    module foobar_mod;
+    let handle_unknown_perms = allow;
+}
+
+module foobar_mod {
+    resource unused;
+}
+
+let read_file_perms = read;
+
+extend thud {
+	allow(thud, babble, file, write);
+}

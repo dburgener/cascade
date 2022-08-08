@@ -199,6 +199,21 @@ impl ParseError {
     }
 }
 
+#[derive(Error, Clone, Debug)]
+#[error("{diagnostic}")]
+pub struct InvalidSystemError {
+    pub diagnostic: Diag<usize>,
+}
+
+impl InvalidSystemError {
+    pub fn new(msg: &str) -> Self {
+        let diagnostic = Diagnostic::error().with_message(msg);
+        InvalidSystemError {
+            diagnostic: diagnostic.into(),
+        }
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum ErrorItem {
     #[error("Compilation error: {0}")]
@@ -210,6 +225,8 @@ pub enum ErrorItem {
     // TODO: Replace IO() with semantic errors wraping io::Error.
     #[error("I/O error: {0}")]
     IO(#[from] io::Error),
+    #[error("Invalid system error: {0}")]
+    InvalidSystem(#[from] InvalidSystemError),
 }
 
 impl ErrorItem {
@@ -311,6 +328,12 @@ impl From<CompileError> for CascadeErrors {
 
 impl From<InternalError> for CascadeErrors {
     fn from(error: InternalError) -> Self {
+        CascadeErrors::from(ErrorItem::from(error))
+    }
+}
+
+impl From<InvalidSystemError> for CascadeErrors {
+    fn from(error: InvalidSystemError) -> Self {
         CascadeErrors::from(ErrorItem::from(error))
     }
 }

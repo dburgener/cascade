@@ -1,0 +1,33 @@
+system bar {
+    module foo_mod2;
+    let handle_unknown_perms = deny;
+}
+
+module foo_mod2 {
+    resource qux;
+    module foo_mod2_mod1;
+    module foo_mod2_mod2;
+}
+
+module foo_mod2_mod1 {
+    domain baz;
+}
+
+module foo_mod2_mod2 {
+    domain quuz;
+}
+
+virtual resource quux {
+	virtual fn read(domain source) {}
+}
+
+resource qux inherits quux {
+	fn read(domain source) {
+		allow(source, this, file, read_file_perms);
+	}
+}
+
+domain baz {}
+domain quuz {
+    qux.read(this);
+}
