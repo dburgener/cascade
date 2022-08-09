@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
-use crate::ast::{CascadeString, Policy, Declaration, DeclarationModifier, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, LetBinding, Virtualable, FuncCall, DeclaredArgument, Module, Machine, MachineBody};
+use crate::ast::{CascadeString, Policy, Declaration, DeclarationModifier, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, LetBinding, Virtualable, FuncCall, DeclaredArgument, Module, Machine, MachineBody, Port, IpAddr as AstIpAddr};
 use lalrpop_util::ErrorRecovery;
 use lalrpop_util::ParseError;
 use crate::error::ParseErrorMsg;
@@ -209,16 +209,39 @@ Arg: Argument = {
 	<s:TypeName> "=" <a: Arg> => Argument::Named(s, Box::new(a)),
 	List => Argument::List(<>),
 	Quoted_String => Argument::Quote(<>),
+	Port => Argument::Port(<>),
+	IPAddr => Argument::IpAddr(<>),
 }
 
 Quoted_String: CascadeString = {
 	<start: @L> <s: r#""[^"]*""#> <end: @R> => CascadeString::new(s.to_string(), start..end),
 }
 
+Port: Port = {
+	<start: @L> <p: PortRegex> <end: @R> => Port::new(p.parse().unwrap(), Some(start..end)) // TODO: report parse error instead of panicing
+}
+
+IPAddr: AstIpAddr = {
+	IPv4 => AstIpAddr::new(<>.as_ref().parse().unwrap(), <>.get_range()), // TODO
+	IPv6 => AstIpAddr::new(<>.as_ref().parse().unwrap(), <>.get_range()), // TODO,
+}
+
+IPv4: CascadeString = {
+	<start: @L> <ip: IPv4Regex> <end: @R> => CascadeString::new(ip.to_string(), start..end),
+	<start: @L> "localhost" <end: @R> => CascadeString::new("localhost".to_string(), start..end),
+}
+
+IPv6: CascadeString = {
+	<start: @L> <ip: IPv6Regex> <end: @R> => CascadeString::new(ip.to_string(), start..end),
+}
+
 // lexing precedence
 match {
 	r"\s*" => { },
 	r"//[^\n\r]*[\n\r]*" => { },
+	r"(\d{1,3}\.){4}" => IPv4Regex,
+	"::1" => IPv6Regex, // TODO
+	r"\d+" => PortRegex,
 } else {
 	_
 }

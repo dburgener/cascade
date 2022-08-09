@@ -4,6 +4,7 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::iter;
+use std::net::IpAddr as NetIpAddr;
 use std::ops::Range;
 
 use codespan_reporting::files::SimpleFile;
@@ -133,6 +134,15 @@ impl PartialOrd for CascadeString {
 impl Ord for CascadeString {
     fn cmp(&self, other: &Self) -> Ordering {
         self.string.cmp(&other.string)
+    }
+}
+
+impl From<&Port> for CascadeString {
+    fn from(p: &Port) -> Self {
+        CascadeString {
+            string: p.port_num.to_string(),
+            range: p.get_range(),
+        }
     }
 }
 
@@ -385,6 +395,7 @@ impl Statement {
 pub enum BuiltIns {
     AvRule,
     FileContext,
+    PortCon,
     ResourceTransition,
     FileSystemContext,
     DomainTransition,
@@ -419,24 +430,22 @@ impl FuncCall {
 
     pub fn check_builtin(&self) -> Option<BuiltIns> {
         if self.class_name.is_some() {
-            return None;
+            None
+        } else if constants::AV_RULES.iter().any(|i| *i == self.name) {
+            Some(BuiltIns::AvRule)
+        } else if self.name == constants::FILE_CONTEXT_FUNCTION_NAME {
+            Some(BuiltIns::FileContext)
+        } else if self.name == constants::PORTCON_FUNCTION_NAME {
+            Some(BuiltIns::PortCon)
+        } else if self.name == constants::FS_CONTEXT_FUNCTION_NAME {
+            Some(BuiltIns::FileSystemContext)
+        } else if self.name == constants::RESOURCE_TRANS_FUNCTION_NAME {
+            Some(BuiltIns::ResourceTransition)
+        } else if self.name == constants::DOMTRANS_FUNCTION_NAME {
+            Some(BuiltIns::DomainTransition)
+        } else {
+            None
         }
-        if constants::AV_RULES.iter().any(|i| *i == self.name) {
-            return Some(BuiltIns::AvRule);
-        }
-        if self.name == constants::FILE_CONTEXT_FUNCTION_NAME {
-            return Some(BuiltIns::FileContext);
-        }
-        if self.name == constants::RESOURCE_TRANS_FUNCTION_NAME {
-            return Some(BuiltIns::ResourceTransition);
-        }
-        if self.name == constants::FS_CONTEXT_FUNCTION_NAME {
-            return Some(BuiltIns::FileSystemContext);
-        }
-        if self.name == constants::DOMTRANS_FUNCTION_NAME {
-            return Some(BuiltIns::DomainTransition);
-        }
-        None
     }
 
     pub fn is_avc(&self) -> bool {
@@ -536,12 +545,106 @@ impl Annotations {
     }
 }
 
+#[derive(Clone, Debug, Eq)]
+pub struct Port {
+    pub port_num: u16,
+    range: Option<Range<usize>>,
+}
+
+impl Port {
+    pub fn new(port_num: u16, range: Option<Range<usize>>) -> Self {
+        Port { port_num, range }
+    }
+
+    pub fn get_range(&self) -> Option<Range<usize>> {
+        self.range.clone()
+    }
+}
+
+impl PartialEq for Port {
+    fn eq(&self, other: &Self) -> bool {
+        self.port_num == other.port_num
+    }
+}
+
+impl Hash for Port {
+    fn hash<H: Hasher>(&self, h: &mut H) {
+        self.port_num.hash(h);
+    }
+}
+
+impl PartialOrd for Port {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.port_num.partial_cmp(&other.port_num)
+    }
+}
+
+impl Ord for Port {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.port_num.cmp(&other.port_num)
+    }
+}
+
+impl fmt::Display for Port {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.port_num)
+    }
+}
+
+#[derive(Clone, Debug, Eq)]
+pub struct IpAddr {
+    inner: NetIpAddr,
+    range: Option<Range<usize>>,
+}
+
+impl IpAddr {
+    pub fn new(inner: NetIpAddr, range: Option<Range<usize>>) -> Self {
+        IpAddr { inner, range }
+    }
+
+    pub fn get_range(&self) -> Option<Range<usize>> {
+        self.range.clone()
+    }
+}
+
+impl PartialEq for IpAddr {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner == other.inner
+    }
+}
+
+impl Hash for IpAddr {
+    fn hash<H: Hasher>(&self, h: &mut H) {
+        self.inner.hash(h);
+    }
+}
+
+impl PartialOrd for IpAddr {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.inner.partial_cmp(&other.inner)
+    }
+}
+
+impl Ord for IpAddr {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.inner.cmp(&other.inner)
+    }
+}
+
+impl fmt::Display for IpAddr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.inner)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Argument {
     Var(CascadeString),
     Named(CascadeString, Box<Argument>),
     List(Vec<CascadeString>),
     Quote(CascadeString),
+    Port(Port),
+    IpAddr(IpAddr),
 }
 
 impl Argument {
@@ -560,6 +663,8 @@ impl Argument {
             }
             Argument::List(l) => CascadeString::slice_to_range(&l.iter().collect::<Vec<_>>()),
             Argument::Quote(a) => a.get_range(),
+            Argument::Port(p) => p.get_range(),
+            Argument::IpAddr(i) => i.get_range(),
         }
     }
 }
@@ -571,6 +676,8 @@ impl fmt::Display for Argument {
             Argument::Named(n, a) => write!(f, "{}={}", n, a),
             Argument::List(_) => write!(f, "[TODO]",),
             Argument::Quote(a) => write!(f, "\"{}\"", a),
+            Argument::Port(p) => write!(f, "{}", p),
+            Argument::IpAddr(i) => i.fmt(f),
         }
     }
 }

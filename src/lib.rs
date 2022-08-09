@@ -667,6 +667,18 @@ mod tests {
     }
 
     #[test]
+    fn networking_rules_test() {
+        valid_policy_test(
+            "networking_rules.cas",
+            &[
+                "(portcon tcp 1234 (system_u object_r my_port ((s0) (s0))))",
+                "(portcon udp 1235 (system_u object_r my_port ((s0) (s0))))",
+            ],
+            &[],
+        );
+    }
+
+    #[test]
     fn makelist_test() {
         let policy_file = [POLICIES_DIR, "makelist.cas"].concat();
 
@@ -1238,6 +1250,11 @@ mod tests {
     #[test]
     fn invalid_resourcetrans() {
         error_policy_test!("resource_trans.cas", 5, ErrorItem::Compile(_));
+    }
+
+    #[test]
+    fn invalid_networking_rules() {
+        error_policy_test!("networking_rules.cas", 1, ErrorItem::Compile(_));
     }
 
     #[test]
