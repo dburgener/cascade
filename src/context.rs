@@ -70,7 +70,7 @@ impl<'a> Context<'a> {
         for a in args {
             // a.name really should be an CascadeString rather than a String
             self.symbols.insert(
-                CascadeString::from(a.name.as_ref()),
+                CascadeString::from(&a.name as &str),
                 BindableObject::Argument(a.clone()),
             );
         }
@@ -121,7 +121,7 @@ impl<'a> Context<'a> {
             None => Some(arg.clone()),
             Some(BindableObject::Type(t)) => Some(t.name.clone()),
             Some(BindableObject::Argument(_)) => Some(arg.clone()),
-            Some(BindableObject::Class(s)) => Some(CascadeString::from(s.as_ref())),
+            Some(BindableObject::Class(s)) => Some(CascadeString::from(s as &str)),
             Some(BindableObject::TypeList(_))
             | Some(BindableObject::PermList(_))
             | Some(BindableObject::ClassList(_)) => None,
@@ -132,7 +132,7 @@ impl<'a> Context<'a> {
         match self.symbols.get(&CascadeString::from(arg)) {
             Some(BindableObject::TypeList(tl)) => tl.iter().map(|t| t.name.clone()).collect(),
             Some(BindableObject::PermList(l)) | Some(BindableObject::ClassList(l)) => {
-                l.iter().map(|i| CascadeString::from(i.as_ref())).collect()
+                l.iter().map(|i| CascadeString::from(i as &str)).collect()
             }
             // Unwrap() is safe here because all of the get_name_or_string() None cases are handled
             // in get_list()
@@ -174,7 +174,7 @@ impl<'a> Context<'a> {
                     .collect(),
             ),
             BindableObject::Class(c) => {
-                match self.get_name_or_string(&CascadeString::from(c.as_ref())) {
+                match self.get_name_or_string(&CascadeString::from(&c as &str)) {
                     Some(s) => BindableObject::Class(s.to_string()),
                     None => BindableObject::ClassList(
                         self.get_list(&c).iter().map(|s| s.to_string()).collect(),

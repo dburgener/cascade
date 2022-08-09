@@ -14,7 +14,7 @@ use codespan_reporting::files::SimpleFile;
 
 use crate::ast::{
     get_cil_name, Annotation, Annotations, Argument, BuiltIns, CascadeString, DeclaredArgument,
-    FuncCall, FuncDecl, Module, Statement, TypeDecl,
+    FuncCall, FuncDecl, IpAddr, Module, Port, Statement, TypeDecl,
 };
 use crate::constants;
 use crate::context::{BlockType, Context as BlockContext};
@@ -744,6 +744,8 @@ pub fn argument_to_typeinfo<'a>(
             ),
         },
         ArgForValidation::Quote(s) => types.get(&type_name_from_string(s.as_ref())),
+        ArgForValidation::Port(_) => types.get(constants::NUMBER),
+        ArgForValidation::IpAddr(_) => types.get(constants::IPADDR),
         ArgForValidation::List(_) => None,
     };
 
@@ -1553,6 +1555,161 @@ fn call_to_fc_rules<'a>(
     }
 
     Ok(ret)
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub enum Protocol {
+    Tcp,
+    Udp,
+}
+
+impl From<Protocol> for &str {
+    fn from(p: Protocol) -> &'static str {
+        match p {
+            Protocol::Tcp => "tcp",
+            Protocol::Udp => "udp",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub struct PortconRule<'a> {
+    proto: Protocol,
+    port: CascadeString, // TODO: lists and ranges
+    context: Context<'a>,
+}
+
+impl From<&PortconRule<'_>> for sexp::Sexp {
+    fn from(p: &PortconRule) -> sexp::Sexp {
+        list(&[
+            atom_s("portcon"),
+            atom_s(p.proto.into()),
+            Sexp::Atom(Atom::S(p.port.to_string())),
+            Sexp::from(&p.context),
+        ])
+    }
+}
+
+pub fn call_to_portcon_rule<'a>(
+    c: &FuncCall,
+    types: &TypeMap,
+    class_perms: &ClassList,
+    context: &BlockContext,
+    file: &SimpleFile<String, String>,
+    parent_type: &'a TypeInfo,
+) -> Result<PortconRule<'a>, CascadeErrors> {
+    let target_args = vec![
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: CascadeString::from("string"),
+                is_list_param: false,
+                name: CascadeString::from("protocol"),
+                default: None,
+            },
+            types,
+            None,
+        )?,
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: CascadeString::from("number"),
+                is_list_param: false, // TODO: Need to support lists and ranges
+                name: CascadeString::from("port"),
+                default: None,
+            },
+            types,
+            None,
+        )?,
+    ];
+
+    let validated_args =
+        validate_arguments(c, &target_args, types, class_perms, context, Some(file))?;
+    let mut args_iter = validated_args.iter();
+
+    let proto = args_iter
+        .next()
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
+        .get_name_or_string(context)?;
+    let proto = match proto.as_ref() {
+        "\"tcp\"" | "\"TCP\"" => Protocol::Tcp,
+        "\"udp\"" | "\"UDP\"" => Protocol::Udp,
+        _ => {
+            return Err(ErrorItem::make_compile_or_internal_error(
+                "Not a valid protocol",
+                Some(file),
+                proto.get_range(),
+                "Valid protocols are \"tcp\" and \"udp\"",
+            )
+            .into());
+        }
+    };
+
+    let port = args_iter
+        .next()
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
+        .get_name_or_string(context)?;
+
+    validate_port(&port, Some(file))?;
+
+    let context = match Context::try_from(parent_type.name.as_ref()) {
+        Ok(c) => c,
+        Err(()) => {
+            return Err(ErrorItem::Internal(InternalError::new()).into());
+        }
+    };
+
+    Ok(PortconRule {
+        proto,
+        port,
+        context,
+    })
+}
+
+impl PortconRule<'_> {
+    fn get_renamed_statement(&self, renames: &BTreeMap<String, String>) -> Self {
+        PortconRule {
+            proto: self.proto,
+            port: self.port.clone(),
+            context: self.context.get_renamed_context(renames),
+        }
+    }
+}
+
+// Recursively validate a port
+// First, split on commas, then hyphens
+// Each comma separated string is validated separatedly
+// Each hyphen separated string must be in the valid port range, and the left side must be lower
+// than the right.
+// The valid port range is 1 through 65535
+fn validate_port(
+    port: &CascadeString,
+    current_file: Option<&SimpleFile<String, String>>,
+) -> Result<(), ErrorItem> {
+    for substr in port.as_ref().split(',') {
+        if validate_port_helper(substr).is_err() {
+            return Err(ErrorItem::make_compile_or_internal_error(
+                "Not a valid port",
+                current_file,
+                port.get_range(),
+                "This should be a comma separated list of ports or port ranges",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_port_helper(port: &str) -> Result<u16, ()> {
+    if port.contains('-') {
+        let mut split = port.split('-');
+        let first = split.next().ok_or(())?.parse::<u16>().map_err(|_| ())?;
+        let second = split.next().ok_or(())?.parse::<u16>().map_err(|_| ())?;
+        if split.next().is_some() || second <= first {
+            Err(())
+        } else {
+            Ok(0)
+        }
+    } else {
+        port.parse::<u16>().map_err(|_| ())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -2518,7 +2675,7 @@ impl<'a> FunctionInfo<'a> {
             Some(decl) => decl.get_cil_name(),
             None => get_cil_name(
                 self.class.map(|c| &c.name),
-                &CascadeString::from(self.name.as_ref()),
+                &CascadeString::from(&self.name as &str),
             ),
         }
     }
@@ -2596,6 +2753,7 @@ impl TryFrom<&FunctionInfo<'_>> for sexp::Sexp {
                         ValidatedStatement::Call(c) => macro_cil.push(Sexp::from(&**c)),
                         ValidatedStatement::AvRule(a) => macro_cil.push(Sexp::from(a)),
                         ValidatedStatement::FcRule(f) => macro_cil.push(Sexp::from(f)),
+                        ValidatedStatement::PortconRule(p) => macro_cil.push(Sexp::from(p)),
                         ValidatedStatement::ResourcetransRule(r) => macro_cil.push(Sexp::from(r)),
                         ValidatedStatement::FscRule(fs) => macro_cil.push(Sexp::try_from(fs)?),
                         ValidatedStatement::DomtransRule(d) => macro_cil.push(Sexp::from(d)),
@@ -2683,6 +2841,7 @@ pub enum ValidatedStatement<'a> {
     Call(Box<ValidatedCall>),
     AvRule(AvRule<'a>),
     FcRule(FileContextRule<'a>),
+    PortconRule(PortconRule<'a>),
     ResourcetransRule(ResourcetransRule<'a>),
     FscRule(FileSystemContextRule<'a>),
     DomtransRule(DomtransRule<'a>),
@@ -2695,7 +2854,7 @@ impl<'a> ValidatedStatement<'a> {
         types: &'a TypeMap,
         class_perms: &ClassList<'a>,
         context: &mut BlockContext<'a>,
-        parent_type: Option<&TypeInfo>,
+        parent_type: Option<&'a TypeInfo>,
         file: &'a SimpleFile<String, String>,
     ) -> Result<BTreeSet<ValidatedStatement<'a>>, CascadeErrors> {
         let in_resource = match parent_type {
@@ -2764,6 +2923,31 @@ impl<'a> ValidatedStatement<'a> {
                         ))
                     }
                 }
+                Some(BuiltIns::PortCon) => {
+                    if in_resource {
+                        // Unwrap is safe because in_resource can only be true when parent_type
+                        // is Some
+                        Ok([ValidatedStatement::PortconRule(call_to_portcon_rule(
+                            c,
+                            types,
+                            class_perms,
+                            &*context,
+                            file,
+                            parent_type.unwrap(),
+                        )?)]
+                        .into())
+                    } else {
+                        Err(CascadeErrors::from(
+                            ErrorItem::make_compile_or_internal_error(
+                                "portcon() calls are only allowed in resources",
+                                Some(file),
+                                c.name.get_range(),
+                                "Not allowed here",
+                            ),
+                        ))
+                    }
+                }
+
                 Some(BuiltIns::DomainTransition) => {
                     if !in_resource {
                         Ok(
@@ -2841,6 +3025,9 @@ impl<'a> ValidatedStatement<'a> {
             ValidatedStatement::FscRule(f) => {
                 ValidatedStatement::FscRule(f.get_renamed_statement(renames))
             }
+            ValidatedStatement::PortconRule(p) => {
+                ValidatedStatement::PortconRule(p.get_renamed_statement(renames))
+            }
         }
     }
 }
@@ -2852,6 +3039,7 @@ impl TryFrom<&ValidatedStatement<'_>> for sexp::Sexp {
             ValidatedStatement::Call(c) => Ok(Sexp::from(&**c)),
             ValidatedStatement::AvRule(a) => Ok(Sexp::from(a)),
             ValidatedStatement::FcRule(f) => Ok(Sexp::from(f)),
+            ValidatedStatement::PortconRule(p) => Ok(Sexp::from(p)),
             ValidatedStatement::ResourcetransRule(r) => Ok(Sexp::from(r)),
             ValidatedStatement::FscRule(fs) => Sexp::try_from(fs),
             ValidatedStatement::DomtransRule(d) => Ok(Sexp::from(d)),
@@ -3119,6 +3307,8 @@ enum TypeValue {
     Str(CascadeString),
     Vector(Vec<CascadeString>),
     SEType(Option<Range<usize>>),
+    Port(Port),
+    IpAddr(IpAddr),
 }
 
 #[derive(Clone, Debug)]
@@ -3163,6 +3353,8 @@ impl<'a> TypeInstance<'a> {
                     None => Ok(CascadeString::from(ret_string)),
                 }
             }
+            TypeValue::Port(p) => Ok(CascadeString::from(p)),
+            TypeValue::IpAddr(_i) => todo!(),
         }
     }
 
@@ -3191,6 +3383,8 @@ impl<'a> TypeInstance<'a> {
                 CascadeString::slice_to_range(v.iter().collect::<Vec<&CascadeString>>().as_slice())
             }
             TypeValue::SEType(r) => r.clone(),
+            TypeValue::Port(p) => p.get_range(),
+            TypeValue::IpAddr(i) => i.get_range(),
         }
     }
 
@@ -3212,6 +3406,8 @@ impl<'a> TypeInstance<'a> {
                 TypeValue::Vector(vec.iter().map(|s| (*s).clone()).collect())
             }
             ArgForValidation::Quote(q) => TypeValue::Str((*q).clone()),
+            ArgForValidation::Port(p) => TypeValue::Port((*p).clone()),
+            ArgForValidation::IpAddr(i) => TypeValue::IpAddr((*i).clone()),
         };
 
         TypeInstance {
@@ -3231,6 +3427,8 @@ impl<'a> TypeInstance<'a> {
                 TypeValue::Vector(vec.iter().map(|s| (*s).clone()).collect())
             }
             ArgForValidation::Var(s) | ArgForValidation::Quote(s) => TypeValue::Str((*s).clone()),
+            ArgForValidation::Port(p) => TypeValue::Port((*p).clone()),
+            ArgForValidation::IpAddr(i) => TypeValue::IpAddr((*i).clone()),
         };
 
         TypeInstance {
@@ -3405,6 +3603,8 @@ pub enum ArgForValidation<'a> {
     Var(&'a CascadeString),
     List(Vec<&'a CascadeString>),
     Quote(&'a CascadeString),
+    Port(&'a Port),
+    IpAddr(&'a IpAddr),
 }
 
 impl<'a> From<&'a Argument> for ArgForValidation<'a> {
@@ -3414,6 +3614,8 @@ impl<'a> From<&'a Argument> for ArgForValidation<'a> {
             Argument::Named(_, a) => ArgForValidation::from(&**a),
             Argument::List(v) => ArgForValidation::List(v.iter().collect()),
             Argument::Quote(s) => ArgForValidation::Quote(s),
+            Argument::Port(p) => ArgForValidation::Port(p),
+            Argument::IpAddr(i) => ArgForValidation::IpAddr(i),
         }
     }
 }
@@ -3424,6 +3626,8 @@ impl fmt::Display for ArgForValidation<'_> {
             ArgForValidation::Var(a) => write!(f, "'{}'", a),
             ArgForValidation::List(_) => write!(f, "[TODO]",),
             ArgForValidation::Quote(a) => write!(f, "\"{}\"", a),
+            ArgForValidation::Port(p) => write!(f, "{}", p),
+            ArgForValidation::IpAddr(i) => write!(f, "{}", i),
         }
     }
 }
@@ -3434,6 +3638,11 @@ impl<'a> ArgForValidation<'a> {
             ArgForValidation::Var(s) => vec![s],
             ArgForValidation::List(v) => v,
             ArgForValidation::Quote(s) => vec![s],
+            // TODO: The approach here assumes all Arguments are either CascadeStrings or lists of
+            // CascadeStrings under the hood.  That seems like basically a bad assumption, but
+            // fixing it will be somewhat non-trivial
+            ArgForValidation::Port(_p) => todo!(),
+            ArgForValidation::IpAddr(_i) => todo!(),
         };
         ArgForValidation::List(vec)
     }
@@ -3443,6 +3652,8 @@ impl<'a> ArgForValidation<'a> {
             ArgForValidation::Var(s) => s.get_range(),
             ArgForValidation::List(v) => CascadeString::slice_to_range(v),
             ArgForValidation::Quote(s) => s.get_range(),
+            ArgForValidation::Port(p) => p.get_range(),
+            ArgForValidation::IpAddr(i) => i.get_range(),
         }
     }
 
@@ -3456,11 +3667,11 @@ impl<'a> ArgForValidation<'a> {
         context: &BlockContext<'a>,
         file: Option<&SimpleFile<String, String>>,
     ) -> Result<(), ErrorItem> {
-        let err_ret = |s: &CascadeString| {
+        let err_ret = |r: Option<Range<usize>>| {
             ErrorItem::make_compile_or_internal_error(
                 "Cannot typecast",
                 file,
-                s.get_range(),
+                r,
                 "This is not something that can be typecast",
             )
         };
@@ -3472,7 +3683,7 @@ impl<'a> ArgForValidation<'a> {
                     .map(|ti| ti.is_setype(types))
                     .unwrap_or(false)
             {
-                Err(err_ret(s))
+                Err(err_ret(s.get_range()))
             } else {
                 Ok(())
             }
@@ -3488,8 +3699,14 @@ impl<'a> ArgForValidation<'a> {
                     check_validity(s)?;
                 }
             }
-            ArgForValidation::Quote(s) => {
-                return Err(err_ret(s));
+            ArgForValidation::Quote(inner) => {
+                return Err(err_ret(inner.get_range()));
+            }
+            ArgForValidation::Port(inner) => {
+                return Err(err_ret(inner.get_range()));
+            }
+            ArgForValidation::IpAddr(inner) => {
+                return Err(err_ret(inner.get_range()));
             }
         }
 
@@ -3960,7 +4177,13 @@ mod tests {
             executable: Cow::Owned(CascadeString::from("old_name")),
         });
 
-        for statement in [statement1, statement2, statement3, statement4] {
+        let statement5 = ValidatedStatement::PortconRule(PortconRule {
+            proto: Protocol::Tcp,
+            port: CascadeString::from("1234"),
+            context: Context::new(false, None, None, Cow::Borrowed("old_name"), None, None),
+        });
+
+        for statement in [statement1, statement2, statement3, statement4, statement5] {
             let mut renames = BTreeMap::new();
             renames.insert("old_name".to_string(), "new_name".to_string());
             let renamed_statement = statement.get_renamed_statement(&renames);
@@ -3968,5 +4191,19 @@ mod tests {
             assert!(sexp.to_string().contains("new_name"));
             assert!(!sexp.to_string().contains("old_name"));
         }
+    }
+
+    #[test]
+    fn validate_port_test() {
+        validate_port(&CascadeString::from("1"), None).unwrap();
+        assert!(validate_port(&CascadeString::from("foo"), None).is_err());
+        validate_port(&CascadeString::from("1-2"), None).unwrap();
+        validate_port(&CascadeString::from("1,2"), None).unwrap();
+        validate_port(&CascadeString::from("1,1234-2000"), None).unwrap();
+        validate_port(&CascadeString::from("1,1234-2000,65535"), None).unwrap();
+        assert!(validate_port(&CascadeString::from("1-2-3"), None).is_err());
+        assert!(validate_port(&CascadeString::from("65536"), None).is_err());
+        assert!(validate_port(&CascadeString::from("-1"), None).is_err());
+        assert!(validate_port(&CascadeString::from("2-1"), None).is_err());
     }
 }

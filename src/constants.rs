@@ -11,6 +11,7 @@ pub const DOMTRANS_FUNCTION_NAME: &str = "domain_transition";
 pub const SYSTEM_TYPE: &str = "machine_type";
 pub const MONOLITHIC: &str = "monolithic";
 pub const HANDLE_UNKNOWN_PERMS: &str = "handle_unknown_perms";
+pub const PORTCON_FUNCTION_NAME: &str = "portcon";
 
 pub const AV_RULES: &[&str] = &[
     ALLOW_FUNCTION_NAME,
@@ -26,10 +27,12 @@ pub const CLASS: &str = "obj_class";
 pub const MODULE: &str = "module";
 pub const SELF: &str = "self";
 pub const FS_TYPE: &str = "fs_type";
+pub const NUMBER: &str = "number";
+pub const IPADDR: &str = "ipaddr";
 
 pub const BUILT_IN_TYPES: &[&str] = &[
     DOMAIN, RESOURCE, MODULE, "path", "string", CLASS, PERM, "context", SELF, FS_TYPE, "xattr",
-    "task", "trans", "genfscon", "*",
+    "task", "trans", "genfscon", "*", NUMBER, IPADDR,
 ];
 
 pub const SYSTEM_CONFIG_DEFAULTS: &[(&str, &str)] =

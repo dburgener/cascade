@@ -1,0 +1,8 @@
+resource my_port {
+	portcon("tcp", 1234);
+	portcon("UDP", 1235);
+}
+
+domain foo {
+	allow(this, my_port, tcp_socket, node_bind);
+}
