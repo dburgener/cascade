@@ -1862,7 +1862,7 @@ impl ValidatedCall {
 
 pub type ModuleMap<'a> = AliasMap<ValidatedModule<'a>>;
 
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone)]
 pub struct ValidatedModule<'a> {
     pub name: CascadeString,
     pub annotations: BTreeSet<AnnotationInfo>,
@@ -1890,6 +1890,8 @@ impl<'a> Annotated for &ValidatedModule<'a> {
         self.annotations.iter()
     }
 }
+
+impl<'a> Eq for ValidatedModule<'a> {}
 
 impl<'a> Ord for ValidatedModule<'a> {
     fn cmp(&self, other: &Self) -> Ordering {
@@ -1971,6 +1973,21 @@ pub struct ValidatedSystem<'a> {
     pub name: CascadeString,
     pub modules: BTreeSet<&'a ValidatedModule<'a>>,
     pub configurations: BTreeMap<String, &'a Argument>,
+    declaration_file: &'a SimpleFile<String, String>,
+}
+
+impl Declared for ValidatedSystem<'_> {
+    fn get_file(&self) -> Option<SimpleFile<String, String>> {
+        Some(self.declaration_file.clone())
+    }
+
+    fn get_name_range(&self) -> Option<Range<usize>> {
+        self.name.get_range()
+    }
+
+    fn get_generic_name(&self) -> String {
+        String::from("system")
+    }
 }
 
 impl<'a> ValidatedSystem<'a> {
@@ -1978,11 +1995,13 @@ impl<'a> ValidatedSystem<'a> {
         name: CascadeString,
         modules: BTreeSet<&'a ValidatedModule<'a>>,
         configurations: BTreeMap<String, &'a Argument>,
+        declaration_file: &'a SimpleFile<String, String>,
     ) -> Self {
         ValidatedSystem {
             name,
             modules,
             configurations,
+            declaration_file,
         }
     }
 }

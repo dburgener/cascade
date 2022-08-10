@@ -185,7 +185,7 @@ impl Expression {
 }
 
 pub trait Virtualable {
-    fn set_virtual(&mut self);
+    fn set_virtual(&mut self, range: Range<usize>) -> Result<(), ParseErrorMsg>;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -197,12 +197,12 @@ pub enum Declaration {
 }
 
 impl Virtualable for Declaration {
-    fn set_virtual(&mut self) {
+    fn set_virtual(&mut self, range: Range<usize>) -> Result<(), ParseErrorMsg> {
         match self {
-            Declaration::Type(t) => t.set_virtual(),
-            Declaration::Func(f) => f.set_virtual(),
-            Declaration::Mod(m) => m.set_virtual(),
-            Declaration::System(s) => s.set_virtual(),
+            Declaration::Type(t) => t.set_virtual(range),
+            Declaration::Func(f) => f.set_virtual(range),
+            Declaration::Mod(m) => m.set_virtual(range),
+            Declaration::System(s) => s.set_virtual(range),
         }
     }
 }
@@ -263,8 +263,9 @@ impl PartialEq for TypeDecl {
 }
 
 impl Virtualable for TypeDecl {
-    fn set_virtual(&mut self) {
+    fn set_virtual(&mut self, _range: Range<usize>) -> Result<(), ParseErrorMsg> {
         self.is_virtual = true;
+        Ok(())
     }
 }
 
@@ -307,8 +308,9 @@ impl FuncDecl {
 }
 
 impl Virtualable for FuncDecl {
-    fn set_virtual(&mut self) {
+    fn set_virtual(&mut self, _range: Range<usize>) -> Result<(), ParseErrorMsg> {
         self.is_virtual = true;
+        Ok(())
     }
 }
 
@@ -553,8 +555,9 @@ impl Module {
 // Virtual modules cannot be compile targets
 // Please see doc/modules.md for more info
 impl Virtualable for Module {
-    fn set_virtual(&mut self) {
+    fn set_virtual(&mut self, _range: Range<usize>) -> Result<(), ParseErrorMsg> {
         self.is_virtual = true;
+        Ok(())
     }
 }
 
@@ -602,12 +605,16 @@ impl System {
 }
 
 impl Virtualable for System {
-    fn set_virtual(&mut self) {
-        self.is_virtual = true;
+    fn set_virtual(&mut self, range: Range<usize>) -> Result<(), ParseErrorMsg> {
+        Err(ParseErrorMsg::new(
+            "Systems cannot be virtual".to_string(),
+            Some(range),
+            "Remove the virtual keyword".to_string(),
+        ))
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum SystemBody {
     Mod(CascadeString),
     Config(LetBinding),
@@ -669,12 +676,13 @@ mod tests {
 
     #[test]
     fn set_module_fields() {
-        let mut fields = Vec::new();
-        fields.push((CascadeString::from("domain"), CascadeString::from("a")));
-        fields.push((CascadeString::from("resource"), CascadeString::from("b")));
-        fields.push((CascadeString::from("module"), CascadeString::from("x")));
-        fields.push((CascadeString::from("module"), CascadeString::from("y")));
-        fields.push((CascadeString::from("module"), CascadeString::from("z")));
+        let fields = vec![
+            (CascadeString::from("domain"), CascadeString::from("a")),
+            (CascadeString::from("resource"), CascadeString::from("b")),
+            (CascadeString::from("module"), CascadeString::from("x")),
+            (CascadeString::from("module"), CascadeString::from("y")),
+            (CascadeString::from("module"), CascadeString::from("z")),
+        ];
         let m = Module::new(CascadeString::from("module_name")).set_fields(fields);
         assert_eq!(m.domains.len(), 1);
         assert_eq!(m.resources.len(), 1);
@@ -688,16 +696,17 @@ mod tests {
 
     #[test]
     fn set_system_fields() {
-        let mut fields: Vec<SystemBody> = Vec::new();
-        fields.push(SystemBody::Mod(CascadeString::from("mod")));
-        fields.push(SystemBody::Config(LetBinding::new(
-            CascadeString::from("system_type"),
-            Argument::Var(CascadeString::from("standard")),
-        )));
-        fields.push(SystemBody::Config(LetBinding::new(
-            CascadeString::from("handle_unknown_perms"),
-            Argument::Var(CascadeString::from("allow")),
-        )));
+        let fields: Vec<SystemBody> = vec![
+            SystemBody::Mod(CascadeString::from("mod")),
+            SystemBody::Config(LetBinding::new(
+                CascadeString::from("system_type"),
+                Argument::Var(CascadeString::from("standard")),
+            )),
+            SystemBody::Config(LetBinding::new(
+                CascadeString::from("handle_unknown_perms"),
+                Argument::Var(CascadeString::from("allow")),
+            )),
+        ];
         let s = System::new(CascadeString::from("system_name")).set_fields(fields);
         assert_eq!(s.modules.len(), 1);
         assert_eq!(s.configurations.len(), 3);

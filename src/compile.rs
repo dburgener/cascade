@@ -600,10 +600,13 @@ pub fn validate_systems<'a, 'b>(
             Err(e) => errors.append(e),
         }
 
-        system_map.insert(
+        match system_map.insert(
             system.name.to_string(),
-            ValidatedSystem::new(system.name.clone(), system_modules, configs),
-        );
+            ValidatedSystem::new(system.name.clone(), system_modules, configs, file),
+        ) {
+            Ok(()) => {}
+            Err(e) => errors.append(e),
+        }
     }
     errors.into_result(())
 }

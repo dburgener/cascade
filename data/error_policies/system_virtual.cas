@@ -1,0 +1,7 @@
+virtual system name {
+    module mod;
+    let system_type = standard;
+    let handle_unknown_perms = allow;
+}
+
+module mod {}
