@@ -114,14 +114,21 @@ pub struct ParseError {
     pub file: SimpleFile<String, String>,
 }
 
-struct ParseErrorMsg {
+#[derive(Clone, Debug)]
+pub struct ParseErrorMsg {
     issue: String,
     range: Option<Range<usize>>,
     help: String,
 }
 
-impl From<LalrpopParseError<usize, Token<'_>, &str>> for ParseErrorMsg {
-    fn from(error: LalrpopParseError<usize, Token<'_>, &str>) -> Self {
+impl ParseErrorMsg {
+    pub fn new(issue: String, range: Option<Range<usize>>, help: String) -> Self {
+        ParseErrorMsg { issue, range, help }
+    }
+}
+
+impl From<LalrpopParseError<usize, Token<'_>, ParseErrorMsg>> for ParseErrorMsg {
+    fn from(error: LalrpopParseError<usize, Token<'_>, ParseErrorMsg>) -> Self {
         match error {
             LalrpopParseError::InvalidToken { location } => ParseErrorMsg {
                 issue: "Unknown character".into(),
@@ -161,7 +168,7 @@ impl From<LalrpopParseError<usize, Token<'_>, &str>> for ParseErrorMsg {
 
 impl ParseError {
     pub fn new(
-        error: LalrpopParseError<usize, Token<'_>, &str>,
+        error: LalrpopParseError<usize, Token<'_>, ParseErrorMsg>,
         file_name: String,
         policy: String,
     ) -> Self {

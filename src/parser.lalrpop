@@ -2,8 +2,14 @@
 // SPDX-License-Identifier: MIT
 use crate::ast::{CascadeString, Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, LetBinding, Virtualable, FuncCall, DeclaredArgument, Module, System, SystemBody};
 use lalrpop_util::ErrorRecovery;
+use lalrpop_util::ParseError;
+use crate::error::ParseErrorMsg;
 
-grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, &'static str>>);
+grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, ParseErrorMsg>>);
+
+extern {
+	type Error = ParseErrorMsg;
+}
 
 // http://lalrpop.github.io/lalrpop/tutorial/006_macros.html
 Comma<T>: Vec<T> = {
@@ -38,9 +44,13 @@ BaseExpr: Expression = {
 	// TODO: other keywords beside virtual?
 	<start: @L> <v: "virtual"?> <end: @R> <mut d: Decl> =>? {
 		if v.is_some() {
-			d.set_virtual();
+			match d.set_virtual(start..end) {
+				Ok(()) => (),
+				Err(e) => return Err(ParseError::User {
+					error: e})
+			}
 		}
-		Expression::Decl(d)
+		Ok(Expression::Decl(d))
 	},
 	<Stmt> => Expression::Stmt(<>),
 };

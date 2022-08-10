@@ -18,7 +18,7 @@ mod sexp_internal;
 use std::collections::BTreeSet;
 
 use crate::ast::{Policy, PolicyFile};
-use crate::error::CascadeErrors;
+use crate::error::{CascadeErrors, ParseErrorMsg};
 use crate::internal_rep::{FunctionMap, ModuleMap, SystemMap};
 
 use codespan_reporting::files::SimpleFile;
@@ -194,10 +194,9 @@ pub fn compile_system_policy(input_files: Vec<&str>) -> Result<String, error::Ca
     errors.into_result(generate_cil(cil_tree))
 }
 
-fn parse_policy<'a>(
-    policy: &'a str,
-) -> Result<Box<Policy>, Vec<LalrpopParseError<usize, lalrpop_util::lexer::Token<'a>, &'static str>>>
-{
+fn parse_policy(
+    policy: &str,
+) -> Result<Box<Policy>, Vec<LalrpopParseError<usize, lalrpop_util::lexer::Token, ParseErrorMsg>>> {
     let mut errors = Vec::new();
     // TODO: Probably should only construct once
     // Why though?
@@ -205,7 +204,7 @@ fn parse_policy<'a>(
     // errors is a vec of ErrorRecovery.  ErrorRecovery is a struct wrapping a ParseError
     // and a sequence of discarded characters.  We don't need those characters, so we just
     // remove the wrapping.
-    let mut parse_errors: Vec<LalrpopParseError<usize, lalrpop_util::lexer::Token, &str>> =
+    let mut parse_errors: Vec<LalrpopParseError<usize, lalrpop_util::lexer::Token, ParseErrorMsg>> =
         errors.iter().map(|e| e.error.clone()).collect();
     match parse_res {
         Ok(p) => {
@@ -747,16 +746,6 @@ mod tests {
     #[test]
     fn module_cycle_error() {
         error_policy_test!("module_cycle.cas", 1, ErrorItem::Compile(_));
-    }
-
-    #[test]
-    fn extend_without_declaration_error() {
-        error_policy_test!("extend_no_decl.cas", 1, ErrorItem::Compile(_));
-    }
-
-    #[test]
-    fn extend_double_declaration_error() {
-        error_policy_test!("extend_double_decl.cas", 1, ErrorItem::Compile(_));
     }
 
     #[test]
