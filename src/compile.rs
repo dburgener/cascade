@@ -239,7 +239,7 @@ pub fn get_global_bindings(
                 }
             };
             if variant == "perm" {
-                classlist.insert_perm_set(&l.name.to_string(), bound_type.get_contents_as_vec())
+                classlist.insert_perm_set(l.name.as_ref(), bound_type.get_contents_as_vec())
             } else {
                 let new_type = TypeInfo::new_bound_type(
                     l.name.clone(),
@@ -270,7 +270,7 @@ pub fn build_func_map<'a>(
         };
         match d {
             Declaration::Type(t) => {
-                let type_being_parsed = match types.get(&t.name.to_string()) {
+                let type_being_parsed = match types.get(t.name.as_ref()) {
                     Some(t) => t,
                     None => return Err(ErrorItem::Internal(InternalError::new()).into()),
                 };
@@ -875,7 +875,7 @@ pub fn apply_associate_annotations<'a>(
         .map(|(k, v)| {
             // TODO: Avoid cloning all expressions.
             let mut new_domain = types
-                .get(&k.to_string())
+                .get(k.as_ref())
                 .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
                 .decl
                 .as_ref()
@@ -1018,7 +1018,7 @@ fn do_rules_pass<'a>(
                 }
             }
             Expression::Decl(Declaration::Type(t)) => {
-                let type_being_parsed = match types.get(&t.name.to_string()) {
+                let type_being_parsed = match types.get(t.name.as_ref()) {
                     Some(t) => t,
                     None => return Err(ErrorItem::Internal(InternalError::new()).into()),
                 };

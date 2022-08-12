@@ -1256,10 +1256,10 @@ impl From<&DomtransRule<'_>> for sexp::Sexp {
     fn from(d: &DomtransRule) -> Self {
         list(&[
             atom_s("typetransition"),
-            atom_s(&d.source.name.to_string()),
-            atom_s(&d.executable.name.to_string()),
+            atom_s(d.source.name.as_ref()),
+            atom_s(d.executable.name.as_ref()),
             atom_s("process"),
-            atom_s(&d.target.name.to_string()),
+            atom_s(d.target.name.as_ref()),
         ])
     }
 }
@@ -1611,9 +1611,9 @@ impl TryFrom<&FunctionInfo<'_>> for sexp::Sexp {
                 for statement in statements {
                     match statement {
                         ValidatedStatement::Call(c) => macro_cil.push(Sexp::from(&**c)),
-                        ValidatedStatement::AvRule(a) => macro_cil.push(Sexp::from(&*a)),
-                        ValidatedStatement::FcRule(f) => macro_cil.push(Sexp::from(&*f)),
-                        ValidatedStatement::DomtransRule(d) => macro_cil.push(Sexp::from(&*d)),
+                        ValidatedStatement::AvRule(a) => macro_cil.push(Sexp::from(a)),
+                        ValidatedStatement::FcRule(f) => macro_cil.push(Sexp::from(f)),
+                        ValidatedStatement::DomtransRule(d) => macro_cil.push(Sexp::from(d)),
                     }
                 }
             }
@@ -1636,7 +1636,7 @@ impl<'a> FunctionArgument<'a> {
         types: &'a TypeMap,
         file: Option<&SimpleFile<String, String>>,
     ) -> Result<Self, ErrorItem> {
-        let param_type = match types.get(&declared_arg.param_type.to_string()) {
+        let param_type = match types.get(declared_arg.param_type.as_ref()) {
             Some(ti) => ti,
             None => {
                 return Err(ErrorItem::make_compile_or_internal_error(
@@ -2276,7 +2276,7 @@ fn validate_argument<'a>(
                     "This function requires a non-list value here",
                 )));
             }
-            let target_ti = match types.get(&target_argument.param_type.name.to_string()) {
+            let target_ti = match types.get(target_argument.param_type.name.as_ref()) {
                 Some(t) => t,
                 None => return Err(InternalError::new().into()),
             };
