@@ -113,8 +113,7 @@ Stmt: Statement = {
 }
 
 StmtBody: Statement = {
-	<c:TypeName> "." <n:NameDecl> "(" <a:Comma<Arg>> ")" => Statement::Call(Box::new(FuncCall::new(Some(c), n, a))),
-	<n:Symbol> "(" <a:Comma<Arg>> ")" => Statement::Call(Box::new(FuncCall::new(None, n, a))),
+	<c:(<TypeName> ".")?> <n:NameDecl> "(" <a:Comma<Arg>> ")" => Statement::Call(Box::new(FuncCall::new(c, n, a))),
 	<l:LetBind> => Statement::LetBinding(Box::new(<>)),
 }
 
