@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
-use crate::ast::{CascadeString, Policy, Declaration, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, LetBinding, Virtualable, FuncCall, DeclaredArgument, Module, System, SystemBody};
+use crate::ast::{CascadeString, Policy, Declaration, DeclarationModifier, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, LetBinding, Virtualable, FuncCall, DeclaredArgument, Module, System, SystemBody};
 use lalrpop_util::ErrorRecovery;
 use lalrpop_util::ParseError;
 use crate::error::ParseErrorMsg;
@@ -41,19 +41,27 @@ pub Expr: Expression = {
 }
 
 BaseExpr: Expression = {
-	// TODO: other keywords beside virtual?
-	<start: @L> <v: "virtual"?> <end: @R> <mut d: Decl> =>? {
-		if v.is_some() {
-			match d.set_virtual(start..end) {
-				Ok(()) => (),
-				Err(e) => return Err(ParseError::User {
-					error: e})
+	<m: DeclModifier?> <mut d: Decl> =>? {
+		match m {
+			Some(DeclarationModifier::Virtual(range)) => {
+				match d.set_virtual(range) {
+					Ok(()) => (),
+					Err(e) => return Err(ParseError::User {
+						error: e})
+				}
 			}
+			Some(DeclarationModifier::Trait) => { todo!() }
+			None => ()
 		}
 		Ok(Expression::Decl(d))
 	},
 	<Stmt> => Expression::Stmt(<>),
-};
+}
+
+DeclModifier: DeclarationModifier = {
+	<start: @L> <v: "virtual"> <end: @R> => DeclarationModifier::Virtual(start..end),
+	<start: @L> <t: "trait"> <end: @R> => DeclarationModifier::Trait,
+}
 
 Decl: Declaration = {
 	TypeDecl => Declaration::Type(<>),

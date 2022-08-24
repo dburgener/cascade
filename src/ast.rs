@@ -191,6 +191,11 @@ impl Expression {
     }
 }
 
+pub enum DeclarationModifier {
+    Virtual(Range<usize>),
+    Trait
+}
+
 pub trait Virtualable {
     fn set_virtual(&mut self, range: Range<usize>) -> Result<(), ParseErrorMsg>;
 }
