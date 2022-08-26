@@ -165,6 +165,7 @@ pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
         name: CascadeString::from("kernel_sid"),
         inherits: vec![CascadeString::from(constants::DOMAIN)],
         is_virtual: false,
+        is_trait: false,
         list_coercion: false,
         declaration_file: None,
         annotations: BTreeSet::new(),
@@ -176,6 +177,7 @@ pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
         name: CascadeString::from("security_sid"),
         inherits: vec![CascadeString::from(constants::RESOURCE)],
         is_virtual: false,
+        is_trait: false,
         list_coercion: false,
         declaration_file: None,
         annotations: BTreeSet::new(),
@@ -187,6 +189,7 @@ pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
         name: CascadeString::from("unlabeled_sid"),
         inherits: vec![CascadeString::from(constants::RESOURCE)],
         is_virtual: false,
+        is_trait: false,
         list_coercion: false,
         declaration_file: None,
         annotations: BTreeSet::new(),
@@ -1390,6 +1393,11 @@ fn get_rules_vec_for_type(ti: &TypeInfo, s: sexp::Sexp, type_map: &TypeMap) -> V
     }
 
     for i in &ti.inherits {
+        if let Some(t) = type_map.get(i.as_ref()) {
+            if t.is_trait() {
+                continue;
+            }
+        }
         ret.push(list(&[
             atom_s("typeattributeset"),
             atom_s(i.get_cil_name().as_ref()),
