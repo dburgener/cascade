@@ -193,6 +193,7 @@ pub struct TypeInfo {
     pub name: CascadeString,
     pub inherits: Vec<CascadeString>,
     pub is_virtual: bool,
+    pub is_trait: bool,
     pub list_coercion: bool, // Automatically transform single instances of this type to a single element list
     pub declaration_file: Option<SimpleFile<String, String>>, // Built in types have no file
     pub annotations: BTreeSet<AnnotationInfo>,
@@ -251,6 +252,7 @@ impl TypeInfo {
             name: td.name.clone(),
             inherits: td.inherits.clone(),
             is_virtual: td.is_virtual,
+            is_trait: td.is_trait,
             // TODO: Use AnnotationInfo::MakeList instead
             list_coercion: td.annotations.has_annotation("makelist"),
             declaration_file: Some(file.clone()), // TODO: Turn into reference
@@ -271,6 +273,7 @@ impl TypeInfo {
             name,
             inherits: vec![variant.into()], // Does this need to somehow grab the bound parents? Does this work for the single case?
             is_virtual: true,               // Maybe?
+            is_trait: false,                // TODO: Allow bound traits?
             list_coercion: annotations.has_annotation("makelist"),
             declaration_file: Some(file.clone()),
             annotations: get_type_annotations(file, annotations)?,
@@ -284,6 +287,7 @@ impl TypeInfo {
             name: CascadeString::from(name),
             inherits: Vec::new(),
             is_virtual: true,
+            is_trait: false,
             list_coercion: makelist,
             declaration_file: None,
             annotations: BTreeSet::new(),
@@ -357,6 +361,10 @@ impl TypeInfo {
 
     pub fn is_domain(&self, types: &TypeMap) -> bool {
         self.is_type_by_name(types, constants::DOMAIN)
+    }
+
+    pub fn is_trait(&self) -> bool {
+        self.is_trait
     }
 
     // All types must inherit from some built in.  Get one for this type.

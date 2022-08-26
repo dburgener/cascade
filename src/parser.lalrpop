@@ -50,7 +50,13 @@ BaseExpr: Expression = {
 						error: e})
 				}
 			}
-			Some(DeclarationModifier::Trait) => { todo!() }
+			Some(DeclarationModifier::Trait(range)) => {
+				match d.set_trait(range) {
+					Ok(()) => (),
+					Err(e) => return Err(ParseError::User {
+						error: e})
+				}
+			}
 			None => ()
 		}
 		Ok(Expression::Decl(d))
@@ -60,7 +66,7 @@ BaseExpr: Expression = {
 
 DeclModifier: DeclarationModifier = {
 	<start: @L> <v: "virtual"> <end: @R> => DeclarationModifier::Virtual(start..end),
-	<start: @L> <t: "trait"> <end: @R> => DeclarationModifier::Trait,
+	<start: @L> <t: "trait"> <end: @R> => DeclarationModifier::Trait(start..end),
 }
 
 Decl: Declaration = {

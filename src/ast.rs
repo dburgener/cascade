@@ -193,11 +193,12 @@ impl Expression {
 
 pub enum DeclarationModifier {
     Virtual(Range<usize>),
-    Trait
+    Trait(Range<usize>),
 }
 
 pub trait Virtualable {
     fn set_virtual(&mut self, range: Range<usize>) -> Result<(), ParseErrorMsg>;
+    fn set_trait(&mut self, range: Range<usize>) -> Result<(), ParseErrorMsg>;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -215,6 +216,28 @@ impl Virtualable for Declaration {
             Declaration::Func(f) => f.set_virtual(range),
             Declaration::Mod(m) => m.set_virtual(range),
             Declaration::System(s) => s.set_virtual(range),
+        }
+    }
+
+    // trait implies virtual.  We set trait first for the better error message
+    fn set_trait(&mut self, range: Range<usize>) -> Result<(), ParseErrorMsg> {
+        match self {
+            Declaration::Type(t) => {
+                t.set_trait(range.clone())?;
+                t.set_virtual(range)
+            }
+            Declaration::Func(f) => {
+                f.set_trait(range.clone())?;
+                f.set_virtual(range)
+            }
+            Declaration::Mod(m) => {
+                m.set_trait(range.clone())?;
+                m.set_virtual(range)
+            }
+            Declaration::System(s) => {
+                s.set_trait(range.clone())?;
+                s.set_virtual(range)
+            }
         }
     }
 }
@@ -235,6 +258,7 @@ pub struct TypeDecl {
     pub name: CascadeString,
     pub inherits: Vec<CascadeString>,
     pub is_virtual: bool,
+    pub is_trait: bool,
     pub is_extension: bool,
     pub expressions: Vec<Expression>,
     pub annotations: Annotations,
@@ -250,6 +274,7 @@ impl TypeDecl {
             name,
             inherits,
             is_virtual: false,
+            is_trait: false,
             is_extension: false,
             expressions: exprs,
             annotations: Annotations::new(),
@@ -277,6 +302,11 @@ impl PartialEq for TypeDecl {
 impl Virtualable for TypeDecl {
     fn set_virtual(&mut self, _range: Range<usize>) -> Result<(), ParseErrorMsg> {
         self.is_virtual = true;
+        Ok(())
+    }
+
+    fn set_trait(&mut self, _range: Range<usize>) -> Result<(), ParseErrorMsg> {
+        self.is_trait = true;
         Ok(())
     }
 }
@@ -323,6 +353,14 @@ impl Virtualable for FuncDecl {
     fn set_virtual(&mut self, _range: Range<usize>) -> Result<(), ParseErrorMsg> {
         self.is_virtual = true;
         Ok(())
+    }
+
+    fn set_trait(&mut self, range: Range<usize>) -> Result<(), ParseErrorMsg> {
+        Err(ParseErrorMsg::new(
+            "The trait keyword cannot be applied to functions".to_string(),
+            Some(range),
+            "Remove the trait keyword".to_string(),
+        ))
     }
 }
 
@@ -571,6 +609,14 @@ impl Virtualable for Module {
         self.is_virtual = true;
         Ok(())
     }
+
+    fn set_trait(&mut self, range: Range<usize>) -> Result<(), ParseErrorMsg> {
+        Err(ParseErrorMsg::new(
+            "The trait keyword cannot be applied to modules".to_string(),
+            Some(range),
+            "Remove the trait keyword".to_string(),
+        ))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -622,6 +668,14 @@ impl Virtualable for System {
             "Systems cannot be virtual".to_string(),
             Some(range),
             "Remove the virtual keyword".to_string(),
+        ))
+    }
+
+    fn set_trait(&mut self, range: Range<usize>) -> Result<(), ParseErrorMsg> {
+        Err(ParseErrorMsg::new(
+            "The trait keyword cannot be applied to systems".to_string(),
+            Some(range),
+            "Remove the trait keyword".to_string(),
         ))
     }
 }
