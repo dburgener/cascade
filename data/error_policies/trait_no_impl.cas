@@ -1,0 +1,7 @@
+trait resource my_trait {
+	fn write(domain source) {
+		allow(source, this, file, write);
+	}
+}
+
+resource foo inherits my_trait {}

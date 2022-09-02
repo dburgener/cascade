@@ -988,6 +988,11 @@ mod tests {
     }
 
     #[test]
+    fn trait_no_impl() {
+        error_policy_test!("trait_no_impl.cas", 1, ErrorItem::Compile(_));
+    }
+
+    #[test]
     fn associate_test() {
         valid_policy_test(
             "associate.cas",
