@@ -331,8 +331,8 @@ pub fn validate_functions<'a, 'b>(
             Ok(_) => (),
             Err(e) => errors.append(e),
         }
-        if function.is_virtual {
-            if let Some(func_class) = function.class {
+        if let Some(func_class) = function.class {
+            if function.is_virtual || func_class.is_trait() {
                 classes_to_required_functions
                     .entry(&func_class.name)
                     .or_insert(BTreeSet::new())
