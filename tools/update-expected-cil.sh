@@ -14,7 +14,7 @@ for f in data/policies/*.cas; do
 		mv out.cil "data/expected_cil/$(basename -- "${f%%.cas}").cil"
 		printf '\r[+]\n'
 	else
-		rm out.cil
+		rm out.cil 2>/dev/null || true
 		printf '\r[-]\n'
 	fi
 done
