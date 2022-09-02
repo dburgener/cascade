@@ -414,6 +414,12 @@ callers have been updated.
 resource foo {}
 ```
 
+## Traits
+
+A trait block defines a collection of functions that children must implement.
+It may also provide default implementations of those functions for children to
+derive.
+
 ## Comments
 
 Comments are a way for a policy author to provide explanatory notes for human

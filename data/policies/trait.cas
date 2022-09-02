@@ -1,0 +1,17 @@
+trait resource my_trait {
+	fn write(domain source) {
+		allow(source, this, file, write);
+	}
+}
+
+resource foo inherits my_trait {
+	fn write(domain source) {
+		allow(source, this, dir, write);
+	}
+}
+
+domain bar {
+	foo.write(this);
+}
+
+// TODO: Once derive is implemented, add a test for derive

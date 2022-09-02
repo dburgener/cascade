@@ -784,6 +784,13 @@ mod tests {
     }
 
     #[test]
+    fn trait_test() {
+        // TODO: The "this" keyword is broken without other PRs.  Flesh out expected results once
+        // that and derive have merged
+        valid_policy_test("trait.cas", &[], &[])
+    }
+
+    #[test]
     fn cycle_error_test() {
         error_policy_test!("cycle.cas", 2, ErrorItem::Compile(_));
     }
