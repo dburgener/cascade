@@ -355,7 +355,7 @@ pub fn validate_functions<'a>(
                 .get(&parent)
                 .unwrap_or(&BTreeSet::new())
             {
-                if !setype.defines_function(required_function_name, functions_copy) {
+                if !setype.defines_function(required_function_name, &functions) {
                     errors.append(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
                                 &format!("{} does not define a function named {}", setype.name, required_function_name),
                                 setype.declaration_file.as_ref(),
