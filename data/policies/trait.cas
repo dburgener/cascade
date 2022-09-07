@@ -10,8 +10,9 @@ resource foo inherits my_trait {
 	}
 }
 
+@derive([write], strategy=union)
+resource baz inherits my_trait {}
+
 domain bar {
 	foo.write(this);
 }
-
-// TODO: Once derive is implemented, add a test for derive

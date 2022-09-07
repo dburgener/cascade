@@ -796,7 +796,10 @@ mod tests {
     fn trait_test() {
         // TODO: The "this" keyword is broken without other PRs.  Flesh out expected results once
         // that and derive have merged
-        valid_policy_test("trait.cas", &[], &[])
+        valid_policy_test("trait.cas", &["(macro baz-write ((type this) (type source)) (allow source this (file (write))))",
+        "(macro foo-write ((type this) (type source)) (allow source this (dir (write))))",
+        "(macro my_trait-write ((type this) (type source)) (allow source this (file (write))))",],
+        &["(macro foo-write ((type this) (type source)) (allow source this (file (write))))"])
     }
 
     #[test]
