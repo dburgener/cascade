@@ -122,6 +122,7 @@
 (allow domain foo (file (read)))
 (filecon "/bin" file (system_u object_r foo ((s0) (s0))))
 (filecon "/bin" dir (system_u object_r foo ((s0) (s0))))
+(filecon "/etc" any (system_u object_r foo ((s0) (s0))))
 (sid kernel)
 (sidcontext kernel (system_u system_r kernel_sid ((s0) (s0))))
 (sid security)

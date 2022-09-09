@@ -965,6 +965,10 @@ impl<'a> ClassList<'a> {
     }
 
     pub fn is_class(&self, class: &str) -> bool {
+        // "any" is a special keyword to represent any class
+        if class == "any" {
+            return true;
+        }
         self.classes.get(class).is_some()
     }
 
@@ -1141,7 +1145,7 @@ impl FromStr for FileType {
             "block_dev" => Ok(FileType::BlockDev),
             "socket" => Ok(FileType::Socket),
             "pipe" => Ok(FileType::Pipe),
-            "" => Ok(FileType::Any),
+            "any" => Ok(FileType::Any),
             _ => Err(()),
         }
     }
@@ -2612,7 +2616,7 @@ mod tests {
     fn file_type_from_string_test() {
         let file_type = "file".parse::<FileType>().unwrap();
         assert!(matches!(file_type, FileType::File));
-        let file_type = "".parse::<FileType>().unwrap();
+        let file_type = "any".parse::<FileType>().unwrap();
         assert!(matches!(file_type, FileType::Any));
 
         assert!("bad_type".parse::<FileType>().is_err());

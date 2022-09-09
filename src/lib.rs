@@ -526,7 +526,11 @@ mod tests {
     fn filecon_test() {
         valid_policy_test(
             "filecon.cas",
-            &["(filecon \"/bin\" file (", "(filecon \"/bin\" dir ("],
+            &[
+                "(filecon \"/bin\" file (",
+                "(filecon \"/bin\" dir (",
+                "(filecon \"/etc\" any (",
+            ],
             &[],
         );
     }
