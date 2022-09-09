@@ -1,5 +1,6 @@
 resource foo {
 	file_context("/bin", [file dir], foo);
+	file_context("/etc", [any], this);
 	// Policies must include at least one av rule
 	allow(domain, foo, file, [read]);
 }
