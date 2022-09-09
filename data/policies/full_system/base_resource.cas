@@ -1,0 +1,17 @@
+let common_file_perms = [ ioctl read write create getattr setattr lock relabelfrom relabelto append map unlink link rename execute quotaon mounton audit_access open execmod watch watch_mount watch_sb watch_with_perm watch_reads ];
+let all_dir_perms = [ common_file_perms add_name remove_name reparent search rmdir ];
+let all_file_perms = [ common_file_perms execute_no_trans entrypoint ];
+
+virtual resource file_like_objects {
+	fn unconfined_access(domain source) {
+		allow(source, this, file, all_file_perms);
+		allow(source, this, dir, all_dir_perms);
+		allow(source, this, lnk_file, common_file_perms);
+		allow(source, this, blk_file, common_file_perms);
+		allow(source, this, fifo_file, common_file_perms);
+		allow(source, this, chr_file, common_file_perms);
+		allow(source, this, sock_file, common_file_perms);
+		allow(source, this, service, [start stop status reload enable disable]);
+		allow(source, this, filesystem, *);
+	}
+}

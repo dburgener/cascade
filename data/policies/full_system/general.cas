@@ -1,0 +1,7 @@
+@derive([domtrans], parents=*)
+domain general inherits unconfined {}
+
+@derive([unconfined_access], parents=*)
+resource init_exec inherits file_like_objects {
+	file_context("/usr/lib/systemd/systemd", [file], this);
+}

@@ -1,0 +1,23 @@
+machine cascade {
+	module unconfined;
+	module kernel;
+	module resources;
+	let machine_type = standard;
+	let handle_unknown_perms = allow;
+}
+
+module unconfined {
+	domain unconfined;
+	domain general;
+	resource init_exec;
+}
+
+module kernel {
+	domain kernel_sid;
+}
+
+module resources {
+	resource file_like_objects;
+	resource all_files;
+	resource ssh_keys;
+}

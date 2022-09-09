@@ -1,0 +1,79 @@
+virtual domain unconfined {
+	all_files.unconfined_access(this);
+	init_exec.unconfined_access(this);
+
+	allow(this, unlabeled_sid, dir, [ read getattr search mounton ]);
+	allow(this, ssh_keys, file, [ getattr ]);
+
+	allow(this, domain:resource, file, *);
+	allow(this, domain:resource, dir, *);
+	allow(this, domain:resource, lnk_file, *);
+	allow(this, domain:resource, fifo_file, *);
+
+	// TODO: support self keyword
+	//allow(this, self, dbus, [acquire_svc send_msg]);
+	allow(this, this: resource, dbus, [acquire_svc send_msg]);
+	allow(this, this: resource, dbus, *);
+	//allow(this, this: resource, security, *);
+	allow(this, security_sid, security, *);
+	allow(this, domain: resource, process, *);
+	allow(this, domain: resource, system, *);
+	allow(this, this: resource, capability, *);
+	allow(this, this: resource, cap_userns, *);
+	allow(this, this: resource, socket, *);
+	allow(this, this: resource, tcp_socket, *);
+	allow(this, this: resource, udp_socket, *);
+	allow(this, this: resource, node_socket, *);
+	allow(this, this: resource, rawip_socket, *);
+	allow(this, this: resource, netlink_socket, *);
+	allow(this, this: resource, netlink_route_socket, *);
+	allow(this, this: resource, netlink_generic_socket, *);
+	allow(this, this: resource, netlink_netfilter_socket, *);
+	allow(this, this: resource, netlink_selinux_socket, *);
+	allow(this, domain: resource, netlink_audit_socket, *);
+	allow(this, this: resource, netlink_kobject_uevent_socket, *);
+	allow(this, this: resource, packet_socket, *);
+	allow(this, this: resource, key_socket, *);
+	allow(this, this: resource, unix_stream_socket, *);
+	allow(this, this: resource, unix_dgram_socket, *);
+	allow(this, this: resource, sem, *);
+	allow(this, this: resource, shm, *);
+	allow(this, this: resource, msg, *);
+	allow(this, this: resource, msgq, *);
+	allow(this, this: resource, bpf, *);
+	allow(this, domain: resource, key, *);
+
+	// X
+	allow(this, this:resource, x_application_data, *);
+	allow(this, all_files, x_client, *);
+	allow(this, this:resource, x_colormap, *);
+	allow(this, this:resource, x_cursor, *);
+	allow(this, this:resource, x_cursor, *);
+	allow(this, this:resource, x_drawable, *);
+	allow(this, all_files, x_event, *);
+	allow(this, all_files, x_extension, *);
+	allow(this, this:resource, x_font, *);
+	allow(this, this:resource, x_gc, *);
+	allow(this, this:resource, x_keyboard, *);
+	allow(this, this:resource, x_pointer, *);
+	allow(this, all_files, x_property, *);
+	allow(this, this:resource, x_resource, *);
+	allow(this, this:resource, x_screen, *);
+	allow(this, all_files, x_selection, *);
+	allow(this, this:resource, x_server, *);
+	allow(this, all_files, x_synthetic_event, *);
+
+	// Port labeling is not yet implemented
+	allow(this, unlabeled_sid, udp_socket, *);
+	allow(this, unlabeled_sid, tcp_socket, *);
+	allow(this, unlabeled_sid, association, *);
+
+	kernel_sid.kernel_ipc(this);
+
+	fn domtrans(domain source) {
+		domain_transition(source, init_exec, this);
+		allow(source, init_exec, file, [ getattr read execute open ]);
+		allow(source, this: resource, process, [ dyntransition signal transition ]);
+		allow(this, source: resource, fd, [ use ]);
+	}
+}

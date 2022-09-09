@@ -1,0 +1,5 @@
+client * system_u:object_r:all_files
+extension * system_u:object_r:all_files
+selection * system_u:object_r:all_files
+property * system_u:object_r:all_files
+event * system_u:object_r:all_files
