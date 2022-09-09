@@ -1,0 +1,42 @@
+@derive([unconfined_access], parents=*)
+resource all_files inherits file_like_objects {
+	file_context("/.*", [any], this);
+
+	allow(this: domain, this, filesystem, [associate]);
+
+	// Filesystem labels for filesystems on a default Fedora install
+	// If you are using this policy on a different system, you may need
+	// to add labels for any other used filesystems here
+	fs_context(this, "proc", genfscon, "/");
+	fs_context(this, "selinuxfs", genfscon, "/");
+	fs_context(this, "securityfs", genfscon, "/");
+	fs_context(this, "sysfs", genfscon, "/");
+	fs_context(this, "bpf", genfscon, "/");
+	fs_context(this, "cgroup2", genfscon, "/");
+	fs_context(this, "pstore", genfscon, "/");
+	fs_context(this, "debugfs", genfscon, "/");
+	fs_context(this, "tracefs", genfscon, "/");
+	fs_context(this, "autofs", genfscon, "/");
+	fs_context(this, "configfs", genfscon, "/");
+	fs_context(this, "rpc_pipefs", genfscon, "/");
+	fs_context(this, "fuse", genfscon, "/");
+	fs_context(this, "fusectl", genfscon, "/");
+	fs_context(this, "vboxsf", genfscon, "/");
+	fs_context(this, "nsfs", genfscon, "/");
+	fs_context(this, "btrfs", xattr);
+	fs_context(this, "ext4", xattr);
+	fs_context(this, "devtmpfs", trans);
+	fs_context(this, "tmpfs", trans);
+	fs_context(this, "hugetlbfs", trans);
+	fs_context(this, "devpts", trans);
+	fs_context(this, "mqueue", trans);
+	fs_context(this, "pipefs", task);
+	fs_context(this, "sockfs", task);
+}
+
+extend unlabeled_sid inherits file_like_objects {}
+
+resource ssh_keys inherits file_like_objects {
+	file_context("/home/dburgener/.ssh/id_rsa", [file], this);
+	allow(this: domain, all_files, filesystem, [associate]);
+}
