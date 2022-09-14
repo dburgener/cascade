@@ -329,6 +329,8 @@ mod tests {
     use std::process::Command;
     use std::str;
 
+    use walkdir::WalkDir;
+
     use super::*;
 
     const POLICIES_DIR: &str = "data/policies/";
@@ -865,6 +867,30 @@ mod tests {
         "(call associates-to_associate-some_associated_call",
         "(macro some_child-domtrans ((type this) (type source) (type exec)) (typetransition source exec process this))"],
         &[]);
+    }
+
+    // This is just a quick compile test.  The true purpose of these files is to actually boot in
+    // enforcing mode on a VM.  That is outside the scope of this test, but compile testing is a
+    // minimum first step and reasonable to do here.
+    #[test]
+    fn full_system_compile_test() {
+        let full_system_path = [POLICIES_DIR, "full_system"].concat();
+        let mut policy_files = Vec::new();
+
+        for entry in WalkDir::new(full_system_path) {
+            let entry = entry.unwrap();
+            if entry.file_type().is_file() && entry.path().extension().unwrap_or_default() == "cas"
+            {
+                policy_files.push(entry.path().display().to_string());
+            }
+        }
+
+        let policy_files = policy_files.iter().map(|s| s as &str).collect();
+
+        match compile_combined(policy_files) {
+            Ok(_) => (),
+            Err(e) => panic!("Full system compilation failed with {}", e),
+        }
     }
 
     #[test]
