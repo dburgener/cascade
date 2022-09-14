@@ -676,14 +676,19 @@ mod tests {
         let mut policy_files_reversed = policy_files.clone();
         policy_files_reversed.reverse();
 
+        let mut policies = Vec::new();
+
         for files in [policy_files, policy_files_reversed] {
             match compile_combined(files) {
                 Ok(p) => {
                     assert!(p.contains("(call foo-read"));
+                    policies.push(p);
                 }
                 Err(e) => panic!("Multi file compilation failed with {}", e),
             }
         }
+
+        assert_eq!(policies[0], policies[1]);
     }
 
     #[test]
