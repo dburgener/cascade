@@ -140,6 +140,12 @@ pub fn make_classlist() -> ClassList<'static> {
             "signull",
             "signal",
             "ptrace",
+            "getsched",
+            "setsched",
+            "getsession",
+            "getpgid",
+            "setpgid",
+            "getcap",
             "setcap",
             "share",
             "getattr",
@@ -151,6 +157,10 @@ pub fn make_classlist() -> ClassList<'static> {
             "rlimitinh",
             "dyntransition",
             "setcurrent",
+            "execmem",
+            "execstack",
+            "execheap",
+            "setkeycreate",
             "setsockcreate",
             "getrlimit",
         ],
@@ -256,7 +266,7 @@ pub fn make_classlist() -> ClassList<'static> {
         "rawip_socket",
         [COMMON_FILE_SOCK_PERMS, COMMON_SOCK_PERMS, &["node_bind"]].concat(),
     );
-    classlist.add_class("node", vec!["recv_from", "sendto"]);
+    classlist.add_class("node", vec!["recvfrom", "sendto"]);
     classlist.add_class("netif", vec!["ingress", "egress"]);
     classlist.add_class(
         "netlink_socket",
