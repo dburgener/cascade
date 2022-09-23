@@ -951,12 +951,10 @@ fn create_synthetic_resource(
         .iter_mut()
         .for_each(|e| e.set_class_name_if_decl(res_name.clone()));
 
-    dup_res_decl.expressions = dup_res_decl
+    dup_res_decl
         .expressions
-        .into_iter()
         // If dup_res_decl is concrete, do not inherit virtual functions
-        .filter(|e| dup_res_is_virtual || !e.is_virtual_function())
-        .collect();
+        .retain(|e| dup_res_is_virtual || !e.is_virtual_function());
     if !global_exprs.insert(Expression::Decl(Declaration::Type(Box::new(dup_res_decl)))) {
         return Err(InternalError::new().into());
     }

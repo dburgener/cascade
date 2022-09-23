@@ -371,14 +371,10 @@ impl TypeInfo {
     // It's possible to inherit from multiple built-ins, so order matters here.  We return the
     // first type in order of preference.
     pub fn get_built_in_variant(&self, types: &TypeMap) -> Option<&str> {
-        for t in constants::BUILT_IN_TYPES {
-            if self.is_type_by_name(types, t) {
-                return Some(t);
-            }
-        }
-
-        // I don't think this should be logically possible
-        None
+        constants::BUILT_IN_TYPES
+            .iter()
+            .find(|t| self.is_type_by_name(types, t))
+            .copied()
     }
 
     pub fn defines_function(&self, virtual_function_name: &str, functions: &FunctionMap) -> bool {
