@@ -177,6 +177,15 @@ pub fn make_classlist() -> ClassList<'static> {
             "syslog_console",
             "module_request",
             "module_load",
+            // systemd permissions
+            "halt",
+            "reboot",
+            "status",
+            "start",
+            "stop",
+            "enable",
+            "disable",
+            "reload",
         ],
     );
 
@@ -569,6 +578,13 @@ pub fn make_classlist() -> ClassList<'static> {
     classlist.add_class(
         "anon_inode",
         [COMMON_FILE_SOCK_PERMS, COMMON_FILE_PERMS].concat(),
+    );
+
+    //Userspace
+    classlist.add_class("dbus", vec!["acquire_svc", "send_msg"]);
+    classlist.add_class(
+        "service",
+        vec!["start", "stop", "status", "reload", "enable", "disable"],
     );
 
     classlist
