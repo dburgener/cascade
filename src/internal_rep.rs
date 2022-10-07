@@ -785,6 +785,41 @@ pub struct AvRule<'a> {
     pub perms: Vec<CascadeString>,
 }
 
+impl AvRule<'_> {
+    fn get_renamed_statement(&self, renames: &BTreeMap<String, String>) -> Self {
+        fn rename_cow<'a>(
+            cow_str: &CascadeString,
+            renames: &BTreeMap<String, String>,
+        ) -> Cow<'a, CascadeString> {
+            Cow::Owned(CascadeString::from(
+                renames
+                    .get::<str>(cow_str.as_ref())
+                    .unwrap_or(&cow_str.to_string())
+                    .clone(),
+            ))
+        }
+
+        AvRule {
+            av_rule_flavor: self.av_rule_flavor,
+            source: rename_cow(&self.source, renames),
+            target: rename_cow(&self.target, renames),
+            class: rename_cow(&self.class, renames),
+            perms: self
+                .perms
+                .iter()
+                .map(|p| {
+                    CascadeString::from(
+                        renames
+                            .get(&p.to_string())
+                            .unwrap_or(&p.to_string())
+                            .clone(),
+                    )
+                })
+                .collect(),
+        }
+    }
+}
+
 impl From<&AvRule<'_>> for sexp::Sexp {
     fn from(rule: &AvRule) -> sexp::Sexp {
         let mut ret = Vec::new();
@@ -846,6 +881,20 @@ impl<'a> Context<'a> {
             setype: t,
             mls_low: ml.unwrap_or(Cow::Borrowed(DEFAULT_MLS)),
             mls_high: mh.unwrap_or(Cow::Borrowed(DEFAULT_MLS)),
+        }
+    }
+
+    fn get_renamed_context(&self, renames: &BTreeMap<String, String>) -> Self {
+        fn rename_cow<'a>(cow_str: &str, renames: &BTreeMap<String, String>) -> Cow<'a, str> {
+            let new_str: &str = cow_str.borrow();
+            Cow::Owned(renames.get(new_str).unwrap_or(&new_str.to_string()).clone())
+        }
+        Context {
+            user: rename_cow(&self.user, renames),
+            role: rename_cow(&self.role, renames),
+            setype: rename_cow(&self.setype, renames),
+            mls_low: rename_cow(&self.mls_low, renames),
+            mls_high: rename_cow(&self.mls_high, renames),
         }
     }
 }
@@ -1308,7 +1357,7 @@ fn call_to_av_rule<'a>(
     Ok(av_rules.into_iter().collect())
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FileType {
     File,
     Directory,
@@ -1361,6 +1410,16 @@ pub struct FileContextRule<'a> {
     pub regex_string: String,
     pub file_type: FileType,
     pub context: Context<'a>,
+}
+
+impl FileContextRule<'_> {
+    fn get_renamed_statement(&self, renames: &BTreeMap<String, String>) -> Self {
+        FileContextRule {
+            regex_string: self.regex_string.clone(),
+            file_type: self.file_type,
+            context: self.context.get_renamed_context(renames),
+        }
+    }
 }
 
 impl From<&FileContextRule<'_>> for sexp::Sexp {
@@ -1780,6 +1839,8 @@ impl<'a> FunctionInfo<'a> {
         let mut derived_body = BTreeSet::new();
         // Becomes true if *any* parent has marked the call as associated
         let mut derived_is_associated_call = false;
+        let mut derived_arg_names: Vec<BTreeSet<String>> = Vec::new();
+
         for parent in derive_classes {
             // The parent may or may not have such a function implemented.
             // As long as at least one parent has it, that's fine
@@ -1796,7 +1857,14 @@ impl<'a> FunctionInfo<'a> {
             // are looking at, we save that prototype.  Otherwise, we compare to ensure they are
             // identical
             match first_parent {
-                None => first_parent = Some(parent_function),
+                None => {
+                    first_parent = Some(parent_function);
+                    derived_arg_names = parent_function
+                        .args
+                        .iter()
+                        .map(|a| BTreeSet::from([a.name.to_string()]))
+                        .collect();
+                }
                 Some(first_parent) => {
                     if parent_function.args != first_parent.args {
                         match (
@@ -1821,13 +1889,46 @@ impl<'a> FunctionInfo<'a> {
                             }
                         }
                     }
+                    for (i, a) in parent_function.args.iter().enumerate() {
+                        // Guaranteed to not overflow because:
+                        // 1. Derived_arg_names length == first_parent length
+                        // 2. parent_function.args == first_parent.args
+                        derived_arg_names[i].insert(a.name.to_string());
+                    }
                 }
             }
-
-            derived_body.append(&mut parent_function.body.clone().unwrap_or_default());
         }
 
-        let derived_args = match first_parent {
+        for parent in derive_classes {
+            let parent_function = match functions.get(&get_cil_name(Some(parent), name)) {
+                Some(f) => f,
+                None => continue,
+            };
+
+            let mut renames = BTreeMap::new();
+            for (i, a) in parent_function.args.iter().enumerate() {
+                renames.insert(
+                    a.name.clone(),
+                    derived_arg_names[i]
+                        .iter()
+                        .cloned()
+                        .collect::<Vec<String>>()
+                        .join("_"),
+                );
+            }
+
+            derived_body.append(
+                &mut parent_function
+                    .body
+                    .clone()
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|s| s.get_renamed_statement(&renames))
+                    .collect(),
+            )
+        }
+
+        let mut derived_args = match first_parent {
             Some(parent) => parent.args.clone(),
             None => {
                 return Err(CompileError::new(
@@ -1838,6 +1939,10 @@ impl<'a> FunctionInfo<'a> {
                 // TODO: A hint about the strategy might be useful
             }
         };
+
+        for (mut arg, name) in derived_args.iter_mut().zip(derived_arg_names.iter()) {
+            arg.name = name.iter().cloned().collect::<Vec<String>>().join("_");
+        }
 
         Ok(FunctionInfo {
             name: name.to_string(),
@@ -2117,6 +2222,23 @@ impl<'a> ValidatedStatement<'a> {
             }
         }
     }
+
+    fn get_renamed_statement(&self, renames: &BTreeMap<String, String>) -> Self {
+        match self {
+            ValidatedStatement::Call(c) => {
+                ValidatedStatement::Call(Box::new(c.get_renamed_call(renames)))
+            }
+            ValidatedStatement::AvRule(a) => {
+                ValidatedStatement::AvRule(a.get_renamed_statement(renames))
+            }
+            ValidatedStatement::FcRule(f) => {
+                ValidatedStatement::FcRule(f.get_renamed_statement(renames))
+            }
+            // DomtransRule is probably broken on derive anyways. It uses TypeInfos directly rather
+            // than strings.  This probably means that deriving a DomTrans using "this" is broken
+            ValidatedStatement::DomtransRule(_) => self.clone(),
+        }
+    }
 }
 
 impl From<&ValidatedStatement<'_>> for sexp::Sexp {
@@ -2195,6 +2317,19 @@ impl ValidatedCall {
         }
 
         Ok(ValidatedCall { cil_name, args })
+    }
+
+    fn get_renamed_call(&self, renames: &BTreeMap<String, String>) -> Self {
+        let new_args = self
+            .args
+            .iter()
+            .cloned()
+            .map(|a| renames.get(&a).unwrap_or(&a).to_string())
+            .collect();
+        ValidatedCall {
+            cil_name: self.cil_name.clone(),
+            args: new_args,
+        }
     }
 }
 
@@ -3126,5 +3261,36 @@ mod tests {
         assert!(matches!(file_type, FileType::Any));
 
         assert!("bad_type".parse::<FileType>().is_err());
+    }
+
+    #[test]
+    fn get_renamed_statement_test() {
+        let statement1 = ValidatedStatement::Call(Box::new(ValidatedCall {
+            cil_name: "foo".to_string(),
+            args: vec!["old_name".to_string(), "b".to_string()],
+        }));
+
+        let statement2 = ValidatedStatement::AvRule(AvRule {
+            av_rule_flavor: AvRuleFlavor::Allow,
+            source: Cow::Owned(CascadeString::from("foo")),
+            target: Cow::Owned(CascadeString::from("bar")),
+            class: Cow::Owned(CascadeString::from("old_name")),
+            perms: vec![CascadeString::from("read")],
+        });
+
+        let statement3 = ValidatedStatement::FcRule(FileContextRule {
+            regex_string: "/bin".to_string(),
+            file_type: FileType::SymLink,
+            context: Context::new(false, None, None, Cow::Borrowed("old_name"), None, None),
+        });
+
+        for statement in [statement1, statement2, statement3] {
+            let mut renames = BTreeMap::new();
+            renames.insert("old_name".to_string(), "new_name".to_string());
+            let renamed_statement = statement.get_renamed_statement(&renames);
+            let sexp = Sexp::from(&renamed_statement);
+            assert!(sexp.to_string().contains("new_name"));
+            assert!(!sexp.to_string().contains("old_name"));
+        }
     }
 }
