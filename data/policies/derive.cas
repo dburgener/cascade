@@ -42,6 +42,7 @@ domain some_domain {
 	strategy_union.read(this);
 	strategy_foo.read(this);
 	custom_define.read(this);
+	name_diff_child.diff_name(this);
 }
 
 @derive([some_associated_call], strategy=union)
@@ -49,3 +50,18 @@ virtual resource to_associate inherits foo, bar {}
 
 @associate([to_associate])
 domain associates {}
+
+virtual resource name_diff1 {
+	fn diff_name(domain a) {
+		allow(a, this, file, relabelfrom);
+	}
+}
+
+virtual resource name_diff2 {
+	fn diff_name(domain b) {
+		allow(b, this, file, relabelto);
+	}
+}
+
+@derive([diff_name], strategy=union)
+resource name_diff_child inherits name_diff1, name_diff2 {}
