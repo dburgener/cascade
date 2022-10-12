@@ -1837,7 +1837,6 @@ impl<'a> FunctionInfo<'a> {
     ) -> Result<FunctionInfo<'a>, CascadeErrors> {
         let mut first_parent = None;
         let mut derived_body = BTreeSet::new();
-        // Becomes true if *any* parent has marked the call as associated
         let mut derived_is_associated_call = false;
         let mut derived_arg_names: Vec<BTreeSet<String>> = Vec::new();
 
@@ -1848,10 +1847,6 @@ impl<'a> FunctionInfo<'a> {
                 Some(f) => f,
                 None => continue,
             };
-
-            if parent_function.is_associated_call {
-                derived_is_associated_call = true;
-            }
 
             // All parent functions must have the same prototype.  If this is the first function we
             // are looking at, we save that prototype.  Otherwise, we compare to ensure they are
@@ -1864,6 +1859,7 @@ impl<'a> FunctionInfo<'a> {
                         .iter()
                         .map(|a| BTreeSet::from([a.name.to_string()]))
                         .collect();
+                    derived_is_associated_call = parent_function.is_associated_call;
                 }
                 Some(first_parent) => {
                     if parent_function.args != first_parent.args {
@@ -1889,6 +1885,30 @@ impl<'a> FunctionInfo<'a> {
                             }
                         }
                     }
+                    if derived_is_associated_call != parent_function.is_associated_call {
+                        match (
+                            first_parent.get_declaration_range(),
+                            parent_function.get_declaration_range(),
+                        ) {
+                            (Some(first_range), Some(second_range)) => {
+                                return Err(CompileError::new(
+                                        &format!("In attempting to derive {}, parent functions do not have matching prototypes.", name),
+                                        first_parent.declaration_file,
+                                        Some(first_range),
+                                        "This parent is annotated with @associated_call...",
+                                        ).add_additional_message(
+                                            parent_function.declaration_file,
+                                            second_range,
+                                            "...but this parent is not").into());
+                            }
+                            (_, _) => {
+                                // TODO: One of the mismatched parent signatures is synthetic.
+                                // Output an appropriate error message
+                                todo!()
+                            }
+                        }
+                    }
+
                     for (i, a) in parent_function.args.iter().enumerate() {
                         // Guaranteed to not overflow because:
                         // 1. Derived_arg_names length == first_parent length

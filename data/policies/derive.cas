@@ -18,6 +18,7 @@ virtual resource bar {
 		allow(source, this, dir, write);
 	}
 
+	@associated_call
 	fn some_associated_call(domain source) {
 		allow(source, this, dir, add_name);
 	}

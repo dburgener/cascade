@@ -1,0 +1,18 @@
+virtual resource foo {
+	@associated_call
+	fn some_associated_call(domain source) {
+		allow(source, this, file, link);
+	}
+}
+
+virtual resource bar {
+	fn some_associated_call(domain source) {
+		allow(source, this, dir, add_name);
+	}
+}
+
+@derive([some_associated_call], strategy=union)
+virtual resource to_associate inherits foo, bar {}
+
+@associate([to_associate])
+domain associates {}

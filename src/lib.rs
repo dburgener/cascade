@@ -1046,6 +1046,7 @@ mod tests {
     #[test]
     fn derive_mismatched_signatures_error() {
         error_policy_test!("derive_non_matching_parents.cas", 1, ErrorItem::Compile(_));
+        error_policy_test!("derive_diff_associated_call.cas", 1, ErrorItem::Compile(_));
     }
 
     #[test]
