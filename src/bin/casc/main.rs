@@ -4,12 +4,13 @@ use selinux_cascade::error::{CascadeErrors, ErrorItem};
 use selinux_cascade::{compile_combined, compile_system_policies, compile_system_policies_all};
 
 mod args;
-use args::Args;
+use args::{Args, ColorArg};
 
 use clap::Parser;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Error, ErrorKind, Write};
+use termcolor::ColorChoice;
 use walkdir::WalkDir;
 
 fn main() -> std::io::Result<()> {
@@ -34,6 +35,20 @@ fn main() -> std::io::Result<()> {
             "No policy source files found",
         ));
     }
+
+    // termcolor doesn't handle automatic terminal detection
+    // https://docs.rs/termcolor/latest/termcolor/#detecting-presence-of-a-terminal
+    let color = match args.color {
+        Some(ColorArg::Always) => ColorChoice::Always,
+        Some(ColorArg::Auto) | None => {
+            if atty::is(atty::Stream::Stderr) {
+                ColorChoice::Auto
+            } else {
+                ColorChoice::Never
+            }
+        }
+        Some(ColorArg::Never) => ColorChoice::Never,
+    };
 
     // If no system names are given, output a single CIL file containing all of the policies,
     // with the default out file name (out.cil) if an out file name isn't specified.
@@ -62,7 +77,7 @@ fn main() -> std::io::Result<()> {
         )
     };
     match result {
-        Err(error_list) => print_error(error_list),
+        Err(error_list) => print_error(error_list, color),
         Ok(system_hashmap) => {
             for (system_name, system_cil) in system_hashmap.iter() {
                 let mut out_file = File::create(system_name.to_owned() + ".cil")?;
@@ -73,12 +88,12 @@ fn main() -> std::io::Result<()> {
     }
 }
 
-fn print_error(error_list: CascadeErrors) -> std::io::Result<()> {
+fn print_error(error_list: CascadeErrors, color: ColorChoice) -> std::io::Result<()> {
     for e in error_list {
         if let ErrorItem::Parse(p) = e {
-            p.print_diagnostic();
+            p.print_diagnostic(color);
         } else if let ErrorItem::Compile(c) = e {
-            c.print_diagnostic();
+            c.print_diagnostic(color);
         } else {
             eprintln!("{}", e);
         }

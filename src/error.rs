@@ -10,12 +10,12 @@ use backtrace::Backtrace as BacktraceCrate;
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::files::{SimpleFile, SimpleFiles};
 use codespan_reporting::term;
-use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
 use lalrpop_util::lexer::Token;
 use lalrpop_util::ParseError as LalrpopParseError;
 use std::fmt;
 use std::io;
 use std::ops::Range;
+use termcolor::{ColorChoice, StandardStream};
 use thiserror::Error;
 
 #[derive(Error, Clone, Debug)]
@@ -65,8 +65,8 @@ impl CompileError {
             files,
         }
     }
-    pub fn print_diagnostic(&self) {
-        let writer = StandardStream::stderr(ColorChoice::Auto);
+    pub fn print_diagnostic(&self, color: ColorChoice) {
+        let writer = StandardStream::stderr(color);
         let config = term::Config::default();
         // Ignores print errors.
         let _ = term::emit(
@@ -186,8 +186,8 @@ impl ParseError {
         }
     }
 
-    pub fn print_diagnostic(&self) {
-        let writer = StandardStream::stderr(ColorChoice::Auto);
+    pub fn print_diagnostic(&self, color: ColorChoice) {
+        let writer = StandardStream::stderr(color);
         let config = term::Config::default();
         // Ignores print errors.
         let _ = term::emit(
