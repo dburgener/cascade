@@ -1,0 +1,11 @@
+virtual resource foo {}
+
+virtual resource bar inherits foo {}
+
+virtual resource baz inherits foo {}
+
+resource qux inherits bar, baz {}
+
+domain requires_allow {
+        allow(this, qux, file, read);
+}

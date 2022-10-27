@@ -248,6 +248,24 @@ impl Declared for TypeInfo {
 
 impl TypeInfo {
     pub fn new(td: TypeDecl, file: &SimpleFile<String, String>) -> Result<TypeInfo, CascadeErrors> {
+        let mut temp_vec = td.inherits.to_vec();
+        temp_vec.sort();
+        let mut iter = temp_vec.iter().peekable();
+        while let Some(cur_val) = iter.next() {
+            match iter.peek() {
+                Some(next_val) => {
+                    if cur_val == *next_val {
+                        return Err(CascadeErrors::from(ErrorItem::Compile(CompileError::new(
+                            "Duplicate Inherit",
+                            file,
+                            (*next_val).get_range(),
+                            "Duplicate Inherit. Possible Typo?",
+                        ))))
+                    }
+                },
+                None => {},
+            }
+        }
         Ok(TypeInfo {
             name: td.name.clone(),
             inherits: td.inherits.clone(),
