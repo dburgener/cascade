@@ -248,7 +248,7 @@ impl Declared for TypeInfo {
 
 impl TypeInfo {
     pub fn new(td: TypeDecl, file: &SimpleFile<String, String>) -> Result<TypeInfo, CascadeErrors> {
-        let mut temp_vec = td.inherits.to_vec();
+        let mut temp_vec = td.inherits.clone();
         temp_vec.sort();
         let mut iter = temp_vec.iter().peekable();
         while let Some(cur_val) = iter.next() {
