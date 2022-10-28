@@ -252,18 +252,15 @@ impl TypeInfo {
         temp_vec.sort();
         let mut iter = temp_vec.iter().peekable();
         while let Some(cur_val) = iter.next() {
-            match iter.peek() {
-                Some(next_val) => {
-                    if cur_val == *next_val {
-                        return Err(CascadeErrors::from(ErrorItem::Compile(CompileError::new(
-                            "Duplicate Inherit",
-                            file,
-                            (*next_val).get_range(),
-                            "Duplicate Inherit. Possible Typo?",
-                        ))))
-                    }
-                },
-                None => {},
+            if let Some(next_val) = iter.peek() {
+                if cur_val == *next_val {
+                    return Err(CascadeErrors::from(ErrorItem::Compile(CompileError::new(
+                        "Duplicate Inherit",
+                        file,
+                        (*next_val).get_range(),
+                        "This type to inherit is identical to another type in the same inheritance list. Perhaps you meant to inherit some other type?",
+                    ))));
+                }
             }
         }
         Ok(TypeInfo {

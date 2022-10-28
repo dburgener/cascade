@@ -1098,10 +1098,15 @@ mod tests {
 
     #[test]
     fn valid_duplicate_inherit() {
-        valid_policy_test("duplicate_inherit.cas", &[
-            "typeattributeset bar (qux)",
-            "typeattributeset baz (qux)",
-            "typeattributeset foo (bar)",
-            "typeattributeset foo (baz)"], &[]);
+        valid_policy_test(
+            "duplicate_inherit.cas",
+            &[
+                "typeattributeset bar (qux)",
+                "typeattributeset baz (qux)",
+                "typeattributeset foo (bar)",
+                "typeattributeset foo (baz)",
+            ],
+            &[],
+        );
     }
 }
