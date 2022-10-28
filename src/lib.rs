@@ -9,6 +9,7 @@ mod ast;
 mod compile;
 mod constants;
 mod context;
+mod dbus;
 pub mod error;
 mod functions;
 mod internal_rep;
