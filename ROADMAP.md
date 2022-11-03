@@ -20,7 +20,6 @@ This lists remaining steps.  Remove steps below as they are completed.
 General bugfixing and clean-up tasks are assumed.  This lists major features needed for each milestone.
 
 ## 0.1
-* API Blocks - A feature similar to rust traits to create a set of functions that a child must implement
 * Derive annotation - Automatic derivation of inherited member functions
 * Associate resources with resources
 * Associate types via nesting in a block
@@ -33,7 +32,6 @@ General bugfixing and clean-up tasks are assumed.  This lists major features nee
 * Port labeling implementation
 * Conditionals - Combining both tunables and booleans into a single feature with configurability for runtime vs compiletime resolution
 * Ephemeral object and filesystem labeling implementation
-* System compilation - Assemble a collection of modules into a full system policy
 * Build individual policy modules and systems
 * Ergonomic compiler front end for selecting build targets
 * Enhanced file_context path support - Treat paths as though they are actual paths, rather than just strings/regexes
