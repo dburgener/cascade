@@ -302,7 +302,7 @@ pub fn build_func_map<'a>(
             Declaration::Func(f) => {
                 decl_map.insert(
                     f.get_cil_name(),
-                    FunctionInfo::new(&**f, types, parent_type, file)?,
+                    FunctionInfo::new(f, types, parent_type, file)?,
                 )?;
             }
             _ => continue,
@@ -320,7 +320,8 @@ pub fn validate_functions<'a, 'b>(
     functions_copy: &'b FunctionMap<'b>,
 ) -> Result<(), CascadeErrors> {
     let mut errors = CascadeErrors::new();
-    let mut classes_to_required_functions = BTreeMap::new();
+    let mut classes_to_required_functions: BTreeMap<&CascadeString, BTreeSet<&str>> =
+        BTreeMap::new();
     for function in functions.values_mut() {
         match function.validate_body(
             functions_copy,
@@ -335,7 +336,7 @@ pub fn validate_functions<'a, 'b>(
             if function.is_virtual || func_class.is_trait() {
                 classes_to_required_functions
                     .entry(&func_class.name)
-                    .or_insert(BTreeSet::new())
+                    .or_default()
                     .insert(&function.name);
             }
         }

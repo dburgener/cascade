@@ -245,7 +245,7 @@ fn get_policies(input_files: Vec<&str>) -> Result<Vec<PolicyFile>, CascadeErrors
     let mut errors = CascadeErrors::new();
     let mut policies: Vec<PolicyFile> = Vec::new();
     for f in input_files {
-        let policy_str = match std::fs::read_to_string(&f) {
+        let policy_str = match std::fs::read_to_string(f) {
             Ok(s) => s,
             Err(e) => {
                 errors.add_error(e);
