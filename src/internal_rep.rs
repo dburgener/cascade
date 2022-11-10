@@ -2210,11 +2210,11 @@ fn validate_arguments<'a>(
     for (index, a) in call
         .args
         .iter()
-        .take_while(|a| !matches!(a, Argument::Named(_, _)))
+        .take_while(|a| !matches!(a.0, Argument::Named(_, _)))
         .enumerate()
     {
         let validated_arg = validate_argument(
-            ArgForValidation::from(a),
+            ArgForValidation::from(&a.0),
             args[index].function_arg,
             types,
             class_perms,
@@ -2227,9 +2227,9 @@ fn validate_arguments<'a>(
     for a in call
         .args
         .iter()
-        .skip_while(|a| !matches!(a, Argument::Named(_, _)))
+        .skip_while(|a| !matches!(a.0, Argument::Named(_, _)))
     {
-        match a {
+        match &a.0 {
             Argument::Named(n, a) => {
                 let index = match args
                     .iter()
@@ -2261,7 +2261,7 @@ fn validate_arguments<'a>(
                     CompileError::new(
                         "Cannot specify anonymous argument after named argument",
                         file,
-                        a.get_range(),
+                        a.0.get_range(),
                         "This argument is anonymous, but named arguments occurred previously.  All anonymous arguments must come before any named arguments")).into());
             }
         }
