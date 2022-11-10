@@ -398,13 +398,21 @@ pub struct FuncCall {
 }
 
 impl FuncCall {
-    pub fn new(cn: Option<CascadeString>, n: CascadeString, a: Vec<Argument>) -> FuncCall {
+    pub fn new_with_casts(
+        cn: Option<CascadeString>,
+        n: CascadeString,
+        a: Vec<(Argument, Option<CascadeString>)>,
+    ) -> FuncCall {
         FuncCall {
             class_name: cn,
             name: n,
-            args: a.into_iter().zip(iter::repeat(None)).collect(),
+            args: a,
             annotations: Annotations::new(),
         }
+    }
+
+    pub fn new(cn: Option<CascadeString>, n: CascadeString, a: Vec<Argument>) -> FuncCall {
+        Self::new_with_casts(cn, n, a.into_iter().zip(iter::repeat(None)).collect())
     }
 
     pub fn check_builtin(&self) -> Option<BuiltIns> {
