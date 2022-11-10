@@ -3,6 +3,7 @@
 use std::cmp::Ordering;
 use std::fmt;
 use std::hash::{Hash, Hasher};
+use std::iter;
 use std::ops::Range;
 
 use codespan_reporting::files::SimpleFile;
@@ -391,7 +392,8 @@ pub enum BuiltIns {
 pub struct FuncCall {
     pub class_name: Option<CascadeString>,
     pub name: CascadeString,
-    pub args: Vec<Argument>,
+    // The second element is an optional typecast
+    pub args: Vec<(Argument, Option<CascadeString>)>,
     pub annotations: Annotations,
 }
 
@@ -400,7 +402,7 @@ impl FuncCall {
         FuncCall {
             class_name: cn,
             name: n,
-            args: a,
+            args: a.into_iter().zip(iter::repeat(None)).collect(),
             annotations: Annotations::new(),
         }
     }
