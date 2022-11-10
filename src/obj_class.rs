@@ -165,6 +165,7 @@ pub fn make_classlist() -> ClassList<'static> {
             "getrlimit",
         ],
     );
+    classlist.set_collapsed("process", "process2");
 
     classlist.add_class("process2", vec!["nnp_transition", "nosuid_transition"]);
 
@@ -190,6 +191,7 @@ pub fn make_classlist() -> ClassList<'static> {
     );
 
     classlist.add_class("capability", COMMON_CAP_PERMS.to_vec());
+    classlist.set_collapsed("capability", "capability2");
 
     classlist.add_class(
         "filesystem",
@@ -433,6 +435,7 @@ pub fn make_classlist() -> ClassList<'static> {
     );
     classlist.add_class("cap_userns", COMMON_CAP_PERMS.to_vec());
     classlist.add_class("cap2_userns", COMMON_CAP2_PERMS.to_vec());
+    classlist.set_collapsed("cap_userns", "cap2_userns");
     classlist.add_class(
         "sctp_socket",
         [

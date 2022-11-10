@@ -809,6 +809,19 @@ mod tests {
     }
 
     #[test]
+    fn permissions_test() {
+        valid_policy_test(
+            "permissions.cas",
+            &[
+                "(allow foo foo (capability (fowner)))",
+                "(allow foo foo (capability2 (mac_override)))",
+                "(allow foo foo (capability2 (wake_alarm)))",
+            ],
+            &["(capabilty (mac_override", "(capability (wake_alarm"],
+        );
+    }
+
+    #[test]
     fn cycle_error_test() {
         error_policy_test!("cycle.cas", 2, ErrorItem::Compile(_));
     }
