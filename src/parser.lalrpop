@@ -127,7 +127,7 @@ Stmt: Statement = {
 }
 
 StmtBody: Statement = {
-	<c:(<TypeName> ".")?> <n:NameDecl> "(" <a:Comma<Arg>> ")" => Statement::Call(Box::new(FuncCall::new(c, n, a))),
+	<c:(<TypeName> ".")?> <n:NameDecl> "(" <a:Comma<CastArg>> ")" => Statement::Call(Box::new(FuncCall::new_with_casts(c, n, a))),
 	<l:LetBind> => Statement::LetBinding(Box::new(<>)),
 }
 
@@ -197,6 +197,10 @@ IfBlock: () = {
 #[inline]
 ElseBlock: () = {
 	"else" "{" <Stmt+> "}"
+}
+
+CastArg: (Argument, Option<CascadeString>) = {
+	<a: Arg> <c:(":" <TypeName>)?> => (a, c)
 }
 
 Arg: Argument = {
