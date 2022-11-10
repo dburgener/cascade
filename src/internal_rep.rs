@@ -639,7 +639,7 @@ pub fn argument_to_typeinfo_vec<'a>(
     Ok(ret)
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AvRuleFlavor {
     Allow,
     Dontaudit,
@@ -856,6 +856,8 @@ pub fn generate_sid_rules(sids: Vec<Sid>) -> Vec<Sexp> {
 
 pub struct Class<'a> {
     pub name: &'a str,
+    // Another class that is treated like this class in Cascade
+    pub collapsed_name: Option<&'a str>,
     pub perms: Vec<&'a str>,
 }
 
@@ -871,7 +873,11 @@ impl From<&Class<'_>> for sexp::Sexp {
 
 impl<'a> Class<'a> {
     pub fn new(name: &'a str, perms: Vec<&'a str>) -> Self {
-        Class { name, perms }
+        Class {
+            name,
+            collapsed_name: None,
+            perms,
+        }
     }
 
     pub fn contains_perm(&self, perm: &str) -> bool {
@@ -900,6 +906,13 @@ impl<'a> ClassList<'a> {
 
     pub fn add_class(&mut self, name: &'a str, perms: Vec<&'a str>) {
         self.classes.insert(name, Class::new(name, perms));
+    }
+
+    // If main_class exists, set collapsed class.  If it doesn't, noop
+    pub fn set_collapsed(&mut self, main_class: &str, collapsed_class: &'a str) {
+        if let Some(mut c) = self.classes.get_mut(main_class) {
+            c.collapsed_name = Some(collapsed_class);
+        }
     }
 
     pub fn generate_class_perm_cil(&self) -> Vec<Sexp> {
@@ -1016,14 +1029,21 @@ impl<'a> ClassList<'a> {
     }
 }
 
+// Returns true if the class is collapsed from a normal and 2 variant
+fn is_collapsed_class(class: &str) -> bool {
+    ["capability", "process", "cap_userns"].contains(&class)
+}
+
 // TODO: This can be converted into a TryFrom for more compile time gaurantees
+// Returns a set of AV Rules, because one Cascade allow() call could generate multiple CIL level AV
+// rules, for example when intermixing capability and capability2 permissions
 fn call_to_av_rule<'a>(
     c: &'a FuncCall,
     types: &'a TypeMap,
     class_perms: &ClassList,
     context: &BlockContext<'a>,
     file: &'a SimpleFile<String, String>,
-) -> Result<AvRule<'a>, CascadeErrors> {
+) -> Result<BTreeSet<AvRule<'a>>, CascadeErrors> {
     let flavor = match c.name.as_ref() {
         constants::ALLOW_FUNCTION_NAME => AvRuleFlavor::Allow,
         constants::DONTAUDIT_FUNCTION_NAME => AvRuleFlavor::Dontaudit,
@@ -1105,13 +1125,50 @@ fn call_to_av_rule<'a>(
 
     let perms = class_perms.expand_perm_list(perms.iter().collect());
 
-    Ok(AvRule {
-        av_rule_flavor: flavor,
-        source: Cow::Owned(source),
-        target: Cow::Owned(target),
-        class: Cow::Owned(class),
-        perms,
-    })
+    let av_rules = if is_collapsed_class(class.as_ref()) {
+        let mut split_perms = (Vec::new(), Vec::new());
+        if let Some(class_struct) = class_perms.classes.get(class.as_ref()) {
+            for p in perms {
+                if class_struct.contains_perm(p.as_ref()) {
+                    split_perms.0.push(p);
+                } else {
+                    split_perms.1.push(p);
+                }
+            }
+            let mut av_rules = Vec::new();
+            if !split_perms.0.is_empty() {
+                av_rules.push(AvRule {
+                    av_rule_flavor: flavor,
+                    source: Cow::Owned(source.clone()),
+                    target: Cow::Owned(target.clone()),
+                    class: Cow::Owned(class),
+                    perms: split_perms.0,
+                });
+            }
+            if !split_perms.1.is_empty() {
+                av_rules.push(AvRule {
+                    av_rule_flavor: flavor,
+                    source: Cow::Owned(source),
+                    target: Cow::Owned(target),
+                    class: Cow::Owned(CascadeString::from(class_struct.collapsed_name.unwrap())),
+                    perms: split_perms.1,
+                });
+            }
+            av_rules
+        } else {
+            return Err(ErrorItem::Internal(InternalError::new()).into());
+        }
+    } else {
+        vec![AvRule {
+            av_rule_flavor: flavor,
+            source: Cow::Owned(source),
+            target: Cow::Owned(target),
+            class: Cow::Owned(class),
+            perms,
+        }]
+    };
+
+    Ok(av_rules.into_iter().collect())
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -1735,63 +1792,62 @@ impl<'a> ValidatedStatement<'a> {
         };
 
         match statement {
-            Statement::Call(c) => {
-                match c.check_builtin() {
-                    Some(BuiltIns::AvRule) => Ok(Some(ValidatedStatement::AvRule(
-                        call_to_av_rule(c, types, class_perms, context, file)?,
-                    ))
-                    .into_iter()
-                    .collect()),
-                    Some(BuiltIns::FileContext) => {
-                        if in_resource {
-                            Ok(call_to_fc_rules(c, types, class_perms, &*context, file)?
-                                .into_iter()
-                                .map(ValidatedStatement::FcRule)
-                                .collect())
-                        } else {
-                            Err(CascadeErrors::from(ErrorItem::Compile(CompileError::new(
-                                "file_context() calls are only allowed in resources",
-                                file,
-                                c.name.get_range(),
-                                "Not allowed here",
-                            ))))
-                        }
-                    }
-                    Some(BuiltIns::DomainTransition) => {
-                        if !in_resource {
-                            Ok(
-                                Some(ValidatedStatement::DomtransRule(call_to_domain_transition(
-                                    c,
-                                    types,
-                                    class_perms,
-                                    &*context,
-                                    file,
-                                )?))
-                                .into_iter()
-                                .collect(),
-                            )
-                        } else {
-                            Err(CascadeErrors::from(ErrorItem::Compile(CompileError::new(
-                                "domain_transition() calls are not allowed in resources",
-                                file,
-                                c.name.get_range(),
-                                "Not allowed here",
-                            ))))
-                        }
-                    }
-                    None => Ok(Some(ValidatedStatement::Call(Box::new(ValidatedCall::new(
-                        c,
-                        functions,
-                        types,
-                        class_perms,
-                        parent_type,
-                        &*context,
-                        file,
-                    )?)))
-                    .into_iter()
-                    .collect()),
+            Statement::Call(c) => match c.check_builtin() {
+                Some(BuiltIns::AvRule) => {
+                    Ok(call_to_av_rule(c, types, class_perms, context, file)?
+                        .into_iter()
+                        .map(ValidatedStatement::AvRule)
+                        .collect())
                 }
-            }
+                Some(BuiltIns::FileContext) => {
+                    if in_resource {
+                        Ok(call_to_fc_rules(c, types, class_perms, &*context, file)?
+                            .into_iter()
+                            .map(ValidatedStatement::FcRule)
+                            .collect())
+                    } else {
+                        Err(CascadeErrors::from(ErrorItem::Compile(CompileError::new(
+                            "file_context() calls are only allowed in resources",
+                            file,
+                            c.name.get_range(),
+                            "Not allowed here",
+                        ))))
+                    }
+                }
+                Some(BuiltIns::DomainTransition) => {
+                    if !in_resource {
+                        Ok(
+                            Some(ValidatedStatement::DomtransRule(call_to_domain_transition(
+                                c,
+                                types,
+                                class_perms,
+                                &*context,
+                                file,
+                            )?))
+                            .into_iter()
+                            .collect(),
+                        )
+                    } else {
+                        Err(CascadeErrors::from(ErrorItem::Compile(CompileError::new(
+                            "domain_transition() calls are not allowed in resources",
+                            file,
+                            c.name.get_range(),
+                            "Not allowed here",
+                        ))))
+                    }
+                }
+                None => Ok(Some(ValidatedStatement::Call(Box::new(ValidatedCall::new(
+                    c,
+                    functions,
+                    types,
+                    class_perms,
+                    parent_type,
+                    &*context,
+                    file,
+                )?)))
+                .into_iter()
+                .collect()),
+            },
             Statement::LetBinding(l) => {
                 // Global scope let bindings were handled by get_global_bindings() in a previous
                 // pass
@@ -2564,6 +2620,15 @@ mod tests {
             Some(2..4)
         );
         assert_eq!(type_instance.get_range(), Some(2..4));
+    }
+
+    #[test]
+    fn is_collapsed_class_test() {
+        assert!(!is_collapsed_class("foo"));
+        assert!(!is_collapsed_class("capability2"));
+        assert!(is_collapsed_class("capability"));
+        assert!(is_collapsed_class("process"));
+        assert!(is_collapsed_class("cap_userns"));
     }
 
     #[test]
