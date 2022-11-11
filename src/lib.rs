@@ -800,6 +800,15 @@ mod tests {
     }
 
     #[test]
+    fn casting_test() {
+        valid_policy_test(
+            "casting.cas",
+            &["(allow foo foo (capability"],
+            &["(allow foo domain (capability"],
+        )
+    }
+
+    #[test]
     fn cycle_error_test() {
         error_policy_test!("cycle.cas", 2, ErrorItem::Compile(_));
     }
@@ -822,6 +831,11 @@ mod tests {
     #[test]
     fn bad_alias_test() {
         error_policy_test!("alias.cas", 2, ErrorItem::Compile(_));
+    }
+
+    #[test]
+    fn bad_typecast_test() {
+        error_policy_test!("bad_typecasts.cas", 4, ErrorItem::Compile(_));
     }
 
     #[test]

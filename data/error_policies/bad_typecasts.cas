@@ -1,0 +1,8 @@
+resource foo {}
+
+domain bar {
+	allow(bar, "some string": resource, file, read);
+	allow(bar, foo: bar, file, read);
+	allow(bar, file: resource, file, read);
+	allow(bar, foo: nonexistant, file, read);
+} 
