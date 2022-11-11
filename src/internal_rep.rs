@@ -2215,6 +2215,7 @@ fn validate_arguments<'a>(
     {
         let validated_arg = validate_argument(
             ArgForValidation::from(&a.0),
+            &a.1,
             args[index].function_arg,
             types,
             class_perms,
@@ -2229,8 +2230,8 @@ fn validate_arguments<'a>(
         .iter()
         .skip_while(|a| !matches!(a.0, Argument::Named(_, _)))
     {
-        match &a.0 {
-            Argument::Named(n, a) => {
+        match &a {
+            (Argument::Named(n, a), cast) => {
                 let index = match args
                     .iter()
                     .position(|ea| ea.function_arg.name == n.as_ref())
@@ -2248,6 +2249,7 @@ fn validate_arguments<'a>(
                 };
                 let validated_arg = validate_argument(
                     ArgForValidation::from(&**a),
+                    cast,
                     args[index].function_arg,
                     types,
                     class_perms,
@@ -2277,6 +2279,7 @@ fn validate_arguments<'a>(
                     // be validated earlier and then return an internal error here on failure
                     Some(v) => validate_argument(
                         ArgForValidation::from(v),
+                        &None,
                         a.function_arg,
                         types,
                         class_perms,
@@ -2354,6 +2357,7 @@ impl<'a> ArgForValidation<'a> {
 
 fn validate_argument<'a>(
     arg: ArgForValidation,
+    cast_name: &Option<CascadeString>,
     target_argument: &FunctionArgument,
     types: &'a TypeMap,
     class_perms: &ClassList,
@@ -2396,6 +2400,7 @@ fn validate_argument<'a>(
                 {
                     return validate_argument(
                         ArgForValidation::coerce_list(arg),
+                        cast_name,
                         target_argument,
                         types,
                         class_perms,
