@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 use sexp::{atom_s, list, Atom, Sexp};
 
-use std::borrow::Cow;
+use std::borrow::{Borrow, Cow};
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryFrom;
@@ -2065,6 +2065,8 @@ enum TypeValue {
     SEType(Option<Range<usize>>),
 }
 
+// If this instance is typecast, then type_info will be the type it is cast to, and instance_value
+// will be Str(original_type)
 #[derive(Clone, Debug)]
 pub struct TypeInstance<'a> {
     instance_value: TypeValue,
@@ -2149,6 +2151,25 @@ impl<'a> TypeInstance<'a> {
         TypeInstance {
             instance_value,
             type_info: Cow::Borrowed(ti),
+            file,
+        }
+    }
+
+    pub fn new_cast_instance(
+        arg: &ArgForValidation,
+        type_info: Cow<'a, TypeInfo>,
+        file: &'a SimpleFile<String, String>,
+    ) -> Self {
+        let instance_value = match arg {
+            ArgForValidation::List(vec) => {
+                TypeValue::Vector(vec.iter().map(|s| (*s).clone()).collect())
+            }
+            ArgForValidation::Var(s) | ArgForValidation::Quote(s) => TypeValue::Str((*s).clone()),
+        };
+
+        TypeInstance {
+            instance_value,
+            type_info,
             file,
         }
     }
@@ -2353,6 +2374,46 @@ impl<'a> ArgForValidation<'a> {
             ArgForValidation::Quote(s) => s.get_range(),
         }
     }
+
+    // An arg can be cast to a ti if it is an setype
+    // cast_ti is unused for now, but it seems like casting rules may eventually become more
+    // complicated, so ensuring we'll have the ability to use it in the future seems worthwhile
+    fn verify_cast(
+        &self,
+        _cast_ti: &TypeInfo,
+        types: &TypeMap,
+        file: &SimpleFile<String, String>,
+    ) -> Result<(), ErrorItem> {
+        let err_ret = |s: &CascadeString| {
+            ErrorItem::Compile(CompileError::new(
+                "Cannot typecast",
+                file,
+                s.get_range(),
+                "This is not something that can be typecast",
+            ))
+        };
+
+        match self {
+            ArgForValidation::Var(s) => {
+                if types.get(s.as_ref()).is_none() {
+                    return Err(err_ret(s));
+                }
+            }
+            ArgForValidation::List(v) => {
+                for s in v {
+                    // TODO: report more than just the first error
+                    if types.get(s.as_ref()).is_none() {
+                        return Err(err_ret(s));
+                    }
+                }
+            }
+            ArgForValidation::Quote(s) => {
+                return Err(err_ret(s));
+            }
+        }
+
+        Ok(())
+    }
 }
 
 fn validate_argument<'a>(
@@ -2364,6 +2425,35 @@ fn validate_argument<'a>(
     context: &BlockContext<'a>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<TypeInstance<'a>, ErrorItem> {
+    // If there is a cast, we first validate that regardless of whether the actual value is a list
+    if let Some(cast_name) = cast_name {
+        // If the cast doesn't validate, that's an error and we can just return the cast validation
+        // error
+        let cast_ti = validate_argument(
+            ArgForValidation::Var(cast_name),
+            &None,
+            target_argument,
+            types,
+            class_perms,
+            context,
+            file,
+        )?;
+        if !matches!(cast_ti.instance_value, TypeValue::SEType(_)) {
+            return Err(ErrorItem::Compile(CompileError::new(
+                "Not something we can cast to",
+                file,
+                cast_name.get_range(),
+                "This must be a domain, resource or trait that exists in this policy",
+            )));
+        }
+        arg.verify_cast(cast_ti.type_info.borrow(), types, file)?;
+
+        return Ok(TypeInstance::new_cast_instance(
+            &arg,
+            cast_ti.type_info,
+            file,
+        ));
+    }
     match &arg {
         ArgForValidation::List(v) => {
             if !target_argument.is_list_param {
