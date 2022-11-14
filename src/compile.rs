@@ -1020,6 +1020,9 @@ fn create_synthetic_resource(
     let dup_res_is_virtual = dup_res_decl.is_virtual;
     // The synthetic resource keeps some, but not all annotations from its parent.
     // Specifically, Makelist and derive are kept from the parent
+    // TODO: This would be cleaner if we convert to AnnotationInfos first and implent the logic as
+    // a member funtion in AnnotationInfo
+    // See https://github.com/dburgener/cascade/pull/39#discussion_r999510493 for fuller discussion
     dup_res_decl
         .annotations
         .annotations
