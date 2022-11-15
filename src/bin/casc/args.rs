@@ -40,3 +40,14 @@ pub enum ColorArg {
     Auto,
     Never,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::CommandFactory;
+
+    #[test]
+    fn test_cli() {
+        Args::command().debug_assert();
+    }
+}
