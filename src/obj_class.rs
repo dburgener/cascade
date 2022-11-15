@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 // Object class and permissions declarations live here
+use crate::ast::CascadeString;
 use crate::internal_rep::ClassList;
+use sexp::{Atom, Sexp};
 
 const COMMON_FILE_SOCK_PERMS: &[&str] = &[
     "ioctl",
@@ -591,4 +593,15 @@ pub fn make_classlist() -> ClassList<'static> {
     );
 
     classlist
+}
+
+pub fn perm_list_to_sexp(perms: &[CascadeString]) -> Vec<sexp::Sexp> {
+    if perms.iter().any(|p| p == "*") {
+        vec![Sexp::Atom(Atom::S("(all)".to_string()))]
+    } else {
+        perms
+            .iter()
+            .map(|p| Sexp::Atom(Atom::S(p.to_string())))
+            .collect()
+    }
 }

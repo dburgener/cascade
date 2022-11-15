@@ -19,6 +19,7 @@ use crate::ast::{
 use crate::constants;
 use crate::context::Context as BlockContext;
 use crate::error::{CascadeErrors, CompileError, ErrorItem, InternalError};
+use crate::obj_class::perm_list_to_sexp;
 
 const DEFAULT_USER: &str = "system_u";
 const DEFAULT_OBJECT_ROLE: &str = "object_r";
@@ -679,11 +680,7 @@ impl From<&AvRule<'_>> for sexp::Sexp {
 
         let mut classpermset = vec![Sexp::Atom(Atom::S(rule.class.get_cil_name()))];
 
-        let perms = rule
-            .perms
-            .iter()
-            .map(|p| Sexp::Atom(Atom::S(p.get_cil_name())))
-            .collect();
+        let perms = perm_list_to_sexp(&rule.perms);
 
         classpermset.push(Sexp::List(perms));
 
@@ -950,6 +947,11 @@ impl<'a> ClassList<'a> {
             }
         };
 
+        if permission.as_ref() == "*" {
+            // * matches all valid object classes
+            return Ok(());
+        }
+
         if let Some(perm_vec) = self.perm_sets.get(&permission.to_string()) {
             for p in perm_vec {
                 self.verify_permission(class, &p.as_str().into(), file)?;
@@ -997,6 +999,9 @@ impl<'a> ClassList<'a> {
     }
 
     pub fn is_perm(&self, perm: &str) -> bool {
+        if perm == "*" {
+            return true;
+        }
         if self.perm_sets.get(perm).is_some() {
             return true;
         }
@@ -1129,7 +1134,11 @@ fn call_to_av_rule<'a>(
         let mut split_perms = (Vec::new(), Vec::new());
         if let Some(class_struct) = class_perms.classes.get(class.as_ref()) {
             for p in perms {
-                if class_struct.contains_perm(p.as_ref()) {
+                if p == "*" {
+                    // '*' is the one special case that matches both
+                    split_perms.0.push(p.clone());
+                    split_perms.1.push(p);
+                } else if class_struct.contains_perm(p.as_ref()) {
                     split_perms.0.push(p);
                 } else {
                     split_perms.1.push(p);
