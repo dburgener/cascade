@@ -816,6 +816,7 @@ mod tests {
                 "(allow foo foo (capability (fowner)))",
                 "(allow foo foo (capability2 (mac_override)))",
                 "(allow foo foo (capability2 (wake_alarm)))",
+                "(allow foo bar (file ((all))))",
             ],
             &["(capabilty (mac_override", "(capability (wake_alarm"],
         );
