@@ -832,7 +832,8 @@ mod tests {
         "(macro custom_define-read ((type this) (type source)) (allow source this (lnk_file (read))))",
         "(macro derive_all-read ((type this) (type source)) (allow source this (dir (read))) (allow source this (file (read))))",
         "(macro derive_all-write ((type this) (type source)) (allow source this (dir (write))))",
-        "(call associates-to_associate-some_associated_call"],
+        "(call associates-to_associate-some_associated_call",
+        "(macro some_child-domtrans ((type this) (type source) (type exec)) (typetransition source exec process this))"],
         &[]);
     }
 

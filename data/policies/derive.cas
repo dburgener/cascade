@@ -44,6 +44,8 @@ domain some_domain {
 	strategy_foo.read(this);
 	custom_define.read(this);
 	name_diff_child.diff_name(this);
+
+	some_child.domtrans(this, strategy_foo);
 }
 
 @derive([some_associated_call], strategy=union)
@@ -66,3 +68,12 @@ virtual resource name_diff2 {
 
 @derive([diff_name], strategy=union)
 resource name_diff_child inherits name_diff1, name_diff2 {}
+
+virtual domain some_domain_parent {
+	fn domtrans(domain source, resource exec) {
+		domain_transition(source, exec, this);
+	}
+}
+
+@derive([domtrans], strategy=some_domain_parent)
+domain some_child inherits some_domain_parent {}
