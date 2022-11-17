@@ -1528,19 +1528,19 @@ fn call_to_fc_rules<'a>(
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DomtransRule<'a> {
-    pub source: Cow<'a, TypeInfo>,
-    pub target: Cow<'a, TypeInfo>,
-    pub executable: Cow<'a, TypeInfo>,
+    pub source: Cow<'a, CascadeString>,
+    pub target: Cow<'a, CascadeString>,
+    pub executable: Cow<'a, CascadeString>,
 }
 
 impl From<&DomtransRule<'_>> for sexp::Sexp {
     fn from(d: &DomtransRule) -> Self {
         list(&[
             atom_s("typetransition"),
-            atom_s(&d.source.name.get_cil_name()),
-            atom_s(&d.executable.name.get_cil_name()),
+            atom_s(&d.source.get_cil_name()),
+            atom_s(&d.executable.get_cil_name()),
             atom_s("process"),
-            atom_s(&d.target.name.get_cil_name()),
+            atom_s(&d.target.get_cil_name()),
         ])
     }
 }
@@ -1592,24 +1592,24 @@ fn call_to_domain_transition<'a>(
     let source = args_iter
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
-        .type_info;
+        .get_name_or_string(context)?;
     let executable = args_iter
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
-        .type_info;
+        .get_name_or_string(context)?;
     let target = args_iter
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
-        .type_info;
+        .get_name_or_string(context)?;
 
     if args_iter.next().is_some() {
         return Err(ErrorItem::Internal(InternalError::new()).into());
     }
 
     Ok(DomtransRule {
-        source,
-        target,
-        executable,
+        source: Cow::Owned(source),
+        target: Cow::Owned(target),
+        executable: Cow::Owned(executable),
     })
 }
 
