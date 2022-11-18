@@ -814,7 +814,9 @@ mod tests {
     fn casting_test() {
         valid_policy_test(
             "casting.cas",
-            &["(allow foo foo (capability"],
+            &["(allow foo foo (capability",
+            "(allow foo foo (capability2",
+            "(macro foo-signal ((type this) (type source)) (allow source this (process (signal))))"],
             &["(allow foo domain (capability"],
         )
     }
