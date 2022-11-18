@@ -377,6 +377,10 @@ impl TypeInfo {
         self.is_type_by_name(types, constants::DOMAIN)
     }
 
+    pub fn is_setype(&self, types: &TypeMap) -> bool {
+        self.is_domain(types) || self.is_resource(types)
+    }
+
     pub fn is_trait(&self) -> bool {
         self.is_trait
     }
@@ -2532,8 +2536,6 @@ enum TypeValue {
     SEType(Option<Range<usize>>),
 }
 
-// If this instance is typecast, then type_info will be the type it is cast to, and instance_value
-// will be Str(original_type)
 #[derive(Clone, Debug)]
 pub struct TypeInstance<'a> {
     instance_value: TypeValue,
@@ -2866,6 +2868,7 @@ impl<'a> ArgForValidation<'a> {
         &self,
         _cast_ti: &TypeInfo,
         types: &TypeMap,
+        context: &BlockContext<'a>,
         file: Option<&SimpleFile<String, String>>,
     ) -> Result<(), ErrorItem> {
         let err_ret = |s: &CascadeString| {
@@ -2877,18 +2880,27 @@ impl<'a> ArgForValidation<'a> {
             )
         };
 
+        let check_validity = |s: &CascadeString| {
+            if types.get(s.as_ref()).is_none()
+                && !context
+                    .symbol_in_context(s.as_ref())
+                    .map(|ti| ti.is_setype(types))
+                    .unwrap_or(false)
+            {
+                Err(err_ret(s))
+            } else {
+                Ok(())
+            }
+        };
+
         match self {
             ArgForValidation::Var(s) => {
-                if types.get(s.as_ref()).is_none() {
-                    return Err(err_ret(s));
-                }
+                return check_validity(s);
             }
             ArgForValidation::List(v) => {
                 for s in v {
                     // TODO: report more than just the first error
-                    if types.get(s.as_ref()).is_none() {
-                        return Err(err_ret(s));
-                    }
+                    check_validity(s)?;
                 }
             }
             ArgForValidation::Quote(s) => {
@@ -2933,11 +2945,17 @@ fn validate_argument<'a>(
                 "This must be a domain, resource or trait that exists in this policy",
             ));
         }
-        arg.verify_cast(cast_ti.type_info.borrow(), types, file)?;
+        arg.verify_cast(cast_ti.type_info.borrow(), types, context, file)?;
 
         return Ok(TypeInstance::new_cast_instance(
             &arg,
-            cast_ti.type_info,
+            Cow::Borrowed(argument_to_typeinfo(
+                &arg,
+                types,
+                class_perms,
+                context,
+                file,
+            )?),
             file,
         ));
     }
