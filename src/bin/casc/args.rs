@@ -25,6 +25,10 @@ pub struct Args {
     ///colorize the output.  WHEN can be 'always', 'auto' (default), or 'never'
     #[clap(long, value_enum, id = "WHEN")]
     pub color: Option<ColorArg>,
+    ///Compile the generated CIL file into policy and generate a tar.gz putting policy files in the
+    ///correct paths
+    #[clap(long)]
+    pub package: bool,
 }
 
 fn parse_out_filename(filename: &str) -> Result<String, String> {

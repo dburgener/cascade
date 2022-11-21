@@ -4,7 +4,9 @@ use selinux_cascade::error::{CascadeErrors, ErrorItem};
 use selinux_cascade::{compile_combined, compile_system_policies, compile_system_policies_all};
 
 mod args;
+mod package;
 use args::{Args, ColorArg};
+use package::build_package;
 
 use clap::Parser;
 use std::collections::HashMap;
@@ -80,8 +82,12 @@ fn main() -> std::io::Result<()> {
         Err(error_list) => print_error(error_list, color),
         Ok(system_hashmap) => {
             for (system_name, system_cil) in system_hashmap.iter() {
-                let mut out_file = File::create(system_name.to_owned() + ".cil")?;
+                let out_filename = system_name.to_owned() + ".cil";
+                let mut out_file = File::create(&out_filename)?;
                 out_file.write_all(system_cil.as_bytes())?;
+                if args.package {
+                    build_package(system_name, &out_filename)?;
+                }
             }
             Ok(())
         }
