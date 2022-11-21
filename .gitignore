@@ -5,3 +5,4 @@ Cargo.lock
 file_contexts
 out.cil
 policy.*
+selinux_policy.tar.gz
