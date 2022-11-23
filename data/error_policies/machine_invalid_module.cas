@@ -1,4 +1,4 @@
-system name {
+machine name {
     module foo;
     module bar;
     let handle_unknown_perms = deny;

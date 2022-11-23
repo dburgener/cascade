@@ -19,8 +19,8 @@ mod sexp_internal;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::ast::{Argument, CascadeString, Declaration, Expression, Policy, PolicyFile};
-use crate::error::{CascadeErrors, InternalError, InvalidSystemError, ParseErrorMsg};
-use crate::internal_rep::{FunctionMap, ModuleMap, SystemMap, ValidatedModule, ValidatedSystem};
+use crate::error::{CascadeErrors, InternalError, InvalidMachineError, ParseErrorMsg};
+use crate::internal_rep::{FunctionMap, MachineMap, ModuleMap, ValidatedMachine, ValidatedModule};
 
 use codespan_reporting::files::SimpleFile;
 use lalrpop_util::ParseError as LalrpopParseError;
@@ -30,7 +30,7 @@ use error::ErrorItem;
 
 lalrpop_mod!(#[allow(clippy::all)] pub parser);
 
-/// Compile all systems into a single policy
+/// Compile all machines into a single policy
 /// The list of input files should contain filenames of files containing policy to be
 /// compiled.
 /// Returns a Result containing either a string of CIL policy which is the compiled result or a
@@ -39,7 +39,7 @@ lalrpop_mod!(#[allow(clippy::all)] pub parser);
 pub fn compile_combined(input_files: Vec<&str>) -> Result<String, error::CascadeErrors> {
     let errors = CascadeErrors::new();
     let policies = get_policies(input_files)?;
-    let mut res = compile_system_policies_internal(policies, vec!["out".to_string()], true)?;
+    let mut res = compile_machine_policies_internal(policies, vec!["out".to_string()], true)?;
     let ret = match res.remove(&"out".to_string()) {
         Some(s) => s,
         None => return Err(CascadeErrors::from(InternalError::new())),
@@ -47,40 +47,40 @@ pub fn compile_combined(input_files: Vec<&str>) -> Result<String, error::Cascade
     errors.into_result(ret)
 }
 
-/// Compile a complete system policy
+/// Compile a complete machine policy
 /// The list of input files should contain filenames of files containing policy to be
 /// compiled.
-/// The list of system names are the names of the systems to build.
+/// The list of machine names are the names of the machines to build.
 /// Returns a Result containing either a string of CIL policy which is the compiled result or a
 /// list of errors.
 /// In order to convert the compiled CIL policy into a usable policy, you must use secilc.
-pub fn compile_system_policies(
+pub fn compile_machine_policies(
     input_files: Vec<&str>,
-    system_names: Vec<String>,
+    machine_names: Vec<String>,
 ) -> Result<HashMap<String, String>, error::CascadeErrors> {
     let policies = get_policies(input_files)?;
-    compile_system_policies_internal(policies, system_names, false)
+    compile_machine_policies_internal(policies, machine_names, false)
 }
 
-/// Compile all of the system policies
+/// Compile all of the machine policies
 /// The list of input files should contain filenames of files containing policy to be
 /// compiled.
 /// Returns a Result containing either a string of CIL policy which is the compiled result or a
 /// list of errors.
 /// In order to convert the compiled CIL policy into a usable policy, you must use secilc.
-pub fn compile_system_policies_all(
+pub fn compile_machine_policies_all(
     input_files: Vec<&str>,
 ) -> Result<HashMap<String, String>, error::CascadeErrors> {
-    let mut system_names = Vec::new();
+    let mut machine_names = Vec::new();
     let policies = get_policies(input_files)?;
     for p in &policies {
         for e in &p.policy.exprs {
-            if let Expression::Decl(Declaration::System(s)) = e {
-                system_names.push(s.name.to_string());
+            if let Expression::Decl(Declaration::Machine(s)) = e {
+                machine_names.push(s.name.to_string());
             }
         }
     }
-    compile_system_policies_internal(policies, system_names, false)
+    compile_machine_policies_internal(policies, machine_names, false)
 }
 
 /// Generate a dbus_contexts file
@@ -90,10 +90,10 @@ pub fn generate_dbus_contexts() -> Result<String, error::CascadeErrors> {
     Ok(dbus::make_dbus_contexts()?)
 }
 
-fn compile_system_policies_internal(
+fn compile_machine_policies_internal(
     mut policies: Vec<PolicyFile>,
-    system_names: Vec<String>,
-    create_default_system: bool,
+    machine_names: Vec<String>,
+    create_default_machine: bool,
 ) -> Result<HashMap<String, String>, error::CascadeErrors> {
     let mut errors = CascadeErrors::new();
 
@@ -101,7 +101,7 @@ fn compile_system_policies_internal(
     let mut classlist = obj_class::make_classlist();
     let mut type_map = compile::get_built_in_types_map()?;
     let mut module_map = ModuleMap::new();
-    let mut system_map = SystemMap::new();
+    let mut machine_map = MachineMap::new();
 
     // Collect all type declarations
     for p in &policies {
@@ -183,14 +183,14 @@ fn compile_system_policies_internal(
     let m_aliases = compile::collect_aliases(module_map.iter());
     module_map.set_aliases(m_aliases);
 
-    // Validate systems
-    compile::validate_systems(&policies, &module_map, &mut system_map)?;
+    // Validate machines
+    compile::validate_machines(&policies, &module_map, &mut machine_map)?;
 
-    // Create a default module and default system
-    // Insert the default module into the default system and insert the system into the system map
+    // Create a default module and default machine
+    // Insert the default module into the default machine and insert the machine into the machine map
     let mut default_module: ValidatedModule;
     let arg;
-    if create_default_system {
+    if create_default_machine {
         default_module = match ValidatedModule::new(
             CascadeString::from("module"),
             BTreeSet::new(),
@@ -209,36 +209,36 @@ fn compile_system_policies_internal(
         }
         let mut configs = BTreeMap::new();
         configs.insert(constants::HANDLE_UNKNOWN_PERMS.to_string(), &arg);
-        let mut default_system = ValidatedSystem::new(
-            CascadeString::from(system_names.first().unwrap().clone()),
+        let mut default_machine = ValidatedMachine::new(
+            CascadeString::from(machine_names.first().unwrap().clone()),
             BTreeSet::new(),
             configs,
             None,
         );
-        default_system.modules.insert(&default_module);
-        system_map.insert(default_system.name.to_string(), default_system)?;
+        default_machine.modules.insert(&default_module);
+        machine_map.insert(default_machine.name.to_string(), default_machine)?;
     }
 
-    let mut system_hashmap = HashMap::new();
-    for system_name in system_names {
-        match system_map.get(&system_name) {
-            Some(system) => {
-                let system_cil_tree = compile::get_reduced_infos(
+    let mut machine_hashmap = HashMap::new();
+    for machine_name in machine_names {
+        match machine_map.get(&machine_name) {
+            Some(machine) => {
+                let machine_cil_tree = compile::get_reduced_infos(
                     &policies,
                     &classlist,
-                    system,
+                    machine,
                     &type_map,
                     &module_map,
                 )?;
 
-                let system_cil = generate_cil(system_cil_tree);
+                let machine_cil = generate_cil(machine_cil_tree);
 
-                system_hashmap.insert(system_name, system_cil);
+                machine_hashmap.insert(machine_name, machine_cil);
             }
-            None => errors.append(CascadeErrors::from(InvalidSystemError::new(&format!(
-                "System {} does not exist.\nThe valid systems are {}",
-                system_name,
-                system_map
+            None => errors.append(CascadeErrors::from(InvalidMachineError::new(&format!(
+                "Machine {} does not exist.\nThe valid machines are {}",
+                machine_name,
+                machine_map
                     .values()
                     .map(|s| s.name.as_ref())
                     .collect::<Vec<&str>>()
@@ -246,7 +246,7 @@ fn compile_system_policies_internal(
             )))),
         }
     }
-    errors.into_result(system_hashmap)
+    errors.into_result(machine_hashmap)
 }
 
 fn get_policies(input_files: Vec<&str>) -> Result<Vec<PolicyFile>, CascadeErrors> {
@@ -350,7 +350,7 @@ mod tests {
                 _ => continue,
             };
 
-            // TODO: Make compile_system_policy() take an iterator of AsRef<Path>.
+            // TODO: Make compile_machine_policy() take an iterator of AsRef<Path>.
             let cil_gen = match compile_combined(vec![&policy_path.to_string_lossy()]) {
                 Ok(c) => c,
                 Err(e) => match fs::read_to_string(&cil_path) {
@@ -644,8 +644,8 @@ mod tests {
     }
 
     #[test]
-    fn system_test() {
-        valid_policy_test("systems.cas", &["(handleunknown allow)"], &[]);
+    fn machine_test() {
+        valid_policy_test("machines.cas", &["(handleunknown allow)"], &[]);
     }
 
     #[test]
@@ -704,99 +704,100 @@ mod tests {
     }
 
     #[test]
-    fn compile_system_policies_test() {
+    fn compile_machine_policies_test() {
         let policy_files = vec![
-            [POLICIES_DIR, "system_building1.cas"].concat(),
-            [POLICIES_DIR, "system_building2.cas"].concat(),
-            [POLICIES_DIR, "system_building3.cas"].concat(),
+            [POLICIES_DIR, "machine_building1.cas"].concat(),
+            [POLICIES_DIR, "machine_building2.cas"].concat(),
+            [POLICIES_DIR, "machine_building3.cas"].concat(),
         ];
         let policy_files: Vec<&str> = policy_files.iter().map(|s| s as &str).collect();
-        let system_names = vec!["foo".to_string(), "bar".to_string()];
+        let machine_names = vec!["foo".to_string(), "bar".to_string()];
 
-        let res = compile_system_policies(policy_files, system_names.clone());
+        let res = compile_machine_policies(policy_files, machine_names.clone());
         match res {
             Ok(hashmap) => {
                 assert_eq!(hashmap.len(), 2);
-                for (system_name, system_cil) in hashmap.iter() {
-                    if system_name == "foo" {
-                        assert!(system_cil.contains("(handleunknown reject)"));
-                        assert!(system_cil.contains("(allow thud babble (file (read)))"));
-                        assert!(system_cil.contains("(allow thud babble (file (write)))"));
-                        assert!(system_cil.contains("(typeattributeset quux (qux))"));
-                        assert!(system_cil.contains("(macro qux-read ((type this) (type source)) (allow source this (file (read))))"));
-                        assert!(system_cil.contains("(typeattributeset domain (xyzzy))"));
-                        assert!(system_cil.contains("(typeattributeset domain (baz))"));
-                        assert!(system_cil.contains("(typeattributeset domain (quuz))"));
 
-                        assert!(!system_cil.contains("(type unused)"));
+                for (machine_name, machine_cil) in hashmap.iter() {
+                    if machine_name == "foo" {
+                        assert!(machine_cil.contains("(handleunknown reject)"));
+                        assert!(machine_cil.contains("(allow thud babble (file (read)))"));
+                        assert!(machine_cil.contains("(allow thud babble (file (write)))"));
+                        assert!(machine_cil.contains("(typeattributeset quux (qux))"));
+                        assert!(machine_cil.contains("(macro qux-read ((type this) (type source)) (allow source this (file (read))))"));
+                        assert!(machine_cil.contains("(typeattributeset domain (xyzzy))"));
+                        assert!(machine_cil.contains("(typeattributeset domain (baz))"));
+                        assert!(machine_cil.contains("(typeattributeset domain (quuz))"));
+
+                        assert!(!machine_cil.contains("(type unused)"));
                     } else {
-                        assert!(system_cil.contains("(handleunknown deny)"));
-                        assert!(system_cil.contains("(typeattributeset domain (baz))"));
-                        assert!(system_cil.contains("(typeattributeset domain (quuz))"));
-                        assert!(system_cil.contains("(typeattributeset quux (qux))"));
-                        assert!(system_cil.contains("(macro qux-read ((type this) (type source)) (allow source this (file (read))))"));
+                        assert!(machine_cil.contains("(handleunknown deny)"));
+                        assert!(machine_cil.contains("(typeattributeset domain (baz))"));
+                        assert!(machine_cil.contains("(typeattributeset domain (quuz))"));
+                        assert!(machine_cil.contains("(typeattributeset quux (qux))"));
+                        assert!(machine_cil.contains("(macro qux-read ((type this) (type source)) (allow source this (file (read))))"));
 
-                        assert!(!system_cil.contains("(type thud)"));
-                        assert!(!system_cil.contains("(type babble)"));
-                        assert!(!system_cil.contains("(type xyzzy)"));
-                        assert!(!system_cil.contains("(type unused)"));
+                        assert!(!machine_cil.contains("(type thud)"));
+                        assert!(!machine_cil.contains("(type babble)"));
+                        assert!(!machine_cil.contains("(type xyzzy)"));
+                        assert!(!machine_cil.contains("(type unused)"));
                     }
                 }
             }
-            Err(e) => panic!("System building compilation failed with {}", e),
+            Err(e) => panic!("Machine building compilation failed with {}", e),
         }
     }
 
     #[test]
-    fn compile_system_policies_all_test() {
+    fn compile_machine_policies_all_test() {
         let policy_files = vec![
-            [POLICIES_DIR, "system_building1.cas"].concat(),
-            [POLICIES_DIR, "system_building2.cas"].concat(),
-            [POLICIES_DIR, "system_building3.cas"].concat(),
+            [POLICIES_DIR, "machine_building1.cas"].concat(),
+            [POLICIES_DIR, "machine_building2.cas"].concat(),
+            [POLICIES_DIR, "machine_building3.cas"].concat(),
         ];
         let policy_files: Vec<&str> = policy_files.iter().map(|s| s as &str).collect();
 
-        let res = compile_system_policies_all(policy_files);
+        let res = compile_machine_policies_all(policy_files);
         match res {
             Ok(hashmap) => {
                 assert_eq!(hashmap.len(), 3);
-                for (system_name, system_cil) in hashmap.iter() {
-                    if system_name == "foo" {
-                        assert!(system_cil.contains("(handleunknown reject)"));
-                        assert!(system_cil.contains("(allow thud babble (file (read)))"));
-                        assert!(system_cil.contains("(allow thud babble (file (write)))"));
-                        assert!(system_cil.contains("(typeattributeset quux (qux))"));
-                        assert!(system_cil.contains("(macro qux-read ((type this) (type source)) (allow source this (file (read))))"));
-                        assert!(system_cil.contains("(typeattributeset domain (xyzzy))"));
-                        assert!(system_cil.contains("(typeattributeset domain (baz))"));
-                        assert!(system_cil.contains("(typeattributeset domain (quuz))"));
+                for (machine_name, machine_cil) in hashmap.iter() {
+                    if machine_name == "foo" {
+                        assert!(machine_cil.contains("(handleunknown reject)"));
+                        assert!(machine_cil.contains("(allow thud babble (file (read)))"));
+                        assert!(machine_cil.contains("(allow thud babble (file (write)))"));
+                        assert!(machine_cil.contains("(typeattributeset quux (qux))"));
+                        assert!(machine_cil.contains("(macro qux-read ((type this) (type source)) (allow source this (file (read))))"));
+                        assert!(machine_cil.contains("(typeattributeset domain (xyzzy))"));
+                        assert!(machine_cil.contains("(typeattributeset domain (baz))"));
+                        assert!(machine_cil.contains("(typeattributeset domain (quuz))"));
 
-                        assert!(!system_cil.contains("(type unused)"));
-                    } else if system_name == "bar" {
-                        assert!(system_cil.contains("(handleunknown deny)"));
-                        assert!(system_cil.contains("(typeattributeset domain (baz))"));
-                        assert!(system_cil.contains("(typeattributeset domain (quuz))"));
-                        assert!(system_cil.contains("(typeattributeset quux (qux))"));
-                        assert!(system_cil.contains("(macro qux-read ((type this) (type source)) (allow source this (file (read))))"));
+                        assert!(!machine_cil.contains("(type unused)"));
+                    } else if machine_name == "bar" {
+                        assert!(machine_cil.contains("(handleunknown deny)"));
+                        assert!(machine_cil.contains("(typeattributeset domain (baz))"));
+                        assert!(machine_cil.contains("(typeattributeset domain (quuz))"));
+                        assert!(machine_cil.contains("(typeattributeset quux (qux))"));
+                        assert!(machine_cil.contains("(macro qux-read ((type this) (type source)) (allow source this (file (read))))"));
 
-                        assert!(!system_cil.contains("(type thud)"));
-                        assert!(!system_cil.contains("(type babble)"));
-                        assert!(!system_cil.contains("(type xyzzy)"));
-                        assert!(!system_cil.contains("(type unused)"));
+                        assert!(!machine_cil.contains("(type thud)"));
+                        assert!(!machine_cil.contains("(type babble)"));
+                        assert!(!machine_cil.contains("(type xyzzy)"));
+                        assert!(!machine_cil.contains("(type unused)"));
                     } else {
-                        assert!(system_cil.contains("(handleunknown allow)"));
-                        assert!(system_cil.contains("(typeattributeset resource (unused))"));
+                        assert!(machine_cil.contains("(handleunknown allow)"));
+                        assert!(machine_cil.contains("(typeattributeset resource (unused))"));
 
-                        assert!(!system_cil.contains("(type thud)"));
-                        assert!(!system_cil.contains("(type babble)"));
-                        assert!(!system_cil.contains("(type xyzzy)"));
-                        assert!(!system_cil.contains("(type baz)"));
-                        assert!(!system_cil.contains("(type quuz)"));
-                        assert!(!system_cil.contains("(type qux)"));
+                        assert!(!machine_cil.contains("(type thud)"));
+                        assert!(!machine_cil.contains("(type babble)"));
+                        assert!(!machine_cil.contains("(type xyzzy)"));
+                        assert!(!machine_cil.contains("(type baz)"));
+                        assert!(!machine_cil.contains("(type quuz)"));
+                        assert!(!machine_cil.contains("(type qux)"));
                     }
                 }
             }
-            Err(e) => panic!("System building compilation failed with {}", e),
+            Err(e) => panic!("Machine building compilation failed with {}", e),
         }
     }
 
@@ -990,33 +991,37 @@ mod tests {
     }
 
     #[test]
-    fn invalid_system_error() {
-        error_policy_test!("system_invalid.cas", 5, ErrorItem::Compile(_));
+    fn invalid_machine_error() {
+        error_policy_test!("machine_invalid.cas", 5, ErrorItem::Compile(_));
     }
 
     #[test]
-    fn system_invalid_module_error() {
-        error_policy_test!("system_invalid_module.cas", 1, ErrorItem::Compile(_));
+    fn machine_invalid_module_error() {
+        error_policy_test!("machine_invalid_module.cas", 1, ErrorItem::Compile(_));
     }
 
     #[test]
-    fn system_missing_req_config_error() {
-        error_policy_test!("system_missing_req_config.cas", 1, ErrorItem::Compile(_));
+    fn machine_missing_req_config_error() {
+        error_policy_test!("machine_missing_req_config.cas", 1, ErrorItem::Compile(_));
     }
 
     #[test]
-    fn system_multiple_config_error() {
-        error_policy_test!("system_multiple_config.cas", 1, ErrorItem::Compile(_));
+    fn machine_multiple_config_error() {
+        error_policy_test!("machine_multiple_config.cas", 1, ErrorItem::Compile(_));
     }
 
     #[test]
-    fn system_no_modules_error() {
-        error_policy_test!("system_no_modules.cas", 1, ErrorItem::Compile(_));
+    fn machine_no_modules_error() {
+        error_policy_test!("machine_no_modules.cas", 1, ErrorItem::Compile(_));
     }
 
     #[test]
-    fn system_virtual_error() {
-        error_policy_test!("system_virtual.cas", 1, ErrorItem::Parse(ParseError { .. }));
+    fn machine_virtual_error() {
+        error_policy_test!(
+            "machine_virtual.cas",
+            1,
+            ErrorItem::Parse(ParseError { .. })
+        );
     }
 
     #[test]
@@ -1030,22 +1035,22 @@ mod tests {
     }
 
     #[test]
-    fn system_building_error() {
+    fn machine_building_error() {
         let policy_files = vec![
-            [POLICIES_DIR, "system_building1.cas"].concat(),
-            [POLICIES_DIR, "system_building2.cas"].concat(),
-            [POLICIES_DIR, "system_building3.cas"].concat(),
+            [POLICIES_DIR, "machine_building1.cas"].concat(),
+            [POLICIES_DIR, "machine_building2.cas"].concat(),
+            [POLICIES_DIR, "machine_building3.cas"].concat(),
         ];
         let policy_files: Vec<&str> = policy_files.iter().map(|s| s as &str).collect();
-        let system_names = vec!["baz".to_string()];
+        let machine_names = vec!["baz".to_string()];
 
-        let res = compile_system_policies(policy_files, system_names.clone());
+        let res = compile_machine_policies(policy_files, machine_names.clone());
         match res {
             Ok(_) => panic!("Compiled successfully"),
             Err(e) => {
                 assert_eq!(e.error_count(), 1);
                 for error in e {
-                    assert!(matches!(error, ErrorItem::InvalidSystem(_)));
+                    assert!(matches!(error, ErrorItem::InvalidMachine(_)));
                 }
             }
         }

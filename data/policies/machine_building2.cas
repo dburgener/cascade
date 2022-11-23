@@ -1,4 +1,4 @@
-system bar {
+machine bar {
     module foo_mod2;
     let handle_unknown_perms = deny;
 }

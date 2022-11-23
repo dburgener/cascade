@@ -2470,17 +2470,17 @@ fn get_module_annotations(
     Ok(infos)
 }
 
-pub type SystemMap<'a> = AliasMap<ValidatedSystem<'a>>;
+pub type MachineMap<'a> = AliasMap<ValidatedMachine<'a>>;
 
 #[derive(Debug, Clone)]
-pub struct ValidatedSystem<'a> {
+pub struct ValidatedMachine<'a> {
     pub name: CascadeString,
     pub modules: BTreeSet<&'a ValidatedModule<'a>>,
     pub configurations: BTreeMap<String, &'a Argument>,
     declaration_file: Option<SimpleFile<String, String>>,
 }
 
-impl Declared for ValidatedSystem<'_> {
+impl Declared for ValidatedMachine<'_> {
     fn get_file(&self) -> Option<SimpleFile<String, String>> {
         self.declaration_file.clone()
     }
@@ -2490,18 +2490,18 @@ impl Declared for ValidatedSystem<'_> {
     }
 
     fn get_generic_name(&self) -> String {
-        String::from("system")
+        String::from("machine")
     }
 }
 
-impl<'a> ValidatedSystem<'a> {
+impl<'a> ValidatedMachine<'a> {
     pub fn new(
         name: CascadeString,
         modules: BTreeSet<&'a ValidatedModule<'a>>,
         configurations: BTreeMap<String, &'a Argument>,
         declaration_file: Option<SimpleFile<String, String>>,
     ) -> Self {
-        ValidatedSystem {
+        ValidatedMachine {
             name,
             modules,
             configurations,

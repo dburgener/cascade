@@ -1,6 +1,6 @@
-system name {
+machine name {
     module module_name;
-    let system_type = default;
+    let machine_type = default;
     let monolithic = truee;
     let config = option;
 }

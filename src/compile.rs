@@ -7,8 +7,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::TryFrom;
 
 use crate::ast::{
-    Argument, CascadeString, Declaration, Expression, FuncCall, LetBinding, Module, PolicyFile,
-    Statement, System,
+    Argument, CascadeString, Declaration, Expression, FuncCall, LetBinding, Machine, Module,
+    PolicyFile, Statement,
 };
 use crate::constants;
 use crate::context::{BlockType, Context as BlockContext};
@@ -16,8 +16,8 @@ use crate::error::{CascadeErrors, CompileError, ErrorItem, InternalError};
 use crate::internal_rep::{
     argument_to_typeinfo, argument_to_typeinfo_vec, generate_sid_rules, type_slice_to_variant,
     validate_derive_args, Annotated, AnnotationInfo, ArgForValidation, Associated, BoundTypeInfo,
-    ClassList, Context, FunctionArgument, FunctionInfo, FunctionMap, ModuleMap, Sid, SystemMap,
-    TypeInfo, TypeMap, ValidatedCall, ValidatedModule, ValidatedStatement, ValidatedSystem,
+    ClassList, Context, FunctionArgument, FunctionInfo, FunctionMap, MachineMap, ModuleMap, Sid,
+    TypeInfo, TypeMap, ValidatedCall, ValidatedMachine, ValidatedModule, ValidatedStatement,
 };
 
 use codespan_reporting::files::SimpleFile;
@@ -43,12 +43,12 @@ pub fn generate_sexp(
     classlist: &ClassList,
     policy_rules: BTreeSet<ValidatedStatement>,
     func_map: &FunctionMap<'_>,
-    system_configurations: &Option<&BTreeMap<String, &Argument>>,
+    machine_configurations: &Option<&BTreeMap<String, &Argument>>,
 ) -> Result<Vec<sexp::Sexp>, CascadeErrors> {
     let type_decl_list = organize_type_map(type_map)?;
     // TODO: The rest of compilation
     let cil_types = type_list_to_sexp(type_decl_list, type_map);
-    let headers = generate_cil_headers(classlist, *system_configurations);
+    let headers = generate_cil_headers(classlist, *machine_configurations);
     let cil_rules = rules_list_to_sexp(policy_rules);
     let cil_macros = func_map_to_sexp(func_map)?;
     let sid_statements =
@@ -63,14 +63,14 @@ pub fn generate_sexp(
 }
 
 // These are hardcoded, at least for now.
-// This sets up MLS, UBAC, and RBAC properties of the system.
+// This sets up MLS, UBAC, and RBAC properties of the machine.
 // Version 0.1 won't allow any language control of these properties, but that will come later.
 // Until we can actually set these things in the language, we need some sensible defaults to make
 // secilc happy. As we add the above listed security models, this should be refactored to set them
 // in accordance with the policy
 fn generate_cil_headers(
     classlist: &ClassList,
-    system_configurations: Option<&BTreeMap<String, &Argument>>,
+    machine_configurations: Option<&BTreeMap<String, &Argument>>,
 ) -> Vec<sexp::Sexp> {
     let mut ret = classlist.generate_class_perm_cil();
     ret.append(&mut vec![
@@ -92,7 +92,7 @@ fn generate_cil_headers(
             list(&[list(&[atom_s("s0")]), list(&[atom_s("s0")])]),
         ]),
     ]);
-    if let Some(c) = system_configurations {
+    if let Some(c) = machine_configurations {
         if let Some(Argument::Var(handle_unknown)) =
             c.get(&constants::HANDLE_UNKNOWN_PERMS.to_string())
         {
@@ -305,8 +305,8 @@ pub fn build_func_map<'a>(
             Declaration::Type(t) => {
                 let type_being_parsed = match types.get(t.name.as_ref()) {
                     Some(t) => t,
-                    // If a type exists but is not in the system, skip it for now
-                    // TODO: Add extra validation for types defined, but not in the system
+                    // If a type exists but is not in the machine, skip it for now
+                    // TODO: Add extra validation for types defined, but not in the machine
                     None => continue,
                 };
                 decl_map.try_extend(build_func_map(
@@ -602,60 +602,60 @@ fn validate_module_contents<'a>(
     ret
 }
 
-pub fn validate_systems<'a, 'b>(
+pub fn validate_machines<'a, 'b>(
     policies: &'b [PolicyFile],
     module_map: &'b ModuleMap,
-    system_map: &'a mut SystemMap<'b>,
+    machine_map: &'a mut MachineMap<'b>,
 ) -> Result<(), CascadeErrors> {
     let mut errors = CascadeErrors::new();
 
-    // Store all systems across files in a vector
-    let mut systems_vec: Vec<(&SimpleFile<String, String>, &System)> = Vec::new();
+    // Store all machines across files in a vector
+    let mut machines_vec: Vec<(&SimpleFile<String, String>, &Machine)> = Vec::new();
     for p in policies {
         for e in &p.policy.exprs {
-            if let Expression::Decl(Declaration::System(s)) = e {
-                systems_vec.push((&p.file, s));
+            if let Expression::Decl(Declaration::Machine(s)) = e {
+                machines_vec.push((&p.file, s));
             }
         }
     }
 
-    for (file, system) in &systems_vec {
-        let mut system_modules = BTreeSet::new();
+    for (file, machine) in &machines_vec {
+        let mut machine_modules = BTreeSet::new();
         let mut configs = BTreeMap::new();
 
-        // Check that a system has at least 1 module
-        if system.modules.is_empty() {
+        // Check that a machine has at least 1 module
+        if machine.modules.is_empty() {
             errors.append(CascadeErrors::from(
                 ErrorItem::make_compile_or_internal_error(
                     &format!(
-                        "System {} cannot be declared with no modules",
-                        system.name.as_ref()
+                        "Machine {} cannot be declared with no modules",
+                        machine.name.as_ref()
                     ),
                     Some(file),
-                    system.name.get_range(),
-                    "Add a module to the system",
+                    machine.name.get_range(),
+                    "Add a module to the machine",
                 ),
             ));
         }
 
-        // Validate that the modules of a system exist
-        for m in &system.modules {
+        // Validate that the modules of a machine exist
+        for m in &machine.modules {
             match module_map.get(m.as_ref()) {
                 Some(module) => {
-                    system_modules.insert(module);
+                    machine_modules.insert(module);
                 }
                 None => errors.append(CascadeErrors::from(
                     ErrorItem::make_compile_or_internal_error(
                         &format!("Module {} does not exist", m.as_ref()),
                         Some(file),
                         m.get_range(),
-                        "modules within systems must be declared elsewhere",
+                        "modules within machines must be declared elsewhere",
                     ),
                 )),
             }
         }
-        // Validate the system's configurations
-        for c in &system.configurations {
+        // Validate the machine's configurations
+        for c in &machine.configurations {
             let config = c.name.as_ref();
             let options = match config {
                 constants::SYSTEM_TYPE => vec!["standard"],
@@ -678,22 +678,22 @@ pub fn validate_systems<'a, 'b>(
                     continue;
                 }
             };
-            match insert_config(file, system, &mut configs, c, config, options) {
+            match insert_config(file, machine, &mut configs, c, config, options) {
                 Ok(()) => (),
                 Err(e) => errors.append(e),
             }
         }
         // Check for required configurations
-        match check_required_config(file, system, &configs, constants::HANDLE_UNKNOWN_PERMS) {
+        match check_required_config(file, machine, &configs, constants::HANDLE_UNKNOWN_PERMS) {
             Ok(()) => (),
             Err(e) => errors.append(e),
         }
 
-        match system_map.insert(
-            system.name.to_string(),
-            ValidatedSystem::new(
-                system.name.clone(),
-                system_modules,
+        match machine_map.insert(
+            machine.name.to_string(),
+            ValidatedMachine::new(
+                machine.name.clone(),
+                machine_modules,
                 configs,
                 Some((*file).clone()),
             ),
@@ -707,7 +707,7 @@ pub fn validate_systems<'a, 'b>(
 
 fn insert_config<'a>(
     file: &SimpleFile<String, String>,
-    system: &System,
+    machine: &Machine,
     configs: &mut BTreeMap<String, &'a Argument>,
     config: &'a LetBinding,
     config_name: &str,
@@ -718,12 +718,12 @@ fn insert_config<'a>(
         ret.append(CascadeErrors::from(
             ErrorItem::make_compile_or_internal_error(
                 &format!(
-                    "The configuration {} is included more than once in system {}",
-                    config_name, system.name
+                    "The configuration {} is included more than once in machine {}",
+                    config_name, machine.name
                 ),
                 Some(file),
                 config.name.get_range(),
-                "Each configuration can only be included once in each system",
+                "Each configuration can only be included once in each machine",
             ),
         ))
     } else if let std::collections::btree_map::Entry::Vacant(e) =
@@ -752,7 +752,7 @@ fn insert_config<'a>(
 
 fn check_required_config<'a>(
     file: &SimpleFile<String, String>,
-    system: &System,
+    machine: &Machine,
     configs: &BTreeMap<String, &'a Argument>,
     config_name: &str,
 ) -> Result<(), CascadeErrors> {
@@ -761,14 +761,14 @@ fn check_required_config<'a>(
         ret.append(CascadeErrors::from(
             ErrorItem::make_compile_or_internal_error(
                 &format!(
-                    "{} configuration must be included in the system",
+                    "{} configuration must be included in the machine",
                     config_name
                 ),
                 Some(file),
                 None,
                 &format!(
-                    "Add a {} configuration to system {}",
-                    config_name, system.name
+                    "Add a {} configuration to machine {}",
+                    config_name, machine.name
                 ),
             ),
         ));
@@ -776,11 +776,11 @@ fn check_required_config<'a>(
     ret.into_result(())
 }
 
-// Get the types, functions, and policy rules for the system.
+// Get the types, functions, and policy rules for the machine.
 pub fn get_reduced_infos<'a>(
     policies: &'a [PolicyFile],
     classlist: &'a ClassList,
-    system: &'a ValidatedSystem,
+    machine: &'a ValidatedMachine,
     type_map: &'a TypeMap,
     module_map: &'a ModuleMap,
 ) -> Result<Vec<sexp::Sexp>, CascadeErrors> {
@@ -788,7 +788,7 @@ pub fn get_reduced_infos<'a>(
     let mut new_type_map = get_built_in_types_map()?;
 
     // Get the reduced type infos
-    for module in &system.modules {
+    for module in &machine.modules {
         get_reduced_types(module, &mut new_type_map, type_map, module_map)?;
     }
 
@@ -816,7 +816,7 @@ pub fn get_reduced_infos<'a>(
         classlist,
         new_policy_rules,
         &new_func_map,
-        &Some(&system.configurations),
+        &Some(&machine.configurations),
     )?;
 
     ret.into_result(new_cil_tree)
@@ -825,7 +825,7 @@ pub fn get_reduced_infos<'a>(
 // This is a recusive function that gets only the relevant types from the type map.
 // The reduced types are the types in the module and the types in any of that modules' child modules.
 // Parents of those types are also automatically included.
-// The types are cloned so that each system TypeMap can own its own types.
+// The types are cloned so that each machine TypeMap can own its own types.
 pub fn get_reduced_types(
     module: &ValidatedModule,
     reduced_type_map: &mut TypeMap,
@@ -1525,7 +1525,7 @@ fn do_rules_pass<'a>(
             Expression::Decl(Declaration::Type(t)) => {
                 let type_being_parsed = match types.get(t.name.as_ref()) {
                     Some(t) => t,
-                    // If a type exists but is not in the system, skip it for now
+                    // If a type exists but is not in the machine, skip it for now
                     None => continue,
                 };
                 match do_rules_pass(

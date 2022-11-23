@@ -6,7 +6,7 @@ pub const AUDITALLOW_FUNCTION_NAME: &str = "auditallow";
 pub const NEVERALLOW_FUNCTION_NAME: &str = "neverallow";
 pub const FILE_CONTEXT_FUNCTION_NAME: &str = "file_context";
 pub const DOMTRANS_FUNCTION_NAME: &str = "domain_transition";
-pub const SYSTEM_TYPE: &str = "system_type";
+pub const SYSTEM_TYPE: &str = "machine_type";
 pub const MONOLITHIC: &str = "monolithic";
 pub const HANDLE_UNKNOWN_PERMS: &str = "handle_unknown_perms";
 

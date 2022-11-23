@@ -1,4 +1,4 @@
-system name {
+machine name {
     module mod;
     let monolithic = true;
     let handle_unknown_perms = allow;
