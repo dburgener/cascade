@@ -217,6 +217,19 @@ pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
     if let Some(i) = built_in_types.get_mut(constants::SELF) {
         i.inherits = vec![CascadeString::from(constants::RESOURCE)];
     }
+    // Add xattr, task, trans, and genfscon as children of fs_type
+    if let Some(i) = built_in_types.get_mut("xattr") {
+        i.inherits = vec![CascadeString::from(constants::FS_TYPE)];
+    }
+    if let Some(i) = built_in_types.get_mut("task") {
+        i.inherits = vec![CascadeString::from(constants::FS_TYPE)];
+    }
+    if let Some(i) = built_in_types.get_mut("trans") {
+        i.inherits = vec![CascadeString::from(constants::FS_TYPE)];
+    }
+    if let Some(i) = built_in_types.get_mut("genfscon") {
+        i.inherits = vec![CascadeString::from(constants::FS_TYPE)];
+    }
 
     Ok(built_in_types)
 }
