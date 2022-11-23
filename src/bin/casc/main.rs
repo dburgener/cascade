@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
 use selinux_cascade::error::{CascadeErrors, ErrorItem};
-use selinux_cascade::{compile_combined, compile_system_policies, compile_system_policies_all};
+use selinux_cascade::{compile_combined, compile_machine_policies, compile_machine_policies_all};
 
 mod args;
 mod package;
@@ -52,13 +52,13 @@ fn main() -> std::io::Result<()> {
         Some(ColorArg::Never) => ColorChoice::Never,
     };
 
-    // If no system names are given, output a single CIL file containing all of the policies,
+    // If no machine names are given, output a single CIL file containing all of the policies,
     // with the default out file name (out.cil) if an out file name isn't specified.
-    // Else, if the system name given is "all", build all of the systems.
-    // This assumes that "all" is a reserved keyword, so a system cannot be declared with the name "all".
-    // Otherwise, output an individual CIL files for each of the system names given.
-    // In both of the previous two cases, the name of each output CIL file is the name of the system + .cil.
-    let result = if args.system_names.is_empty() {
+    // Else, if the machine name given is "all", build all of the machines.
+    // This assumes that "all" is a reserved keyword, so a machine cannot be declared with the name "all".
+    // Otherwise, output an individual CIL files for each of the machine names given.
+    // In both of the previous two cases, the name of each output CIL file is the name of the machine + .cil.
+    let result = if args.machine_names.is_empty() {
         let res = compile_combined(policies.iter().map(|s| s as &str).collect());
         match res {
             Err(e) => Err(e),
@@ -70,23 +70,23 @@ fn main() -> std::io::Result<()> {
                 Ok(hm)
             }
         }
-    } else if args.system_names.contains(&"all".to_string()) {
-        compile_system_policies_all(policies.iter().map(|s| s as &str).collect())
+    } else if args.machine_names.contains(&"all".to_string()) {
+        compile_machine_policies_all(policies.iter().map(|s| s as &str).collect())
     } else {
-        compile_system_policies(
+        compile_machine_policies(
             policies.iter().map(|s| s as &str).collect(),
-            args.system_names,
+            args.machine_names,
         )
     };
     match result {
         Err(error_list) => print_error(error_list, color),
-        Ok(system_hashmap) => {
-            for (system_name, system_cil) in system_hashmap.iter() {
-                let out_filename = system_name.to_owned() + ".cil";
+        Ok(machine_hashmap) => {
+            for (machine_name, machine_cil) in machine_hashmap.iter() {
+                let out_filename = machine_name.to_owned() + ".cil";
                 let mut out_file = File::create(&out_filename)?;
-                out_file.write_all(system_cil.as_bytes())?;
+                out_file.write_all(machine_cil.as_bytes())?;
                 if args.package {
-                    build_package(system_name, &out_filename, "32")?;
+                    build_package(machine_name, &out_filename, "32")?;
                 }
             }
             Ok(())

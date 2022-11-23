@@ -1,6 +1,6 @@
-virtual system name {
+virtual machine name {
     module mod;
-    let system_type = standard;
+    let machine_type = standard;
     let handle_unknown_perms = allow;
 }
 

@@ -1,4 +1,4 @@
-system foobar {
+machine foobar {
     module foobar_mod;
     let handle_unknown_perms = allow;
 }

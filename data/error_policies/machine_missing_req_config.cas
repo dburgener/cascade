@@ -1,0 +1,7 @@
+machine name {
+    module mod;
+    let monolithic = true;
+    let machine_type = standard;
+}
+
+module mod {}

@@ -207,7 +207,7 @@ pub enum Declaration {
     Type(Box<TypeDecl>),
     Func(Box<FuncDecl>),
     Mod(Module),
-    System(System),
+    Machine(Machine),
 }
 
 impl Virtualable for Declaration {
@@ -216,7 +216,7 @@ impl Virtualable for Declaration {
             Declaration::Type(t) => t.set_virtual(range),
             Declaration::Func(f) => f.set_virtual(range),
             Declaration::Mod(m) => m.set_virtual(range),
-            Declaration::System(s) => s.set_virtual(range),
+            Declaration::Machine(s) => s.set_virtual(range),
         }
     }
 
@@ -235,7 +235,7 @@ impl Virtualable for Declaration {
                 m.set_trait(range.clone())?;
                 m.set_virtual(range)
             }
-            Declaration::System(s) => {
+            Declaration::Machine(s) => {
                 s.set_trait(range.clone())?;
                 s.set_virtual(range)
             }
@@ -249,7 +249,7 @@ impl Declaration {
             Declaration::Type(t) => t.annotations.push(annotation),
             Declaration::Func(f) => f.annotations.push(annotation),
             Declaration::Mod(m) => m.annotations.push(annotation),
-            Declaration::System(s) => s.annotations.push(annotation),
+            Declaration::Machine(s) => s.annotations.push(annotation),
         }
     }
 }
@@ -630,16 +630,16 @@ impl Virtualable for Module {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct System {
+pub struct Machine {
     pub name: CascadeString,
     pub annotations: Annotations,
     pub modules: Vec<CascadeString>,
     pub configurations: Vec<LetBinding>,
 }
 
-impl System {
+impl Machine {
     pub fn new(name: CascadeString) -> Self {
-        System {
+        Machine {
             name,
             annotations: Annotations::new(),
             modules: Vec::new(),
@@ -647,13 +647,13 @@ impl System {
         }
     }
 
-    pub fn set_fields(mut self, input: Vec<SystemBody>) -> Self {
+    pub fn set_fields(mut self, input: Vec<MachineBody>) -> Self {
         for i in input {
             match i {
-                SystemBody::Mod(m) => {
+                MachineBody::Mod(m) => {
                     self.modules.push(m);
                 }
-                SystemBody::Config(l) => {
+                MachineBody::Config(l) => {
                     self.configurations.push(l);
                 }
             }
@@ -672,10 +672,10 @@ impl System {
     }
 }
 
-impl Virtualable for System {
+impl Virtualable for Machine {
     fn set_virtual(&mut self, range: Range<usize>) -> Result<(), ParseErrorMsg> {
         Err(ParseErrorMsg::new(
-            "Systems cannot be virtual".to_string(),
+            "Machines cannot be virtual".to_string(),
             Some(range),
             "Remove the virtual keyword".to_string(),
         ))
@@ -683,7 +683,7 @@ impl Virtualable for System {
 
     fn set_trait(&mut self, range: Range<usize>) -> Result<(), ParseErrorMsg> {
         Err(ParseErrorMsg::new(
-            "The trait keyword cannot be applied to systems".to_string(),
+            "The trait keyword cannot be applied to machines".to_string(),
             Some(range),
             "Remove the trait keyword".to_string(),
         ))
@@ -691,7 +691,7 @@ impl Virtualable for System {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum SystemBody {
+pub enum MachineBody {
     Mod(CascadeString),
     Config(LetBinding),
 }
@@ -771,23 +771,23 @@ mod tests {
     }
 
     #[test]
-    fn set_system_fields() {
-        let fields: Vec<SystemBody> = vec![
-            SystemBody::Mod(CascadeString::from("mod")),
-            SystemBody::Config(LetBinding::new(
-                CascadeString::from("system_type"),
+    fn set_machine_fields() {
+        let fields: Vec<MachineBody> = vec![
+            MachineBody::Mod(CascadeString::from("mod")),
+            MachineBody::Config(LetBinding::new(
+                CascadeString::from("machine_type"),
                 Argument::Var(CascadeString::from("standard")),
             )),
-            SystemBody::Config(LetBinding::new(
+            MachineBody::Config(LetBinding::new(
                 CascadeString::from("handle_unknown_perms"),
                 Argument::Var(CascadeString::from("allow")),
             )),
         ];
-        let s = System::new(CascadeString::from("system_name")).set_fields(fields);
+        let s = Machine::new(CascadeString::from("machine_name")).set_fields(fields);
         assert_eq!(s.modules.len(), 1);
         assert_eq!(s.configurations.len(), 3);
         assert_eq!(s.modules[0].string, "mod");
-        assert_eq!(s.configurations[0].name.string, "system_type");
+        assert_eq!(s.configurations[0].name.string, "machine_type");
         assert_eq!(s.configurations[1].name.string, "handle_unknown_perms");
         assert_eq!(s.configurations[2].name.string, "monolithic");
         assert_eq!(

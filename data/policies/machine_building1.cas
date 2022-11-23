@@ -1,4 +1,4 @@
-system foo {
+machine foo {
     module foo_mod1;
     module foo_mod2;
     let handle_unknown_perms = reject;

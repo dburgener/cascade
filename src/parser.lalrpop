@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
-use crate::ast::{CascadeString, Policy, Declaration, DeclarationModifier, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, LetBinding, Virtualable, FuncCall, DeclaredArgument, Module, System, SystemBody};
+use crate::ast::{CascadeString, Policy, Declaration, DeclarationModifier, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, LetBinding, Virtualable, FuncCall, DeclaredArgument, Module, Machine, MachineBody};
 use lalrpop_util::ErrorRecovery;
 use lalrpop_util::ParseError;
 use crate::error::ParseErrorMsg;
@@ -73,7 +73,7 @@ Decl: Declaration = {
 	TypeDecl => Declaration::Type(<>),
 	FuncDecl => Declaration::Func(<>),
 	ModuleDecl => Declaration::Mod(<>),
-	SystemDecl => Declaration::System(<>),
+	MachineDecl => Declaration::Machine(<>),
 }
 
 TypeDecl: Box<TypeDecl> = {
@@ -144,13 +144,13 @@ ModuleBody: (CascadeString, CascadeString) = {
 	<start: @L> <s: "module"> <end: @R> <n: NameDecl> ";" => (CascadeString::new(s.to_string(), start..end), n),
 }
 
-SystemDecl: System = {
-	"system" <n: NameDecl> "{" <x: SysBody*> "}" => System::new(n).set_fields(x),
+MachineDecl: Machine = {
+	"machine" <n: NameDecl> "{" <x: SysBody*> "}" => Machine::new(n).set_fields(x),
 }
 
-SysBody: SystemBody = {
-	"module" <n: NameDecl> ";" => SystemBody::Mod(n),
-	<l:LetBind> ";" => SystemBody::Config(l),
+SysBody: MachineBody = {
+	"module" <n: NameDecl> ";" => MachineBody::Mod(n),
+	<l:LetBind> ";" => MachineBody::Config(l),
 }
 
 Ann: Annotation = {

@@ -1,0 +1,7 @@
+virtual domain foo {}
+
+resource some_resource {}
+
+domain baz inherits foo, foo {
+	allow(this, some_resource, file, read);
+}

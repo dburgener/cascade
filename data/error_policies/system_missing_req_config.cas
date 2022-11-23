@@ -1,7 +1,0 @@
-system name {
-    module mod;
-    let monolithic = true;
-    let system_type = standard;
-}
-
-module mod {}
