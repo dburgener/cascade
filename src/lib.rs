@@ -1205,6 +1205,26 @@ mod tests {
     #[test]
     fn valid_self() {
         valid_policy_test("self.cas", &["allow qux self (file (read))"], &[]);
+    
+    #[test]
+    fn valid_fs_context() {
+        valid_policy_test(
+            "fs_context.cas",
+            &[
+                "fsuse xattr ext3 (system_u object_r foo ((s0) (s0)))",
+                "fsuse task sockfs (system_u object_r foo ((s0) (s0)))",
+                "fsuse trans proc (system_u object_r foo ((s0) (s0)))",
+                "genfscon proc \"/\" (system_u object_r foo ((s0) (s0)))",
+                "genfscon sysfs \"/zap\" file (system_u object_r foo ((s0) (s0)))",
+                "genfscon tmpfs \"/\" (system_u object_r foo ((s0) (s0)))",
+            ],
+            &[],
+        );
+    }
+
+    #[test]
+    fn invalid_fs_context() {
+        error_policy_test!("fs_context.cas", 5, ErrorItem::Compile(_));
     }
 
     #[test]

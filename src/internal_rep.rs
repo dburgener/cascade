@@ -1597,7 +1597,7 @@ impl From<&FileSystemContextRule<'_>> for sexp::Sexp {
             FSContextType::XAttr | FSContextType::Task | FSContextType::Trans => list(&[
                 atom_s("fsuse"),
                 Sexp::Atom(Atom::S(f.fscontext_type.to_string())),
-                atom_s(&f.fs_name.trim_matches('"')),
+                atom_s(f.fs_name.trim_matches('"')),
                 Sexp::from(&f.context),
             ]),
             FSContextType::GenFSCon => {
@@ -1611,14 +1611,14 @@ impl From<&FileSystemContextRule<'_>> for sexp::Sexp {
                     match &f.file_type {
                         Some(file_type) => list(&[
                             atom_s("genfscon"),
-                            atom_s(&f.fs_name.trim_matches('"')),
+                            atom_s(f.fs_name.trim_matches('"')),
                             atom_s(p.as_ref()),
                             Sexp::Atom(Atom::S(file_type.to_string())),
                             Sexp::from(&f.context),
                         ]),
                         None => list(&[
                             atom_s("genfscon"),
-                            atom_s(&f.fs_name.trim_matches('"')),
+                            atom_s(f.fs_name.trim_matches('"')),
                             atom_s(p.as_ref()),
                             Sexp::from(&f.context),
                         ]),
@@ -1674,7 +1674,7 @@ fn call_to_fsc_rules<'a>(
                 param_type: CascadeString::from("path"),
                 is_list_param: false,
                 name: CascadeString::from("path_regex"),
-                default: Some(Argument::Quote(CascadeString::from("/"))),
+                default: Some(Argument::Quote(CascadeString::from("\"/\""))),
             },
             types,
             None,
@@ -1742,19 +1742,19 @@ fn call_to_fsc_rules<'a>(
     match fscontext_type {
         FSContextType::XAttr | FSContextType::Task | FSContextType::Trans => {
             ret.push(FileSystemContextRule {
-                fscontext_type: fscontext_type,
-                fs_name: fs_name.clone(),
+                fscontext_type,
+                fs_name,
                 path: None,
                 file_type: None,
                 context: fs_context.clone(),
             });
         }
         FSContextType::GenFSCon => {
-            if file_types.len() == 0 {
+            if file_types.is_empty() {
                 ret.push(FileSystemContextRule {
-                    fscontext_type: fscontext_type,
-                    fs_name: fs_name.clone(),
-                    path: Some(regex_string.clone()),
+                    fscontext_type,
+                    fs_name,
+                    path: Some(regex_string),
                     file_type: None,
                     context: fs_context.clone(),
                 });

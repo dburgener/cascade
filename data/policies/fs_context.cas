@@ -1,0 +1,12 @@
+resource foo {
+    fs_context(foo, "ext3", xattr);
+    fs_context(this, "sockfs", task);
+    fs_context(this, "proc", trans);
+
+    fs_context(this, "proc", genfscon, "/");
+    fs_context(this, "tmpfs", genfscon);
+    fs_context(this, "sysfs", genfscon, "/zap", [file]);
+
+	// Policies must include at least one av rule
+	allow(domain, foo, file, [read]);
+}

@@ -170,6 +170,11 @@ The following types are built in to the language:
 * user
 * mls
 * bool
+* fs_type
+* xattr
+* task
+* trans
+* genfscon
 * [T] (a list of any other types)
 
 TODO: Which of these can be in a standard library instead of the compiler?
@@ -289,6 +294,38 @@ This is under discussion now.  We agree that we should take advantage of the fac
 TODO: default contexts.  This will be part of the next phase of design
 
 TODO: file_contexts.subs_dist (although is it necessary with advanced file_context handling features?)
+
+### Filesystem labeling
+
+All filesystem are labeled using the following prototype:
+
+`fs_context(resource fs_label, string fs_name, fs_type type, path path, file_type [obj_class])`
+
+* `fs_label` is label you wish to apply to the filesystem.
+* `fs_name` is the OS recognized name for the filesystem. (e.g. ext4, proc, tmpfs)
+* `fs_type` must be one of the following options:
+  * `xattr`: Filesystems supporting the extended attribute security.selinux. The labeling is persistent for filesystems that support extended attributes.
+  * `task`: For pseudo filesystems supporting task related services such as pipes and sockets.
+  * `trans`: For pseudo filesystems such as pseudo terminals and temporary objects.
+  * `genfscon`: Used to allocate a security context to filesystems that cannot support any of the previous file labeling options
+* `path` is an optional path relative to root of the mounted filesystem.  Currently this is only valid for the proc filesystem, all other types must be "/".  If not given, the field will default to "/".
+* `file_type` is an optional keyword representing a file type to apply the label to. Valid values are the same as in file_context function.  If not given, [any] is assumed.
+  * Note: You must use SELinux userspace tools version 3.4 or newer to use this field.
+
+`xattr`, `task`, and `trans` all represent filesystems that support SELinux security contexts.  The filesystem itself has a labeled applied to it as a whole, which is the `fs_label` provided in this function.  All files on the filesystem also store their own SELinux security context in their own extended attributes. 
+
+`genfscon` represents filesystems that do not support SELinux security contexts.  Generally a filesystem has a single default security context, `fs_label` provided in this function, assigned by `genfscon` from the root (/) that is inherited by all files and directories on that filesystem. The exception to this is the /proc filesystem, where directories can be labeled with a specific security context.
+
+This call must be part of a resource block.
+
+#### Examples
+fs_context(foo, "ext3", xattr);  
+fs_context(this, "sockfs", task);  
+fs_context(this, "tmpfs", trans);  
+
+fs_context(this, "cgroup", genfscon);  
+fs_context(this, "sysfs", genfscon, "/");  
+fs_context(this, "proc", genfscon, "/zap", [file]);  
 
 ## Constants
 
