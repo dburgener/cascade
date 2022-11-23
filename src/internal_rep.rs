@@ -2096,7 +2096,13 @@ impl<'a> TypeInstance<'a> {
                 self.get_range(),
                 "Expected scalar value here",
             ))),
-            TypeValue::SEType(_) => Ok(self.type_info.name.clone()),
+            TypeValue::SEType(_) => {
+                let ret_string = self.type_info.name.to_string();
+                match self.get_range() {
+                    Some(range) => Ok(CascadeString::new(ret_string, range)),
+                    None => Ok(CascadeString::from(ret_string)),
+                }
+            }
         }
     }
 
@@ -2537,6 +2543,28 @@ impl From<&ValidatedCall> for sexp::Sexp {
 mod tests {
     use super::*;
     use crate::sexp_internal;
+
+    #[test]
+    fn typeinstance_test() {
+        let type_info = TypeInfo::make_built_in("foo".to_string(), false);
+        let file = SimpleFile::new("some_file.txt".to_string(), "contents".to_string());
+        let tm = TypeMap::new();
+        let context = BlockContext::new(&tm, None);
+        let type_instance = TypeInstance {
+            instance_value: TypeValue::SEType(Some(2..4)),
+            type_info: Cow::Borrowed(&type_info),
+            file: &file,
+        };
+
+        assert_eq!(
+            type_instance
+                .get_name_or_string(&context)
+                .unwrap()
+                .get_range(),
+            Some(2..4)
+        );
+        assert_eq!(type_instance.get_range(), Some(2..4));
+    }
 
     #[test]
     fn generate_cil_for_av_rule_test() {
