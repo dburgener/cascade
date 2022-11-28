@@ -12,11 +12,11 @@ use crate::ast::{
 };
 use crate::constants;
 use crate::context::{BlockType, Context as BlockContext};
-use crate::error::{CascadeErrors, ErrorItem, InternalError};
+use crate::error::{CascadeErrors, ErrorItem, InternalError, InvalidFileSystemError};
 use crate::internal_rep::{
     argument_to_typeinfo, argument_to_typeinfo_vec, generate_sid_rules, type_slice_to_variant,
     validate_derive_args, Annotated, AnnotationInfo, ArgForValidation, Associated, BoundTypeInfo,
-    ClassList, Context, FunctionArgument, FunctionInfo, FunctionMap, MachineMap, ModuleMap, Sid,
+    ClassList, Context, FileSystemContextRule, FSContextType, FunctionArgument, FunctionInfo, FunctionMap, MachineMap, ModuleMap, Sid,
     TypeInfo, TypeMap, ValidatedCall, ValidatedMachine, ValidatedModule, ValidatedStatement,
 };
 
@@ -340,6 +340,81 @@ pub fn build_func_map<'a>(
     }
 
     Ok(decl_map)
+}
+
+#[allow(clippy::collapsible_if)]
+pub fn validate_rules(statements: &BTreeSet<ValidatedStatement>) -> Result<(), CascadeErrors> {
+    let mut errors = CascadeErrors::new();
+    let mut fsc_rules: BTreeMap<&String, BTreeSet<&FileSystemContextRule>> = BTreeMap::new();
+
+    for statement in statements {
+        // Add all file system context rules to a new map to check for semi duplicates later
+        if let ValidatedStatement::FscRule(fs) = statement {
+            fsc_rules.entry(&fs.fs_name).or_default().insert(fs);
+        }
+    }
+
+    'key_loop: for (_, v) in fsc_rules {
+        // We only have 1 or 0 elements, thus we cannot have a semi duplicate
+        if v.len() <= 1 {
+            continue;
+        }
+        for rule in &v {
+            match rule.fscontext_type {
+                FSContextType::XAttr | FSContextType::Task | FSContextType::Trans => {
+                    // If we ever see a duplicate and one of them is xattr, task, or trans something is wrong
+                    // return an error and look for more.
+                    errors.append(CascadeErrors::from(InvalidFileSystemError::new(&format!(
+                        "Duplicate filesystem context.\n Found two different filesystem type declarations for filesystem: {}",
+                        rule.fs_name
+                    ))));
+                    continue 'key_loop;
+                }
+                FSContextType::GenFSCon => {
+                    // genfscon gets more complicated.  We can have simlar rules as long as the paths different.
+                    // If we find a genfscon with the same path, they must have the same context and object type.
+                    if let Some(path) = &rule.path {
+                        for inner_rule in &v {
+                            if let Some(inner_path) = &inner_rule.path {
+                                if path == inner_path && rule.context != inner_rule.context {
+                                    errors.append(CascadeErrors::from(InvalidFileSystemError::new(&format!(
+                                        "Duplicate genfscon.\n Found duplicate genfscon rules with differing contexts: {}\
+                                        \n\tPath: {}\n\tContext 1: {}\n\tContext 2: {}",
+                                        rule.fs_name,
+                                        path,
+                                        rule.context,
+                                        inner_rule.context,
+                                    ))));
+                                    continue 'key_loop;
+                                // else if let is not suppored currently (https://github.com/rust-lang/rust/issues/53667).
+                                // Thus we check if we are not none and then unwrap
+                                } else if path == inner_path
+                                    && rule.file_type.is_some()
+                                    && inner_rule.file_type.is_some()
+                                {
+                                    if rule.file_type.as_ref().unwrap()
+                                        != inner_rule.file_type.as_ref().unwrap()
+                                    {
+                                        errors.append(CascadeErrors::from(InvalidFileSystemError::new(&format!(
+                                            "Duplicate genfscon.\n Found duplicate genfscon rules with differing object types: {}\
+                                            \n\tPath: {}\n\tObject Type 1: {}\n\tObject Type 2: {}",
+                                            rule.fs_name,
+                                            path,
+                                            rule.file_type.as_ref().unwrap(),
+                                            inner_rule.file_type.as_ref().unwrap(),
+                                        ))));
+                                        continue 'key_loop;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    errors.into_result(())
 }
 
 // Mutate hash map to set the validated body
@@ -821,6 +896,8 @@ pub fn get_reduced_infos<'a>(
 
     // Get the policy rules
     let new_policy_rules = get_policy_rules(policies, &new_type_map, classlist, &new_func_map)?;
+
+    validate_rules(&new_policy_rules)?;
 
     // generate_sexp(...) is called at this step because new_func_map and new_policy_rules,
     // which are needed for the generate_sexp call, cannot be returned from this function.

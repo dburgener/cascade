@@ -995,6 +995,16 @@ impl<'a> TryFrom<String> for Context<'a> {
     }
 }
 
+impl<'a> fmt::Display for Context<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}:{}:{}:{} - {}",
+            self.user, self.role, self.setype, self.mls_low, self.mls_high,
+        )
+    }
+}
+
 pub struct Sid<'a> {
     name: &'a str,
     context: Context<'a>,
@@ -1631,6 +1641,18 @@ impl From<&FileSystemContextRule<'_>> for sexp::Sexp {
     }
 }
 
+impl FileSystemContextRule<'_> {
+    fn get_renamed_statement(&self, renames: &BTreeMap<String, String>) -> Self {
+        FileSystemContextRule {
+            fscontext_type: self.fscontext_type.clone(),
+            fs_name: self.fs_name.clone(),
+            path: self.path.clone(),
+            file_type: self.file_type,
+            context: self.context.get_renamed_context(renames),
+        }
+    }
+}
+
 fn call_to_fsc_rules<'a>(
     c: &'a FuncCall,
     types: &'a TypeMap,
@@ -1690,7 +1712,7 @@ fn call_to_fsc_rules<'a>(
             None,
         )?,
     ];
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
+    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, Some(file))?;
     let mut args_iter = validated_args.iter();
     let mut ret = Vec::new();
 
@@ -1701,12 +1723,12 @@ fn call_to_fsc_rules<'a>(
     let fs_context = match Context::try_from(context_str.to_string()) {
         Ok(c) => c,
         Err(_) => {
-            return Err(CascadeErrors::from(ErrorItem::Compile(CompileError::new(
+            return Err(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
                 "Invalid context",
-                file,
+                Some(file),
                 context_str.get_range(),
                 "Cannot parse this into a context",
-            ))))
+            )))
         }
     };
     let fs_name = args_iter
@@ -1721,12 +1743,12 @@ fn call_to_fsc_rules<'a>(
     let fscontext_type = match fscontext_str.to_string().parse::<FSContextType>() {
         Ok(f) => f,
         Err(_) => {
-            return Err(CascadeErrors::from(ErrorItem::Compile(CompileError::new(
+            return Err(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
                 "Not a valid file system type",
-                file,
+                Some(file),
                 fscontext_str.get_range(), //TODO error not showing correctly
                 "File system type must be 'xattr', 'task', 'trans', or 'genfscon'",
-            ))));
+            )));
         }
     };
     let regex_string = args_iter
@@ -1763,12 +1785,12 @@ fn call_to_fsc_rules<'a>(
                     let file_type = match file_type.to_string().parse::<FileType>() {
                         Ok(f) => f,
                         Err(_) => {
-                            return Err(CascadeErrors::from(ErrorItem::Compile(CompileError::new(
+                            return Err(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
                                 "Not a valid file type",
-                                file,
+                                Some(file),
                                 file_type.get_range(),
                                 "",
-                            ))))
+                            )))
                         }
                     };
 
@@ -2624,12 +2646,12 @@ impl<'a> ValidatedStatement<'a> {
                             .map(ValidatedStatement::FscRule)
                             .collect())
                     } else {
-                        Err(CascadeErrors::from(ErrorItem::Compile(CompileError::new(
+                        Err(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
                             "file_context() calls are only allowed in resources",
-                            file,
+                            Some(file),
                             c.name.get_range(),
                             "Not allowed here",
-                        ))))
+                        )))
                     }
                 }
                 Some(BuiltIns::DomainTransition) => {
@@ -2705,6 +2727,9 @@ impl<'a> ValidatedStatement<'a> {
             }
             ValidatedStatement::ResourcetransRule(r) => {
                 ValidatedStatement::ResourcetransRule(r.get_renamed_statement(renames))
+            }
+            ValidatedStatement::FscRule(f) => {
+                ValidatedStatement::FscRule(f.get_renamed_statement(renames))
             }
         }
     }
