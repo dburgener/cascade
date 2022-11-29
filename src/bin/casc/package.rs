@@ -9,7 +9,7 @@ use flate2::write::GzEncoder;
 use flate2::Compression;
 use tar::{Builder, Header};
 
-use selinux_cascade::generate_dbus_contexts;
+use selinux_cascade::{generate_dbus_contexts, generate_seusers};
 
 const FC_NAME: &str = "file_contexts";
 
@@ -65,6 +65,7 @@ pub fn build_package(
         "contexts/dbus_contexts",
         &dbus_contexts,
     )?;
+    add_file_to_tar_from_string(&mut tar, system_name, "seusers", &generate_seusers())?;
     tar.finish()
 }
 
