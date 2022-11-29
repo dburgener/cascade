@@ -90,6 +90,11 @@ pub fn generate_dbus_contexts() -> Result<String, error::CascadeErrors> {
     Ok(dbus::make_dbus_contexts()?)
 }
 
+/// Generate an seusers file
+pub fn generate_seusers() -> String {
+    "__default__:system_u".to_string()
+}
+
 fn compile_machine_policies_internal(
     mut policies: Vec<PolicyFile>,
     machine_names: Vec<String>,
