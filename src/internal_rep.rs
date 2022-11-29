@@ -1611,28 +1611,37 @@ impl From<&FileSystemContextRule<'_>> for sexp::Sexp {
                 Sexp::from(&f.context),
             ]),
             FSContextType::GenFSCon => {
-                // Since path is an optional arg and I dont want to get
+                // Since path is an optional arg and I don't want to get
                 // into unwrap issue we are doing an 'if let' here.  The lack
-                // of path should be caught ealier, so if we dont have a path
+                // of path should be caught earlier, so if we don't have a path
                 // we will return an empty list.  The more correct way to fix this
                 // is convert this to a try_from, but this causes issues with some
                 // of our match statements and mixing returns.
                 if let Some(p) = &f.path {
-                    match &f.file_type {
-                        Some(file_type) => list(&[
-                            atom_s("genfscon"),
-                            atom_s(f.fs_name.trim_matches('"')),
-                            atom_s(p.as_ref()),
-                            Sexp::Atom(Atom::S(file_type.to_string())),
-                            Sexp::from(&f.context),
-                        ]),
-                        None => list(&[
-                            atom_s("genfscon"),
-                            atom_s(f.fs_name.trim_matches('"')),
-                            atom_s(p.as_ref()),
-                            Sexp::from(&f.context),
-                        ]),
+                    if let Some(file_type) = &f.file_type {
+                        // TODO add secilc check here. Right now our github pipeline
+                        // supports an older version of secilc.  So to get things moving forward
+                        // we are forcing the old behavior.  The new behavior has been tested locally.
+                        // REMEMBER TO UPDATE THE TESTS
+                        // if secilc/libsepol version is new enough {
+                        if false {
+                            return list(&[
+                                atom_s("genfscon"),
+                                atom_s(f.fs_name.trim_matches('"')),
+                                atom_s(p.as_ref()),
+                                Sexp::Atom(Atom::S(file_type.to_string())),
+                                Sexp::from(&f.context),
+                            ]);
+                        }
                     }
+                    // We are purposefully falling through without an else to
+                    // reduce redundant lines of code
+                    list(&[
+                        atom_s("genfscon"),
+                        atom_s(f.fs_name.trim_matches('"')),
+                        atom_s(p.as_ref()),
+                        Sexp::from(&f.context),
+                    ])
                 } else {
                     list(&[])
                 }

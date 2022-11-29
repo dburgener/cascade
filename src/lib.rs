@@ -1216,8 +1216,9 @@ mod tests {
                 "fsuse task sockfs (system_u object_r foo ((s0) (s0)))",
                 "fsuse trans tmpfs (system_u object_r foo ((s0) (s0)))",
                 "genfscon proc \"/\" (system_u object_r foo ((s0) (s0)))",
-                "genfscon sysfs \"/zap\" dir (system_u object_r foo ((s0) (s0)))",
-                "genfscon sysfs \"/zap/baa\" file (system_u object_r bar ((s0) (s0)))",
+                // TODO re-add when secilc check is in place
+                // "genfscon sysfs \"/zap\" dir (system_u object_r foo ((s0) (s0)))",
+                // "genfscon sysfs \"/zap/baa\" file (system_u object_r bar ((s0) (s0)))",
                 "genfscon cgroup \"/\" (system_u object_r foo ((s0) (s0)))",
             ],
             &[],
