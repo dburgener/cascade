@@ -86,7 +86,7 @@ fn main() -> std::io::Result<()> {
                 let mut out_file = File::create(&out_filename)?;
                 out_file.write_all(system_cil.as_bytes())?;
                 if args.package {
-                    build_package(system_name, &out_filename)?;
+                    build_package(system_name, &out_filename, "32")?;
                 }
             }
             Ok(())
