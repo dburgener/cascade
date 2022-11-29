@@ -83,6 +83,13 @@ pub fn compile_system_policies_all(
     compile_system_policies_internal(policies, system_names, false)
 }
 
+/// Generate a dbus_contexts file
+/// In the long term, this needs to take information about the policy to use in the generation
+/// For now, all we generate is an xml template
+pub fn generate_dbus_contexts() -> String {
+    dbus::make_dbus_contexts()
+}
+
 fn compile_system_policies_internal(
     mut policies: Vec<PolicyFile>,
     system_names: Vec<String>,

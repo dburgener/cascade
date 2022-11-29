@@ -1,3 +1,4 @@
+use std::convert::TryInto;
 ///Make a full set of policy files, as stored in /etc/selinux
 use std::fs;
 use std::io::{Error, ErrorKind, Write};
@@ -6,7 +7,9 @@ use std::process::Command;
 
 use flate2::write::GzEncoder;
 use flate2::Compression;
-use tar::Builder;
+use tar::{Builder, Header};
+
+use selinux_cascade::generate_dbus_contexts;
 
 const FC_NAME: &str = "file_contexts";
 
@@ -46,6 +49,12 @@ pub fn build_package(
         "contexts/files/file_contexts",
         FC_NAME,
     )?;
+    add_file_to_tar_from_string(
+        &mut tar,
+        system_name,
+        "contexts/dbus_contexts",
+        &generate_dbus_contexts(),
+    )?;
     tar.finish()
 }
 
@@ -61,6 +70,22 @@ where
     let mut fd = fs::File::open(file_path)?;
     let out_path = Path::new(system_name).join(target_path);
     tar.append_file(out_path, &mut fd)
+}
+
+fn add_file_to_tar_from_string<W>(
+    tar: &mut Builder<W>,
+    system_name: &str,
+    target_path: &str,
+    file_contents: &str,
+) -> std::io::Result<()>
+where
+    W: Write,
+{
+    let mut header = Header::new_gnu();
+    header.set_size(file_contents.len().try_into().unwrap()); //TODO: handle error
+    header.set_cksum();
+    let out_path = Path::new(system_name).join(target_path);
+    tar.append_data(&mut header, out_path, file_contents.as_bytes())
 }
 
 #[cfg(test)]
@@ -84,6 +109,7 @@ mod tests {
             for file in [
                 &["policy/policy.", version].concat(),
                 "contexts/files/file_contexts",
+                "contexts/dbus_contexts",
             ] {
                 let filename = &["package_test/foo/", file].concat();
                 let metadata = fs::metadata(filename).unwrap();
