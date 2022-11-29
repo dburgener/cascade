@@ -213,6 +213,11 @@ pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
         built_in_types.insert(sid.name.to_string(), sid)?;
     }
 
+    // Add self as children of resource
+    if let Some(i) = built_in_types.get_mut("self") {
+        i.inherits = vec![CascadeString::from(constants::RESOURCE)];
+    }
+
     Ok(built_in_types)
 }
 
@@ -1343,6 +1348,8 @@ fn organize_type_map(types: &TypeMap) -> Result<Vec<&TypeInfo>, CascadeErrors> {
 
     let mut out: Vec<&TypeInfo> = Vec::new();
 
+    let mut errors = CascadeErrors::new();
+
     // TODO: This should be allowed, but isn't yet supported.  Remove this check once support for
     // non-virtual inheritance is added
     check_non_virtual_inheritance(types)?;
@@ -1357,6 +1364,15 @@ fn organize_type_map(types: &TypeMap) -> Result<Vec<&TypeInfo>, CascadeErrors> {
             // should have always been populated with at least domain or resource by the parser.
             // Should probably return an internal error if that hasn't happened
             for key in &ti.inherits {
+                if key == "self" {
+                    errors.add_error(ErrorItem::make_compile_or_internal_error(
+                        "Inheriting from self is not supported",
+                        ti.declaration_file.as_ref(),
+                        key.get_range(),
+                        "Cannot inherit self",
+                    ));
+                    continue;
+                }
                 if !out.iter().any(|&x| &x.name == key) {
                     wait = true;
                     continue;
@@ -1379,7 +1395,7 @@ fn organize_type_map(types: &TypeMap) -> Result<Vec<&TypeInfo>, CascadeErrors> {
         }
         out.append(&mut current_pass_types);
     }
-    Ok(out)
+    errors.into_result(out)
 }
 
 // Gather all the alias annotations for types and functions and return them so they can be stored

@@ -1,0 +1,3 @@
+domain qux {
+    allow(this, self, file, read);
+}
