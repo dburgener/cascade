@@ -24,7 +24,7 @@ pub const CLASS: &str = "obj_class";
 pub const MODULE: &str = "module";
 
 pub const BUILT_IN_TYPES: &[&str] = &[
-    DOMAIN, RESOURCE, MODULE, "path", "string", CLASS, PERM, "context", "*",
+    DOMAIN, RESOURCE, MODULE, "path", "string", CLASS, PERM, "context", "self", "*",
 ];
 
 pub const SYSTEM_CONFIG_DEFAULTS: &[(&str, &str)] =

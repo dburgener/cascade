@@ -1168,4 +1168,20 @@ mod tests {
             &[],
         );
     }
+
+    #[test]
+    fn invalid_self_inherit() {
+        error_policy_test!("self_inherit.cas", 4, ErrorItem::Compile(_));
+    }
+
+    #[test]
+    fn valid_self() {
+        valid_policy_test(
+            "self.cas",
+            &[
+                "allow qux self (file (read))",
+            ],
+            &[],
+        );
+    }
 }
