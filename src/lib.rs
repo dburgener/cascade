@@ -1171,7 +1171,7 @@ mod tests {
 
     #[test]
     fn invalid_self_inherit() {
-        error_policy_test!("self_inherit.cas", 4, ErrorItem::Compile(_));
+        error_policy_test!("self_inherit.cas", 2, ErrorItem::Compile(_));
     }
 
     #[test]

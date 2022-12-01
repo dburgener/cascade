@@ -284,7 +284,7 @@ impl CascadeErrors {
         self.errors.push(error.into());
     }
 
-    fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.errors.is_empty()
     }
 
