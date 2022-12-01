@@ -1176,12 +1176,6 @@ mod tests {
 
     #[test]
     fn valid_self() {
-        valid_policy_test(
-            "self.cas",
-            &[
-                "allow qux self (file (read))",
-            ],
-            &[],
-        );
+        valid_policy_test("self.cas", &["allow qux self (file (read))"], &[]);
     }
 }
