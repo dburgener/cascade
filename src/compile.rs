@@ -1394,6 +1394,10 @@ fn organize_type_map(types: &TypeMap) -> Result<Vec<&TypeInfo>, CascadeErrors> {
             tmp_types.remove(&t.name.to_string());
         }
         out.append(&mut current_pass_types);
+
+        if !errors.is_empty() {
+            break;
+        }
     }
     errors.into_result(out)
 }
