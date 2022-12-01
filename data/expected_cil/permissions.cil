@@ -124,7 +124,7 @@
 (type unlabeled_sid)
 (roletype object_r unlabeled_sid)
 (typeattributeset resource (unlabeled_sid))
-(allow foo bar (file ((all))))
+(allow foo bar (file (all)))
 (allow foo foo (capability (fowner)))
 (allow foo foo (capability2 (mac_override)))
 (allow foo foo (capability2 (wake_alarm)))

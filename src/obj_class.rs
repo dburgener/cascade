@@ -597,7 +597,7 @@ pub fn make_classlist() -> ClassList<'static> {
 
 pub fn perm_list_to_sexp(perms: &[CascadeString]) -> Vec<sexp::Sexp> {
     if perms.iter().any(|p| p == "*") {
-        vec![Sexp::Atom(Atom::S("(all)".to_string()))]
+        vec![Sexp::Atom(Atom::S("all".to_string()))]
     } else {
         perms
             .iter()
