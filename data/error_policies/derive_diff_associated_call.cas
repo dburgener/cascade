@@ -11,7 +11,7 @@ virtual resource bar {
 	}
 }
 
-@derive([some_associated_call], strategy=*)
+@derive([some_associated_call], parents=*)
 virtual resource to_associate inherits foo, bar {}
 
 @associate([to_associate])

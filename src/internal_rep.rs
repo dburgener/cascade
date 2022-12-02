@@ -611,7 +611,7 @@ pub fn validate_derive_args<'a>(
             &DeclaredArgument {
                 param_type: CascadeString::from("string"),
                 is_list_param: true,
-                name: CascadeString::from("strategy"),
+                name: CascadeString::from("parents"),
                 default: Some(Argument::Var("*".into())),
             },
             types,
@@ -640,7 +640,7 @@ pub fn validate_derive_args<'a>(
         .map(|s| (*s).clone())
         .collect();
 
-    let strategy = args_iter
+    let parents = args_iter
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
         .get_list(&local_context)?;
@@ -649,11 +649,11 @@ pub fn validate_derive_args<'a>(
         return Err(ErrorItem::Internal(InternalError::new()).into());
     }
 
-    let derive_strategy = if strategy.first() == Some(&CascadeString::from("*")) {
+    let derive_parents = if parents.first() == Some(&CascadeString::from("*")) {
         target_type.get_all_parent_names(types)
     } else {
         let mut ret = BTreeSet::new();
-        for name in &strategy {
+        for name in &parents {
             let parent_ti = types.get(name.as_ref()).ok_or_else(|| {
                 ErrorItem::make_compile_or_internal_error(
                     "No such type",
@@ -685,7 +685,7 @@ pub fn validate_derive_args<'a>(
         ret
     };
 
-    Ok((derive_strategy, functions))
+    Ok((derive_parents, functions))
 }
 
 // strings may be paths or strings

@@ -30,25 +30,25 @@ resource custom_define inherits foo, bar {
 	}
 }
 
-@derive([read], strategy=*)
-resource strategy_union inherits foo, bar {}
+@derive([read], parents=*)
+resource union_all_parents inherits foo, bar {}
 
-@derive([read], strategy=[foo])
-resource strategy_foo inherits foo, bar {}
+@derive([read], parents=[foo])
+resource derive_from_foo inherits foo, bar {}
 
-@derive(*, strategy=*)
+@derive(*, parents=*)
 resource derive_all inherits foo, bar {}
 
 domain some_domain {
-	strategy_union.read(this);
-	strategy_foo.read(this);
+	union_all_parents.read(this);
+	derive_from_foo.read(this);
 	custom_define.read(this);
 	name_diff_child.diff_name(this);
 
-	some_child.domtrans(this, strategy_foo);
+	some_child.domtrans(this, derive_from_foo);
 }
 
-@derive([some_associated_call], strategy=*)
+@derive([some_associated_call], parents=*)
 virtual resource to_associate inherits foo, bar {}
 
 @associate([to_associate])
@@ -66,7 +66,7 @@ virtual resource name_diff2 {
 	}
 }
 
-@derive([diff_name], strategy=*)
+@derive([diff_name], parents=*)
 resource name_diff_child inherits name_diff1, name_diff2 {}
 
 virtual domain some_domain_parent {
@@ -75,5 +75,5 @@ virtual domain some_domain_parent {
 	}
 }
 
-@derive([domtrans], strategy=[some_domain_parent])
+@derive([domtrans], parents=[some_domain_parent])
 domain some_child inherits some_domain_parent {}
