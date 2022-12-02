@@ -16,6 +16,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - name: Checkout selinux userspace
+      uses: actions/checkout@v2
+      with:
+              repository: SELinuxProject/selinux
+              ref: refs/tags/3.4
+              path: selinux
     - name: Setup
       run: .github/workflows/restore.sh
     - name: Build
