@@ -16,18 +16,15 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Checkout selinux userspace
-      uses: actions/checkout@v2
-      with:
-              repository: SELinuxProject/selinux
-              ref: refs/tags/3.4
-              path: selinux
-    - name: Setup
-      run: .github/workflows/restore.sh
     - name: Build
       run: .github/workflows/build.sh
-    - name: Run tests
-      run: .github/workflows/test.sh
+  checks:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup
+      run: .github/workflows/restore-nightly.sh
     - name: Check format
       run: .github/workflows/format.sh
     - name: Check clippy
@@ -36,3 +33,18 @@ jobs:
       run: .github/workflows/doc.sh
     - name: Nightly
       run: .github/workflows/nightly.sh
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - uses: actions/checkout@v2
+    - name: Checkout selinux userspace
+      uses: actions/checkout@v2
+      with:
+              repository: SELinuxProject/selinux
+              ref: refs/tags/3.4
+              path: selinux
+    - name: Setup
+      run: .github/workflows/restore-test.sh
+    - name: Run tests
+      run: .github/workflows/test.sh
