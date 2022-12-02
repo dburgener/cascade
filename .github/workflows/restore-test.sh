@@ -8,5 +8,11 @@ sudo apt install -y --no-install-recommends flex bison pkg-config libaudit-dev l
 
 pushd selinux
 
-sudo make -j16 -C libsepol install
+# 3.2 and earlier have a warning fro stringop-truncation
+# 3.0 and earlier have multiple definitions of global variables, which fails to
+# compile with -fno-common, which is the default behavior in modern GCC.  This
+# was fixed upstream in commit a96e8c59ecac84096d870b42701a504791a8cc8c, but
+# for our purposes compiling the older versions, we can just allow the behavior
+# with -fcommon
+sudo make -j16 CFLAGS="-Wno-error=stringop-truncation -fcommon -pipe -fPIC" -C libsepol install
 sudo make -j16 -C secilc install
