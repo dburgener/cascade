@@ -300,7 +300,7 @@ Annotations are prefixed with the '@' symbol, followed by the name of the
 annotation, and arguments (if any) in parentheses. For example:
 
 ```
-@derive(all)
+@derive(*,*)
 ```
 
 Annotation lines do not end in a semicolon.
@@ -309,10 +309,10 @@ Annotation lines do not end in a semicolon.
 
 The derive annotation tells the compiler to define member functions by using
 the union of the parent class member functions of the same name.  It takes the
-name(s) of function(s) to derive as arguments.
+name(s) of function(s) to derive, and the list of parents to use as arguments.
 
 ```
-@derive(foo)
+@derive([foo], *)
 ```
 
 Is equivalent to:
@@ -325,10 +325,9 @@ fn foo(...) {
 }
 ```
 
-The derive function may also be given the keyword "all" instead of function
-names to derive all conflicting functions from parent classes using this
-method.  (This implies that the word "all" is reserved and cannot be used as a
-function name).
+The derive function may also be given the special character `*` instead of
+function names to derive all conflicting functions from parent classes using
+this method.
 
 ### hint annotation
 
