@@ -47,18 +47,15 @@ impl CompileError {
     pub fn new(
         msg: &str,
         file: &SimpleFile<String, String>,
-        range: Option<Range<usize>>,
+        range: Range<usize>,
         help: &str,
     ) -> Self {
         let mut files = SimpleFiles::new();
         let file_id = files.add(file.name().clone(), file.source().clone());
 
-        let diagnostic = Diagnostic::error().with_message(msg);
-
-        let diagnostic = match range {
-            None => diagnostic,
-            Some(r) => diagnostic.with_labels(vec![Label::primary(file_id, r).with_message(help)]),
-        };
+        let diagnostic = Diagnostic::error()
+            .with_message(msg)
+            .with_labels(vec![Label::primary(file_id, range).with_message(help)]);
 
         CompileError {
             diagnostic: diagnostic.into(),
@@ -236,9 +233,9 @@ impl ErrorItem {
         range: Option<Range<usize>>,
         help: &str,
     ) -> Self {
-        match file {
-            Some(f) => ErrorItem::Compile(CompileError::new(msg, f, range, help)),
-            None => ErrorItem::Internal(InternalError::new()),
+        match (file, range) {
+            (Some(f), Some(r)) => ErrorItem::Compile(CompileError::new(msg, f, r, help)),
+            (_, _) => ErrorItem::Internal(InternalError::new()),
         }
     }
 }
@@ -391,7 +388,7 @@ mod tests {
         let mut error = CompileError::new(
             "This message points at multiple files",
             &file1,
-            Some(9..11),
+            9..11,
             "This is the word 'of' in file 1",
         );
 

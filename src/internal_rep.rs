@@ -253,12 +253,12 @@ impl TypeInfo {
         while let Some(cur_val) = iter.next() {
             if let Some(next_val) = iter.peek() {
                 if cur_val == *next_val {
-                    return Err(CascadeErrors::from(ErrorItem::Compile(CompileError::new(
+                    return Err(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
                         "Duplicate Inherit",
-                        file,
+                        Some(file),
                         (*next_val).get_range(),
                         "This type to inherit is identical to another type in the same inheritance list. Perhaps you meant to inherit some other type?",
-                    ))));
+                    )));
                 }
             }
         }
@@ -470,23 +470,23 @@ fn get_associate(
     file: &SimpleFile<String, String>,
     annotation_name_range: Option<Range<usize>>,
     annotation: &Annotation,
-) -> Result<AnnotationInfo, CompileError> {
+) -> Result<AnnotationInfo, ErrorItem> {
     let mut args = annotation.arguments.iter();
 
     let res_list = match args.next() {
         None => {
-            return Err(CompileError::new(
+            return Err(ErrorItem::make_compile_or_internal_error(
                 "Missing resource list as first argument",
-                file,
+                Some(file),
                 annotation_name_range,
                 "You must use a set of resource names, enclosed by square brackets, as first argument.",
             ));
         }
         Some(Argument::List(l)) => l,
         Some(a) => {
-            return Err(CompileError::new(
+            return Err(ErrorItem::make_compile_or_internal_error(
                 "Invalid argument type",
-                file,
+                Some(file),
                 a.get_range(),
                 "You must use a set of resource names, enclosed by square brackets, as first argument.",
             ));
@@ -494,9 +494,9 @@ fn get_associate(
     };
 
     if let Some(a) = args.next() {
-        return Err(CompileError::new(
+        return Err(ErrorItem::make_compile_or_internal_error(
             "Superfluous argument",
-            file,
+            Some(file),
             a.get_range(),
             "There must be only one argument.",
         ));
@@ -506,9 +506,9 @@ fn get_associate(
         // Checks for duplicate resources.
         resources: res_list.iter().try_fold(BTreeSet::new(), |mut s, e| {
             if !s.insert(e.clone()) {
-                Err(CompileError::new(
+                Err(ErrorItem::make_compile_or_internal_error(
                     "Duplicate resource",
-                    file,
+                    Some(file),
                     e.get_range(),
                     "Only unique resource names are valid.",
                 ))
@@ -522,7 +522,7 @@ fn get_associate(
 fn get_type_annotations(
     file: &SimpleFile<String, String>,
     annotations: &Annotations,
-) -> Result<BTreeSet<AnnotationInfo>, CompileError> {
+) -> Result<BTreeSet<AnnotationInfo>, ErrorItem> {
     let mut infos = BTreeSet::new();
 
     // Only allow a set of specific annotation names and strictly check their arguments.
@@ -533,9 +533,9 @@ fn get_type_annotations(
                 // TODO: Check arguments
                 // Multiple @makelist annotations doesn't make sense.
                 if !infos.insert(AnnotationInfo::MakeList) {
-                    return Err(CompileError::new(
+                    return Err(ErrorItem::make_compile_or_internal_error(
                         "Multiple @makelist annotations",
-                        file,
+                        Some(file),
                         annotation.name.get_range(),
                         "You need to remove duplicated @makelist annotations.",
                     ));
@@ -548,9 +548,9 @@ fn get_type_annotations(
                     annotation.name.get_range(),
                     annotation,
                 )?) {
-                    return Err(CompileError::new(
+                    return Err(ErrorItem::make_compile_or_internal_error(
                         "Multiple @associate annotations",
-                        file,
+                        Some(file),
                         annotation.name.get_range(),
                         "You need to remove duplicated @associate annotations.",
                     ));
@@ -563,9 +563,9 @@ fn get_type_annotations(
                             infos.insert(AnnotationInfo::Alias(a.clone()));
                         }
                         _ => {
-                            return Err(CompileError::new(
+                            return Err(ErrorItem::make_compile_or_internal_error(
                                 "Invalid alias",
-                                file,
+                                Some(file),
                                 a.get_range(),
                                 "This must be a symbol",
                             ));
@@ -578,9 +578,9 @@ fn get_type_annotations(
                 infos.insert(AnnotationInfo::Derive(annotation.arguments.clone()));
             }
             _ => {
-                return Err(CompileError::new(
+                return Err(ErrorItem::make_compile_or_internal_error(
                     "Unknown annotation",
-                    file,
+                    Some(file),
                     annotation.name.get_range(),
                     "This is not a valid annotation name.",
                 ));
@@ -1115,13 +1115,13 @@ impl<'a> ClassList<'a> {
         class: &CascadeString,
         permission: &CascadeString,
         file: &SimpleFile<String, String>,
-    ) -> Result<(), CompileError> {
+    ) -> Result<(), ErrorItem> {
         let class_struct = match self.classes.get(class.as_ref()) {
             Some(c) => c,
             None => {
-                return Err(CompileError::new(
+                return Err(ErrorItem::make_compile_or_internal_error(
                     "No such object class",
-                    file,
+                    Some(file),
                     class.get_range(),
                     "Invalid class",
                 ));
@@ -1158,13 +1158,13 @@ impl<'a> ClassList<'a> {
                 return self.verify_permission(&hll_string, permission, file);
             }
 
-            Err(CompileError::new(
+            Err(ErrorItem::make_compile_or_internal_error(
                 &format!(
                     "Permission {} is not defined for object class {}",
                     permission.as_ref(),
                     class.as_ref()
                 ),
-                file,
+                Some(file),
                 permission.get_range(),
                 "Invalid permission",
             ))
@@ -1507,12 +1507,14 @@ fn call_to_fc_rules<'a>(
     let context = match Context::try_from(context_str.to_string()) {
         Ok(c) => c,
         Err(_) => {
-            return Err(CascadeErrors::from(ErrorItem::Compile(CompileError::new(
-                "Invalid context",
-                file,
-                context_str.get_range(),
-                "Cannot parse this into a context",
-            ))))
+            return Err(CascadeErrors::from(
+                ErrorItem::make_compile_or_internal_error(
+                    "Invalid context",
+                    Some(file),
+                    context_str.get_range(),
+                    "Cannot parse this into a context",
+                ),
+            ))
         }
     };
 
@@ -1520,12 +1522,14 @@ fn call_to_fc_rules<'a>(
         let file_type = match file_type.to_string().parse::<FileType>() {
             Ok(f) => f,
             Err(_) => {
-                return Err(CascadeErrors::from(ErrorItem::Compile(CompileError::new(
-                    "Not a valid file type",
-                    file,
-                    file_type.get_range(),
-                    "",
-                ))))
+                return Err(CascadeErrors::from(
+                    ErrorItem::make_compile_or_internal_error(
+                        "Not a valid file type",
+                        Some(file),
+                        file_type.get_range(),
+                        "",
+                    ),
+                ))
             }
         };
 
@@ -1630,14 +1634,14 @@ fn check_associated_call(
     annotation: &Annotation,
     funcdecl: &FuncDecl,
     file: &SimpleFile<String, String>,
-) -> Result<bool, CompileError> {
+) -> Result<bool, ErrorItem> {
     // Checks that annotation arguments match the expected signature.
     let mut annotation_args = annotation.arguments.iter();
 
     if let Some(a) = annotation_args.next() {
-        return Err(CompileError::new(
+        return Err(ErrorItem::make_compile_or_internal_error(
             "Superfluous argument",
-            file,
+            Some(file),
             a.get_range(),
             "@associated_call doesn't take argument.",
         ));
@@ -1647,9 +1651,9 @@ fn check_associated_call(
     let mut func_args = funcdecl.args.iter();
     match func_args.next() {
         None => {
-            return Err(CompileError::new(
+            return Err(ErrorItem::make_compile_or_internal_error(
                 "Invalid method signature for @associated_call annotation: missing first argument",
-                file,
+                Some(file),
                 funcdecl.name.get_range(),
                 "Add a 'domain' argument.",
             ))
@@ -1661,9 +1665,9 @@ fn check_associated_call(
             default: _,
         }) => {
             if param_type.as_ref() != constants::DOMAIN || *is_list_param {
-                return Err(CompileError::new(
+                return Err(ErrorItem::make_compile_or_internal_error(
                     "Invalid method signature for @associated_call annotation: invalid first argument",
-                    file,
+                    Some(file),
                     param_type.get_range(),
                     "The type of the first method argument must be 'domain'.",
                 ));
@@ -1671,9 +1675,9 @@ fn check_associated_call(
         }
     }
     if let Some(a) = func_args.next() {
-        return Err(CompileError::new(
+        return Err(ErrorItem::make_compile_or_internal_error(
             "Invalid method signature for @associated_call annotation: too many arguments",
-            file,
+            Some(file),
             a.param_type.get_range(),
             "Only one argument of type 'domain' is accepted.",
         ));
@@ -1763,9 +1767,9 @@ impl<'a> FunctionInfo<'a> {
                 "associated_call" => {
                     // For now, there is only one @associated_call allowed.
                     if is_associated_call {
-                        return Err(CompileError::new(
+                        return Err(ErrorItem::make_compile_or_internal_error(
                             "Multiple @associated_call annotations",
-                            declaration_file,
+                            Some(declaration_file),
                             annotation.name.get_range(),
                             "You need to remove superfluous @associated_call annotation.",
                         )
@@ -1782,9 +1786,9 @@ impl<'a> FunctionInfo<'a> {
                                 func_aliases.push(s);
                             }
                             _ => {
-                                return Err(CompileError::new(
+                                return Err(ErrorItem::make_compile_or_internal_error(
                                     "Invalid alias",
-                                    declaration_file,
+                                    Some(declaration_file),
                                     annotation.name.get_range(),
                                     "Alias name must be a symbol",
                                 )
@@ -1794,9 +1798,9 @@ impl<'a> FunctionInfo<'a> {
                     }
                 }
                 _ => {
-                    return Err(CompileError::new(
+                    return Err(ErrorItem::make_compile_or_internal_error(
                         "Unknown annotation",
-                        declaration_file,
+                        Some(declaration_file),
                         annotation.name.get_range(),
                         "The only valid annotation is '@associated_call'",
                     )
@@ -1884,7 +1888,7 @@ impl<'a> FunctionInfo<'a> {
                                 return Err(CompileError::new(
                                         &format!("In attempting to derive {}, parent functions do not have matching prototypes.", name),
                                         first_parent.declaration_file,
-                                        Some(first_range),
+                                        first_range,
                                         "This parent prototype...",
                                         ).add_additional_message(
                                             parent_function.declaration_file,
@@ -1907,7 +1911,7 @@ impl<'a> FunctionInfo<'a> {
                                 return Err(CompileError::new(
                                         &format!("In attempting to derive {}, parent functions do not have matching prototypes.", name),
                                         first_parent.declaration_file,
-                                        Some(first_range),
+                                        first_range,
                                         "This parent is annotated with @associated_call...",
                                         ).add_additional_message(
                                             parent_function.declaration_file,
@@ -1964,9 +1968,9 @@ impl<'a> FunctionInfo<'a> {
         let mut derived_args = match first_parent {
             Some(parent) => parent.args.clone(),
             None => {
-                return Err(CompileError::new(
+                return Err(ErrorItem::make_compile_or_internal_error(
                     &format!("Unable to derive {}, because it has no parent implementations", name),
-                    file,
+                    Some(file),
                     name.get_range(),
                     &format!("Attempted to derive an implementation of {}, but couldn't find any derivable parent implementations", name)).into());
                 // TODO: A hint about the strategy might be useful
@@ -2193,12 +2197,14 @@ impl<'a> ValidatedStatement<'a> {
                             .map(ValidatedStatement::FcRule)
                             .collect())
                     } else {
-                        Err(CascadeErrors::from(ErrorItem::Compile(CompileError::new(
-                            "file_context() calls are only allowed in resources",
-                            file,
-                            c.name.get_range(),
-                            "Not allowed here",
-                        ))))
+                        Err(CascadeErrors::from(
+                            ErrorItem::make_compile_or_internal_error(
+                                "file_context() calls are only allowed in resources",
+                                Some(file),
+                                c.name.get_range(),
+                                "Not allowed here",
+                            ),
+                        ))
                     }
                 }
                 Some(BuiltIns::DomainTransition) => {
@@ -2215,12 +2221,14 @@ impl<'a> ValidatedStatement<'a> {
                             .collect(),
                         )
                     } else {
-                        Err(CascadeErrors::from(ErrorItem::Compile(CompileError::new(
-                            "domain_transition() calls are not allowed in resources",
-                            file,
-                            c.name.get_range(),
-                            "Not allowed here",
-                        ))))
+                        Err(CascadeErrors::from(
+                            ErrorItem::make_compile_or_internal_error(
+                                "domain_transition() calls are not allowed in resources",
+                                Some(file),
+                                c.name.get_range(),
+                                "Not allowed here",
+                            ),
+                        ))
                     }
                 }
                 None => Ok(Some(ValidatedStatement::Call(Box::new(ValidatedCall::new(
@@ -2314,22 +2322,25 @@ impl ValidatedCall {
         let function_info = match functions.get(&cil_name) {
             Some(function_info) => function_info,
             None => {
-                return Err(CascadeErrors::from(ErrorItem::Compile(CompileError::new(
-                    "No such function",
-                    file,
-                    call.get_name_range(),
-                    "",
-                ))));
+                return Err(CascadeErrors::from(
+                    ErrorItem::make_compile_or_internal_error(
+                        "No such function",
+                        Some(file),
+                        call.get_name_range(),
+                        "",
+                    ),
+                ));
             }
         };
 
         if function_info.is_virtual {
-            return Err(CascadeErrors::from(CompileError::new(
+            return Err(ErrorItem::make_compile_or_internal_error(
                 "Invalid call to virtual function",
-                file,
+                Some(file),
                 call.get_name_range(),
                 "This function is marked as virtual, so it can't be called.",
-            )));
+            )
+            .into());
         }
 
         // Each argument must match the type the function signature expects
@@ -2444,7 +2455,7 @@ impl<'a> ValidatedModule<'a> {
 fn get_module_annotations(
     file: &SimpleFile<String, String>,
     annotations: &Annotations,
-) -> Result<BTreeSet<AnnotationInfo>, CompileError> {
+) -> Result<BTreeSet<AnnotationInfo>, ErrorItem> {
     let mut infos = BTreeSet::new();
     for annotation in annotations.annotations.iter() {
         match annotation.name.as_ref() {
@@ -2455,9 +2466,9 @@ fn get_module_annotations(
                             infos.insert(AnnotationInfo::Alias(a.clone()));
                         }
                         _ => {
-                            return Err(CompileError::new(
+                            return Err(ErrorItem::make_compile_or_internal_error(
                                 "Invalid alias",
-                                file,
+                                Some(file),
                                 annotation.name.get_range(),
                                 "Alias name must be a symbol",
                             ));
@@ -2466,9 +2477,9 @@ fn get_module_annotations(
                 }
             }
             _ => {
-                return Err(CompileError::new(
+                return Err(ErrorItem::make_compile_or_internal_error(
                     "Unknown annotation",
-                    file,
+                    Some(file),
                     annotation.name.get_range(),
                     "The only valid annotation for modules is '@alias'",
                 ));
@@ -3233,18 +3244,38 @@ mod tests {
             .verify_permission(&"process".into(), &"foo".into(), &fake_file)
             .is_ok());
 
-        match classlist.verify_permission(&"bar".into(), &"baz".into(), &fake_file) {
+        match classlist.verify_permission(
+            &CascadeString::new("bar".to_string(), 0..1),
+            &CascadeString::new("baz".to_string(), 0..1),
+            &fake_file,
+        ) {
             Ok(_) => panic!("Nonexistent class verified"),
-            Err(e) => assert!(e.diagnostic.inner.message.contains("No such object class")),
+            Err(e) => {
+                if let ErrorItem::Compile(e) = e {
+                    assert!(e.diagnostic.inner.message.contains("No such object class"))
+                } else {
+                    panic!("verify permission returned an internal error")
+                }
+            }
         }
 
-        match classlist.verify_permission(&"foo".into(), &"cap_bar".into(), &fake_file) {
+        match classlist.verify_permission(
+            &CascadeString::new("foo".to_string(), 0..1),
+            &CascadeString::new("cap_bar".to_string(), 0..1),
+            &fake_file,
+        ) {
             Ok(_) => panic!("Nonexistent permission verified"),
-            Err(e) => assert!(e
-                .diagnostic
-                .inner
-                .message
-                .contains("cap_bar is not defined for")),
+            Err(e) => {
+                if let ErrorItem::Compile(e) = e {
+                    assert!(e
+                        .diagnostic
+                        .inner
+                        .message
+                        .contains("cap_bar is not defined for"))
+                } else {
+                    panic!("verify permission returned an internal error")
+                }
+            }
         }
     }
 
