@@ -15,14 +15,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Build
       run: .github/workflows/build.sh
   checks:
     runs-on: ubuntu-latest
     needs: build
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Setup
       run: .github/workflows/restore-nightly.sh
     - name: Check format
@@ -47,9 +47,9 @@ jobs:
         # test against 2.7-2.9
         selinux-version: [ secilc-3.0, secilc-3.1, 3.2, 3.3, 3.4 ]
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Checkout selinux userspace
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
               repository: SELinuxProject/selinux
               ref: refs/tags/${{ matrix.selinux-version }}
