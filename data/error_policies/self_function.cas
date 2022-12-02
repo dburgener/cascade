@@ -1,0 +1,9 @@
+resource my_file {
+	my_domain.read(self);
+}
+
+domain my_domain {
+	fn read(resource r) {
+		allow(this, r, file, [ read open getattr ]);
+	}
+}

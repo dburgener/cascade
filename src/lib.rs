@@ -1175,6 +1175,16 @@ mod tests {
     }
 
     #[test]
+    fn invalid_self_subject() {
+        error_policy_test!("self_subject.cas", 1, ErrorItem::Compile(_));
+    }
+
+    #[test]
+    fn invalid_self_function() {
+        error_policy_test!("self_function.cas", 1, ErrorItem::Compile(_));
+    }
+
+    #[test]
     fn valid_self() {
         valid_policy_test("self.cas", &["allow qux self (file (read))"], &[]);
     }

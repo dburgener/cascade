@@ -22,9 +22,10 @@ pub const RESOURCE: &str = "resource";
 pub const PERM: &str = "perm";
 pub const CLASS: &str = "obj_class";
 pub const MODULE: &str = "module";
+pub const SELF: &str = "self";
 
 pub const BUILT_IN_TYPES: &[&str] = &[
-    DOMAIN, RESOURCE, MODULE, "path", "string", CLASS, PERM, "context", "self", "*",
+    DOMAIN, RESOURCE, MODULE, "path", "string", CLASS, PERM, "context", SELF, "*",
 ];
 
 pub const SYSTEM_CONFIG_DEFAULTS: &[(&str, &str)] =

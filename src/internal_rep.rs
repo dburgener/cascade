@@ -2723,6 +2723,7 @@ fn validate_arguments<'a>(
             class_perms,
             context,
             file,
+            call.is_avc(),
         )?;
         args[index].provided_arg = Some(validated_arg);
     }
@@ -2757,6 +2758,7 @@ fn validate_arguments<'a>(
                     class_perms,
                     context,
                     file,
+                    call.is_avc(),
                 )?;
                 args[index].provided_arg = Some(validated_arg);
             }
@@ -2787,6 +2789,7 @@ fn validate_arguments<'a>(
                         class_perms,
                         context,
                         file,
+                        call.is_avc(),
                     )?,
                     None => {
                         return Err(ErrorItem::make_compile_or_internal_error(
@@ -2897,6 +2900,7 @@ impl<'a> ArgForValidation<'a> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn validate_argument<'a>(
     arg: ArgForValidation,
     cast_name: &Option<CascadeString>,
@@ -2905,6 +2909,7 @@ fn validate_argument<'a>(
     class_perms: &ClassList,
     context: &BlockContext<'a>,
     file: Option<&'a SimpleFile<String, String>>,
+    is_avc: bool,
 ) -> Result<TypeInstance<'a>, ErrorItem> {
     // If there is a cast, we first validate that regardless of whether the actual value is a list
     if let Some(cast_name) = cast_name {
@@ -2918,6 +2923,7 @@ fn validate_argument<'a>(
             class_perms,
             context,
             file,
+            is_avc,
         )?;
         if !matches!(cast_ti.instance_value, TypeValue::SEType(_)) {
             return Err(ErrorItem::make_compile_or_internal_error(
@@ -2977,6 +2983,7 @@ fn validate_argument<'a>(
                         class_perms,
                         context,
                         file,
+                        is_avc,
                     );
                     // TODO: Do we handle bound lists here?
                 }
@@ -2986,6 +2993,23 @@ fn validate_argument<'a>(
                     arg.get_range(),
                     "This function requires a list value here",
                 ));
+            }
+
+            if let Some(resource_type) = types.get(constants::RESOURCE) {
+                if (target_argument.param_type == resource_type
+                    || target_argument
+                        .param_type
+                        .is_child_or_actual_type(resource_type, types))
+                    && arg_typeinfo.name == constants::SELF
+                    && !is_avc
+                {
+                    return Err(ErrorItem::Compile(CompileError::new(
+                        "'self' passed as resource argument",
+                        file,
+                        arg.get_range(),
+                        "'self' cannot be passed into a function as a resource since 'self' is dependent on local context",
+                    )));
+                }
             }
 
             if arg_typeinfo.is_child_or_actual_type(target_argument.param_type, types) {
