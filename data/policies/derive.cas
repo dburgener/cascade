@@ -39,6 +39,9 @@ resource derive_from_foo inherits foo, bar {}
 @derive(*, parents=*)
 resource derive_all inherits foo, bar {}
 
+@derive(*, parents=[foo bar])
+resource enumerate_parents inherits foo, bar {}
+
 domain some_domain {
 	union_all_parents.read(this);
 	derive_from_foo.read(this);
