@@ -431,6 +431,10 @@ impl FuncCall {
         None
     }
 
+    pub fn is_avc(&self) -> bool {
+        constants::AV_RULES.iter().any(|i| *i == self.name)
+    }
+
     pub fn get_display_name(&self) -> String {
         match &self.class_name {
             Some(class) => format!("{}.{}", class, self.name),

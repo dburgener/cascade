@@ -214,7 +214,7 @@ pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
     }
 
     // Add self as children of resource
-    if let Some(i) = built_in_types.get_mut("self") {
+    if let Some(i) = built_in_types.get_mut(constants::SELF) {
         i.inherits = vec![CascadeString::from(constants::RESOURCE)];
     }
 
@@ -1364,7 +1364,7 @@ fn organize_type_map(types: &TypeMap) -> Result<Vec<&TypeInfo>, CascadeErrors> {
             // should have always been populated with at least domain or resource by the parser.
             // Should probably return an internal error if that hasn't happened
             for key in &ti.inherits {
-                if key == "self" {
+                if key == constants::SELF {
                     errors.add_error(ErrorItem::make_compile_or_internal_error(
                         "Inheriting from self is not supported",
                         ti.declaration_file.as_ref(),
