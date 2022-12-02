@@ -10,5 +10,5 @@ virtual resource bar {
 	}
 }
 
-@derive([do_something], union)
+@derive([do_something], *)
 resource baz inherits foo, bar {}

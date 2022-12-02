@@ -10,7 +10,7 @@ resource foo inherits my_trait {
 	}
 }
 
-@derive([write], strategy=union)
+@derive([write], strategy=*)
 resource baz inherits my_trait {}
 
 domain bar {

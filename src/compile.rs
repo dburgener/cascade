@@ -16,9 +16,8 @@ use crate::error::{CascadeErrors, CompileError, ErrorItem, InternalError};
 use crate::internal_rep::{
     argument_to_typeinfo, argument_to_typeinfo_vec, generate_sid_rules, type_slice_to_variant,
     validate_derive_args, Annotated, AnnotationInfo, ArgForValidation, Associated, BoundTypeInfo,
-    ClassList, Context, DeriveStrategy, FunctionArgument, FunctionInfo, FunctionMap, ModuleMap,
-    Sid, SystemMap, TypeInfo, TypeMap, ValidatedCall, ValidatedModule, ValidatedStatement,
-    ValidatedSystem,
+    ClassList, Context, FunctionArgument, FunctionInfo, FunctionMap, ModuleMap, Sid, SystemMap,
+    TypeInfo, TypeMap, ValidatedCall, ValidatedModule, ValidatedStatement, ValidatedSystem,
 };
 
 use codespan_reporting::files::SimpleFile;
@@ -151,7 +150,9 @@ pub fn verify_extends(p: &PolicyFile, type_map: &TypeMap) -> Result<(), CascadeE
 
 pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
     let mut built_in_types = TypeMap::new();
-    let list_coercions = constants::BUILT_IN_TYPES.iter().map(|t| *t == "perm");
+    let list_coercions = constants::BUILT_IN_TYPES
+        .iter()
+        .map(|t| *t == "perm" || *t == "*");
 
     for (built_in, list_coercion) in constants::BUILT_IN_TYPES.iter().zip(list_coercions) {
         let built_in = built_in.to_string();
@@ -159,6 +160,16 @@ pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
             built_in.clone(),
             TypeInfo::make_built_in(built_in, list_coercion),
         )?;
+    }
+
+    // '*' is a special case.  It can be used to mean "all" of the things.  For now, the meaning of
+    // "all" is only defined for strings (in annotation contexts where the annotation is
+    // responsible for figuring it out) and perms (all permissions for a given object
+    if let Some(t) = built_in_types.get_mut("*") {
+        t.inherits = vec![
+            CascadeString::from("string"),
+            CascadeString::from(constants::PERM),
+        ];
     }
 
     //Special handling for sids.  These are temporary built in types that are handled differently
@@ -389,16 +400,11 @@ fn handle_derive<'a>(
     target_type: &'a TypeInfo,
     derive_args: &[Argument],
     functions: &mut FunctionMap<'a>,
-    types: &TypeMap,
+    types: &'a TypeMap,
     class_perms: &ClassList,
 ) -> Result<(), CascadeErrors> {
-    let (strategy, mut func_names) =
+    let (parents, mut func_names) =
         validate_derive_args(target_type, derive_args, types, class_perms)?;
-
-    let parents = match &strategy {
-        DeriveStrategy::Union => target_type.get_all_parent_names(types),
-        DeriveStrategy::Parent(parent) => [parent].into(),
-    };
 
     if vec![CascadeString::from("all")] == func_names {
         func_names = get_all_function_names(&parents, &*functions);
