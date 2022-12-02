@@ -36,7 +36,7 @@ resource strategy_union inherits foo, bar {}
 @derive([read], strategy=[foo])
 resource strategy_foo inherits foo, bar {}
 
-@derive([all], strategy=*)
+@derive(*, strategy=*)
 resource derive_all inherits foo, bar {}
 
 domain some_domain {

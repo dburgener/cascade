@@ -406,7 +406,7 @@ fn handle_derive<'a>(
     let (parents, mut func_names) =
         validate_derive_args(target_type, derive_args, types, class_perms)?;
 
-    if vec![CascadeString::from("all")] == func_names {
+    if vec![CascadeString::from("*")] == func_names {
         func_names = get_all_function_names(&parents, &*functions);
     }
 
