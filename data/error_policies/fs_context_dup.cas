@@ -7,8 +7,8 @@ resource foo {
 
     fs_context(this, "test", genfscon, "/zap/baa", [file]);
 
-	// Policies must include at least one av rule
-	allow(domain, foo, file, [read]);
+    // Policies must include at least one av rule
+    allow(domain, foo, file, [read]);
 }
 
 resource bar {

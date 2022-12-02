@@ -10,8 +10,8 @@ resource foo {
     // TODO re-add when secilc check is in place
     // fs_context(this, "sysfs", genfscon, "/zap", [dir]);
 
-	// Policies must include at least one av rule
-	allow(domain, foo, file, [read]);
+    // Policies must include at least one av rule
+    allow(domain, foo, file, [read]);
 }
 
 // TODO re-add when secilc check is in place

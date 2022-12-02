@@ -49,7 +49,7 @@ pub fn generate_sexp(
     // TODO: The rest of compilation
     let cil_types = type_list_to_sexp(type_decl_list, type_map);
     let headers = generate_cil_headers(classlist, *machine_configurations);
-    let cil_rules = rules_list_to_sexp(policy_rules);
+    let cil_rules = rules_list_to_sexp(policy_rules)?;
     let cil_macros = func_map_to_sexp(func_map)?;
     let sid_statements =
         generate_sid_rules(generate_sids("kernel_sid", "security_sid", "unlabeled_sid"));
@@ -1684,11 +1684,12 @@ fn get_rules_vec_for_type(ti: &TypeInfo, s: sexp::Sexp, type_map: &TypeMap) -> V
     ret
 }
 
-fn rules_list_to_sexp<'a, T>(rules: T) -> Vec<sexp::Sexp>
+fn rules_list_to_sexp<'a, T>(rules: T) -> Result<Vec<sexp::Sexp>, ErrorItem>
 where
     T: IntoIterator<Item = ValidatedStatement<'a>>,
 {
-    rules.into_iter().map(|r| Sexp::from(&r)).collect()
+    let ret: Result<Vec<_>, _> = rules.into_iter().map(|r| Sexp::try_from(&r)).collect();
+    ret
 }
 
 fn generate_sids<'a>(

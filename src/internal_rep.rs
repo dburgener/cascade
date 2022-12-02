@@ -18,7 +18,7 @@ use crate::ast::{
 };
 use crate::constants;
 use crate::context::{BlockType, Context as BlockContext};
-use crate::error::{CascadeErrors, CompileError, ErrorItem, InternalError};
+use crate::error::{CascadeErrors, CompileError, ErrorItem, InternalError, InvalidFileSystemError};
 use crate::obj_class::perm_list_to_sexp;
 
 const DEFAULT_USER: &str = "system_u";
@@ -1600,23 +1600,18 @@ pub struct FileSystemContextRule<'a> {
     pub context: Context<'a>,
 }
 
-// TODO convert to TryFrom/try_from see comment below
-impl From<&FileSystemContextRule<'_>> for sexp::Sexp {
-    fn from(f: &FileSystemContextRule) -> sexp::Sexp {
+impl TryFrom<&FileSystemContextRule<'_>> for sexp::Sexp {
+    type Error = ErrorItem;
+
+    fn try_from(f: &FileSystemContextRule) -> Result<sexp::Sexp, ErrorItem> {
         match f.fscontext_type {
-            FSContextType::XAttr | FSContextType::Task | FSContextType::Trans => list(&[
+            FSContextType::XAttr | FSContextType::Task | FSContextType::Trans => Ok(list(&[
                 atom_s("fsuse"),
                 Sexp::Atom(Atom::S(f.fscontext_type.to_string())),
                 atom_s(f.fs_name.trim_matches('"')),
                 Sexp::from(&f.context),
-            ]),
+            ])),
             FSContextType::GenFSCon => {
-                // Since path is an optional arg and I don't want to get
-                // into unwrap issue we are doing an 'if let' here.  The lack
-                // of path should be caught earlier, so if we don't have a path
-                // we will return an empty list.  The more correct way to fix this
-                // is convert this to a try_from, but this causes issues with some
-                // of our match statements and mixing returns.
                 if let Some(p) = &f.path {
                     if let Some(file_type) = &f.file_type {
                         // TODO add secilc check here. Right now our github pipeline
@@ -1625,25 +1620,31 @@ impl From<&FileSystemContextRule<'_>> for sexp::Sexp {
                         // REMEMBER TO UPDATE THE TESTS
                         // if secilc/libsepol version is new enough {
                         if false {
-                            return list(&[
+                            return Ok(list(&[
                                 atom_s("genfscon"),
                                 atom_s(f.fs_name.trim_matches('"')),
                                 atom_s(p.as_ref()),
                                 Sexp::Atom(Atom::S(file_type.to_string())),
                                 Sexp::from(&f.context),
-                            ]);
+                            ]));
                         }
                     }
                     // We are purposefully falling through without an else to
                     // reduce redundant lines of code
-                    list(&[
+                    Ok(list(&[
                         atom_s("genfscon"),
                         atom_s(f.fs_name.trim_matches('"')),
                         atom_s(p.as_ref()),
                         Sexp::from(&f.context),
-                    ])
+                    ]))
                 } else {
-                    list(&[])
+                    Err(ErrorItem::InvalidFileSystem(InvalidFileSystemError::new(
+                        &format!(
+                            "Genfscon missing path.\n No path given for genfscon rule:\
+                        \n\tFilesystem name: {}\n\tContext: {}",
+                            f.fs_name, f.context,
+                        ),
+                    )))
                 }
             }
         }
@@ -1755,30 +1756,49 @@ fn call_to_fsc_rules<'a>(
             return Err(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
                 "Not a valid file system type",
                 Some(file),
-                fscontext_str.get_range(), //TODO error not showing correctly
+                fscontext_str.get_range(),
                 "File system type must be 'xattr', 'task', 'trans', or 'genfscon'",
             )));
         }
     };
-    let regex_string = args_iter
+    let regex_string_arg = args_iter
         .next()
-        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
-        .get_name_or_string(context)?
-        .to_string();
-    let file_types = args_iter
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?;
+    let regex_string = regex_string_arg.get_name_or_string(context)?.to_string();
+    let file_types_arg = args_iter
         .next()
-        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
-        .get_list(context)?;
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?;
+    let file_types = file_types_arg.get_list(context)?;
 
     match fscontext_type {
         FSContextType::XAttr | FSContextType::Task | FSContextType::Trans => {
-            ret.push(FileSystemContextRule {
-                fscontext_type,
-                fs_name,
-                path: None,
-                file_type: None,
-                context: fs_context.clone(),
-            });
+            // The 'regex_string_arg.get_range().is_none()' is a hacky way to
+            // to check if arg was actually provided or not.  Since we set the
+            // default for regex_string to "/" this is the only way I could find
+            // to test if the actual arg was passed or not
+            if regex_string_arg.get_range().is_none() && file_types.is_empty() {
+                ret.push(FileSystemContextRule {
+                    fscontext_type,
+                    fs_name,
+                    path: None,
+                    file_type: None,
+                    context: fs_context.clone(),
+                });
+            } else if !file_types.is_empty() {
+                return Err(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
+                    "File types can only be provided for 'genfscon'",
+                    Some(file),
+                    file_types_arg.get_range(),
+                    "",
+                )));
+            } else {
+                return Err(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
+                    "File path can only be provided for 'genfscon'",
+                    Some(file),
+                    regex_string_arg.get_range(),
+                    "",
+                )));
+            }
         }
         FSContextType::GenFSCon => {
             if file_types.is_empty() {
@@ -2498,7 +2518,7 @@ impl TryFrom<&FunctionInfo<'_>> for sexp::Sexp {
                         ValidatedStatement::AvRule(a) => macro_cil.push(Sexp::from(a)),
                         ValidatedStatement::FcRule(f) => macro_cil.push(Sexp::from(f)),
                         ValidatedStatement::ResourcetransRule(r) => macro_cil.push(Sexp::from(r)),
-                        ValidatedStatement::FscRule(fs) => macro_cil.push(Sexp::from(fs)),
+                        ValidatedStatement::FscRule(fs) => macro_cil.push(Sexp::try_from(fs)?),
                         ValidatedStatement::DomtransRule(d) => macro_cil.push(Sexp::from(d)),
                     }
                 }
@@ -2656,7 +2676,7 @@ impl<'a> ValidatedStatement<'a> {
                             .collect())
                     } else {
                         Err(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
-                            "file_context() calls are only allowed in resources",
+                            "fs_context() calls are only allowed in resources",
                             Some(file),
                             c.name.get_range(),
                             "Not allowed here",
@@ -2744,15 +2764,16 @@ impl<'a> ValidatedStatement<'a> {
     }
 }
 
-impl From<&ValidatedStatement<'_>> for sexp::Sexp {
-    fn from(statement: &ValidatedStatement) -> sexp::Sexp {
+impl TryFrom<&ValidatedStatement<'_>> for sexp::Sexp {
+    type Error = ErrorItem;
+    fn try_from(statement: &ValidatedStatement) -> Result<sexp::Sexp, ErrorItem> {
         match statement {
-            ValidatedStatement::Call(c) => Sexp::from(&**c),
-            ValidatedStatement::AvRule(a) => Sexp::from(a),
-            ValidatedStatement::FcRule(f) => Sexp::from(f),
-            ValidatedStatement::ResourcetransRule(r) => Sexp::from(r),
-            ValidatedStatement::FscRule(fs) => Sexp::from(fs),
-            ValidatedStatement::DomtransRule(d) => Sexp::from(d),
+            ValidatedStatement::Call(c) => Ok(Sexp::from(&**c)),
+            ValidatedStatement::AvRule(a) => Ok(Sexp::from(a)),
+            ValidatedStatement::FcRule(f) => Ok(Sexp::from(f)),
+            ValidatedStatement::ResourcetransRule(r) => Ok(Sexp::from(r)),
+            ValidatedStatement::FscRule(fs) => Sexp::try_from(fs),
+            ValidatedStatement::DomtransRule(d) => Ok(Sexp::from(d)),
         }
     }
 }
@@ -3862,7 +3883,8 @@ mod tests {
             let mut renames = BTreeMap::new();
             renames.insert("old_name".to_string(), "new_name".to_string());
             let renamed_statement = statement.get_renamed_statement(&renames);
-            let sexp = Sexp::from(&renamed_statement);
+            // Since this is a controlled test these should always unrwap
+            let sexp = Sexp::try_from(&renamed_statement).unwrap();
             assert!(sexp.to_string().contains("new_name"));
             assert!(!sexp.to_string().contains("old_name"));
         }
