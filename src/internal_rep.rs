@@ -163,11 +163,6 @@ pub enum AnnotationInfo {
     Derive(Vec<Argument>),
 }
 
-pub enum DeriveStrategy {
-    Union,
-    Parent(CascadeString),
-}
-
 #[derive(Clone, Debug)]
 pub enum BoundTypeInfo {
     Single(String),
@@ -591,13 +586,13 @@ fn get_type_annotations(
     Ok(infos)
 }
 
-// On success, returns a tuple of DeriveStrategy and the names of the functions to derive
-pub fn validate_derive_args(
-    target_type: &TypeInfo,
+// On success, returns a tuple of parents to derive from and the names of the functions to derive
+pub fn validate_derive_args<'a>(
+    target_type: &'a TypeInfo,
     arguments: &[Argument],
-    types: &TypeMap,
+    types: &'a TypeMap,
     class_perms: &ClassList,
-) -> Result<(DeriveStrategy, Vec<CascadeString>), CascadeErrors> {
+) -> Result<(BTreeSet<&'a CascadeString>, Vec<CascadeString>), CascadeErrors> {
     // TODO: We might actually be in a context here, once nested type declarations are supported
     let local_context = BlockContext::new(BlockType::Annotation, types, None);
     let file = target_type.declaration_file.as_ref();
@@ -615,9 +610,9 @@ pub fn validate_derive_args(
         FunctionArgument::new(
             &DeclaredArgument {
                 param_type: CascadeString::from("string"),
-                is_list_param: false,
+                is_list_param: true,
                 name: CascadeString::from("strategy"),
-                default: Some(Argument::List(vec!["union".into()])),
+                default: Some(Argument::Var("*".into())),
             },
             types,
             None,
@@ -648,28 +643,30 @@ pub fn validate_derive_args(
     let strategy = args_iter
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
-        .get_name_or_string(&local_context)?;
+        .get_list(&local_context)?;
 
     if args_iter.next().is_some() {
         return Err(ErrorItem::Internal(InternalError::new()).into());
     }
 
-    let derive_strategy = match strategy.as_ref() {
-        "union" => DeriveStrategy::Union,
-        name => {
-            let parent_ti = types.get(name).ok_or_else(|| {
+    let derive_strategy = if strategy.first() == Some(&CascadeString::from("*")) {
+        target_type.get_all_parent_names(types)
+    } else {
+        let mut ret = BTreeSet::new();
+        for name in &strategy {
+            let parent_ti = types.get(name.as_ref()).ok_or_else(|| {
                 ErrorItem::make_compile_or_internal_error(
                     "No such type",
                     file,
-                    strategy.get_range(),
+                    name.get_range(),
                     "This type does not exist.",
                 )
             })?;
-            if target_type.name == name {
+            if &target_type.name == name {
                 return Err(ErrorItem::make_compile_or_internal_error(
                     "Cannot derive from self",
                     file,
-                    strategy.get_range(),
+                    name.get_range(),
                     "This needs to be a parent type",
                 )
                 .into());
@@ -678,13 +675,14 @@ pub fn validate_derive_args(
                 return Err(ErrorItem::make_compile_or_internal_error(
                     &format!("{} is not a parent of {}", name, target_type.name),
                     file,
-                    strategy.get_range(),
+                    name.get_range(),
                     &format!("This needs to be a parent of {}", target_type.name),
                 )
                 .into());
             }
-            DeriveStrategy::Parent(strategy)
+            ret.insert(&parent_ti.name);
         }
+        ret
     };
 
     Ok((derive_strategy, functions))
@@ -706,7 +704,10 @@ fn typeinfo_from_string<'a>(
     class_perms: &ClassList,
     context: &BlockContext<'a>,
 ) -> Option<&'a TypeInfo> {
-    if coerce_strings {
+    if s == "*" {
+        // Don't coerce to string
+        types.get("*")
+    } else if coerce_strings {
         types.get("string")
     } else if class_perms.is_class(s) {
         types.get("obj_class")
