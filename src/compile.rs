@@ -12,7 +12,7 @@ use crate::ast::{
 };
 use crate::constants;
 use crate::context::{BlockType, Context as BlockContext};
-use crate::error::{CascadeErrors, CompileError, ErrorItem, InternalError};
+use crate::error::{CascadeErrors, ErrorItem, InternalError};
 use crate::internal_rep::{
     argument_to_typeinfo, argument_to_typeinfo_vec, generate_sid_rules, type_slice_to_variant,
     validate_derive_args, Annotated, AnnotationInfo, ArgForValidation, Associated, BoundTypeInfo,
@@ -137,9 +137,9 @@ pub fn verify_extends(p: &PolicyFile, type_map: &TypeMap) -> Result<(), CascadeE
     for e in &p.policy.exprs {
         if let Expression::Decl(Declaration::Type(td)) = e {
             if td.is_extension && type_map.get(td.name.as_ref()).is_none() {
-                errors.append(CompileError::new(
+                errors.append(ErrorItem::make_compile_or_internal_error(
                         &format!("{} is undeclared", td.name),
-                        &p.file,
+                        Some(&p.file),
                         td.name.get_range(),
                         "In order to extend this type, it must be declared elsewhere (maybe you want to declare it instead?)").into());
             }
@@ -1004,16 +1004,12 @@ fn create_synthetic_resource(
     global_exprs: &mut HashSet<Expression>,
 ) -> Result<CascadeString, ErrorItem> {
     if !class.is_resource(types) {
-        return Err(CompileError::new(
+        return Err(ErrorItem::make_compile_or_internal_error(
             "not a resource",
-            dom_info
-                .declaration_file
-                .as_ref()
-                .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?,
+            dom_info.declaration_file.as_ref(),
             class_string.get_range(),
             "This should be a resource, not a domain.",
-        )
-        .into());
+        ));
     }
 
     // Creates a synthetic resource declaration.
@@ -1078,12 +1074,12 @@ fn interpret_associate(
         if let Some(class) = func_info.class {
             if let Some((res, seen)) = potential_resources.get_mut(class.name.as_ref()) {
                 *seen = if *seen {
-                    errors.add_error(ErrorItem::Compile(CompileError::new(
+                    errors.add_error(ErrorItem::make_compile_or_internal_error(
                         "multiple @associated_call in the same resource",
-                        func_info.declaration_file,
+                        Some(func_info.declaration_file),
                         func_info.get_declaration_range(),
                         "Only one function in the same resource can be annotated with @associated_call.",
-                    )));
+                    ));
                     continue;
                 } else {
                     true
@@ -1128,12 +1124,9 @@ fn interpret_associate(
                     Err(e) => errors.add_error(e),
                 }
             }
-            None => errors.add_error(CompileError::new(
+            None => errors.add_error(ErrorItem::make_compile_or_internal_error(
                 "unknown resource",
-                dom_info
-                    .declaration_file
-                    .as_ref()
-                    .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?,
+                dom_info.declaration_file.as_ref(),
                 res.get_range(),
                 "didn't find this resource in the policy",
             )),
