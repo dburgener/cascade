@@ -3007,7 +3007,9 @@ fn validate_argument<'a>(
                         "'self' passed as resource argument",
                         file,
                         arg.get_range(),
-                        "'self' cannot be passed into a function as a resource since 'self' is dependent on local context",
+                        "'self' cannot be passed into a function as a resource since 'self' \
+                        is dependent on local context\n\t(If you intended to refer to the type declared \
+                        in the enclosing block, use 'this')",
                     )));
                 }
             }
