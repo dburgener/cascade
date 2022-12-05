@@ -249,6 +249,24 @@ impl From<ErrorItem> for Vec<ErrorItem> {
     }
 }
 
+// In our case, quick_xml errors are typically code errors on our end.
+// If a quick_xml error could be caused by bad user input, then we need to manually create a
+// CompileError at the call site.  Otherwise, we can just use the below From trait to get an
+// Internal Error
+impl From<quick_xml::Error> for ErrorItem {
+    fn from(_: quick_xml::Error) -> Self {
+        // TODO: It would be nice to be able to augment the Internal Error with info about the
+        // quick_xml error
+        ErrorItem::Internal(InternalError::new())
+    }
+}
+
+impl From<std::str::Utf8Error> for ErrorItem {
+    fn from(_: std::str::Utf8Error) -> Self {
+        ErrorItem::Internal(InternalError::new())
+    }
+}
+
 #[derive(Error, Debug)]
 pub struct CascadeErrors {
     errors: Vec<ErrorItem>,
