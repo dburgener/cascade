@@ -49,11 +49,21 @@ pub fn build_package(
         "contexts/files/file_contexts",
         FC_NAME,
     )?;
+    let dbus_contexts = match generate_dbus_contexts() {
+        Ok(contexts) => contexts,
+        Err(e) => {
+            eprintln!("Failed generating dbus_contexts file: {}", e);
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "Generation of dbus_contexts failed.  This is a Cascade bug",
+            ));
+        }
+    };
     add_file_to_tar_from_string(
         &mut tar,
         system_name,
         "contexts/dbus_contexts",
-        &generate_dbus_contexts(),
+        &dbus_contexts,
     )?;
     tar.finish()
 }
