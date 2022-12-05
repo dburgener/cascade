@@ -213,7 +213,7 @@ pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
         built_in_types.insert(sid.name.to_string(), sid)?;
     }
 
-    // Add self as children of resource
+    // Add self as child of resource
     if let Some(i) = built_in_types.get_mut(constants::SELF) {
         i.inherits = vec![CascadeString::from(constants::RESOURCE)];
     }
