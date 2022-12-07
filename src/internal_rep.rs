@@ -1784,20 +1784,26 @@ fn call_to_fsc_rules<'a>(
                     file_type: None,
                     context: fs_context.clone(),
                 });
-            } else if !file_types.is_empty() {
-                return Err(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
+            }
+            let mut errors = CascadeErrors::new();
+            if !file_types.is_empty() {
+                errors.append(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
                     "File types can only be provided for 'genfscon'",
                     Some(file),
                     file_types_arg.get_range(),
                     "",
                 )));
-            } else {
-                return Err(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
+            }
+            if regex_string_arg.get_range().is_some() {
+                errors.append(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
                     "File path can only be provided for 'genfscon'",
                     Some(file),
                     regex_string_arg.get_range(),
                     "",
                 )));
+            }
+            if !errors.is_empty() {
+                return Err(errors);
             }
         }
         FSContextType::GenFSCon => {

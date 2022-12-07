@@ -342,8 +342,9 @@ pub fn build_func_map<'a>(
     Ok(decl_map)
 }
 
-#[allow(clippy::collapsible_if)]
-pub fn validate_rules(statements: &BTreeSet<ValidatedStatement>) -> Result<(), CascadeErrors> {
+pub fn validate_fs_context_duplicates(
+    statements: &BTreeSet<ValidatedStatement>,
+) -> Result<(), CascadeErrors> {
     let mut errors = CascadeErrors::new();
     let mut fsc_rules: BTreeMap<&String, BTreeSet<&FileSystemContextRule>> = BTreeMap::new();
 
@@ -371,7 +372,7 @@ pub fn validate_rules(statements: &BTreeSet<ValidatedStatement>) -> Result<(), C
                     continue 'key_loop;
                 }
                 FSContextType::GenFSCon => {
-                    // genfscon gets more complicated.  We can have simlar rules as long as the paths different.
+                    // genfscon gets more complicated.  We can have similar rules as long as the paths are different.
                     // If we find a genfscon with the same path, they must have the same context and object type.
                     if let Some(path) = &rule.path {
                         for inner_rule in &v {
@@ -386,25 +387,19 @@ pub fn validate_rules(statements: &BTreeSet<ValidatedStatement>) -> Result<(), C
                                         inner_rule.context,
                                     ))));
                                     continue 'key_loop;
-                                // else if let is not suppored currently (https://github.com/rust-lang/rust/issues/53667).
-                                // Thus we check if we are not none and then unwrap
                                 } else if path == inner_path
+                                    && rule.file_type != inner_rule.file_type
                                     && rule.file_type.is_some()
-                                    && inner_rule.file_type.is_some()
                                 {
-                                    if rule.file_type.as_ref().unwrap()
-                                        != inner_rule.file_type.as_ref().unwrap()
-                                    {
-                                        errors.append(CascadeErrors::from(InvalidFileSystemError::new(&format!(
-                                            "Duplicate genfscon.\n Found duplicate genfscon rules with differing object types: {}\
-                                            \n\tPath: {}\n\tObject Type 1: {}\n\tObject Type 2: {}",
-                                            rule.fs_name,
-                                            path,
-                                            rule.file_type.as_ref().unwrap(),
-                                            inner_rule.file_type.as_ref().unwrap(),
-                                        ))));
-                                        continue 'key_loop;
-                                    }
+                                    errors.append(CascadeErrors::from(InvalidFileSystemError::new(&format!(
+                                        "Duplicate genfscon.\n Found duplicate genfscon rules with differing object types: {}\
+                                        \n\tPath: {}\n\tObject Type 1: {}\n\tObject Type 2: {}",
+                                        rule.fs_name,
+                                        path,
+                                        rule.file_type.as_ref().unwrap(),
+                                        inner_rule.file_type.as_ref().unwrap(),
+                                    ))));
+                                    continue 'key_loop;
                                 }
                             }
                         }
@@ -413,7 +408,15 @@ pub fn validate_rules(statements: &BTreeSet<ValidatedStatement>) -> Result<(), C
             }
         }
     }
+    errors.into_result(())
+}
 
+pub fn validate_rules(statements: &BTreeSet<ValidatedStatement>) -> Result<(), CascadeErrors> {
+    let mut errors = CascadeErrors::new();
+
+    if let Err(call_errors) = validate_fs_context_duplicates(statements) {
+        errors.append(call_errors);
+    }
     errors.into_result(())
 }
 

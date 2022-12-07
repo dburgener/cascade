@@ -1227,7 +1227,7 @@ mod tests {
 
     #[test]
     fn invalid_fs_context() {
-        error_policy_test!("fs_context.cas", 8, ErrorItem::Compile(_));
+        error_policy_test!("fs_context.cas", 9, ErrorItem::Compile(_));
     }
 
     #[test]

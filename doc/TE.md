@@ -322,16 +322,16 @@ file_type [obj_class])`
   Currently this is only valid for the proc filesystem, all other types must be
   "/".  If not given, the field will default to "/".
 * `file_type` is an optional keyword representing a file type to apply the label
-  to. Valid values are the same as in file_context function.  If not given,
+  to. Valid values are the same as in the file_context function.  If not given,
   [any] is assumed.
   * Note: You must use SELinux userspace tools version 3.4 or newer to use this
     field.
 
 `xattr`, `task`, and `trans` all represent filesystems that support SELinux
 security contexts.  The filesystem itself has a labeled applied to it as a
-whole, which is the `fs_label` provided in this function.  All files on the
-filesystem also store their own SELinux security context in their own extended
-attributes. 
+whole, which is the `fs_label` provided in this function.  Individual files
+may also have specific security contexts stored in their extended attributes
+if supported by the filesystem.
 
 `genfscon` represents filesystems that do not support SELinux security contexts.
 Generally a filesystem has a single default security context, `fs_label`
