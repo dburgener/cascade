@@ -39,6 +39,9 @@ resource derive_from_foo inherits foo, bar {}
 @derive(*, *)
 resource derive_all inherits foo, bar {}
 
+@derive(*)
+resource defaults inherits foo, bar {}
+
 @derive(*, parents=[foo bar])
 resource enumerate_parents inherits foo, bar {}
 
