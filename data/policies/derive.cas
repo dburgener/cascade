@@ -36,7 +36,7 @@ resource union_all_parents inherits foo, bar {}
 @derive([read], parents=[foo])
 resource derive_from_foo inherits foo, bar {}
 
-@derive(*, parents=*)
+@derive(*, *)
 resource derive_all inherits foo, bar {}
 
 @derive(*, parents=[foo bar])
