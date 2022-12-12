@@ -3003,14 +3003,14 @@ fn validate_argument<'a>(
                     && arg_typeinfo.name == constants::SELF
                     && !is_avc
                 {
-                    return Err(ErrorItem::Compile(CompileError::new(
+                    return Err(ErrorItem::make_compile_or_internal_error(
                         "'self' passed as resource argument",
                         file,
                         arg.get_range(),
                         "'self' cannot be passed into a function as a resource since 'self' \
                         is dependent on local context\n\t(If you intended to refer to the type declared \
                         in the enclosing block, use 'this')",
-                    )));
+                    ));
                 }
             }
 
