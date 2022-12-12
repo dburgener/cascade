@@ -1600,6 +1600,18 @@ pub struct FileSystemContextRule<'a> {
     pub context: Context<'a>,
 }
 
+impl FileSystemContextRule<'_> {
+    fn get_renamed_statement(&self, renames: &BTreeMap<String, String>) -> Self {
+        FileSystemContextRule {
+            fscontext_type: self.fscontext_type.clone(),
+            fs_name: self.fs_name.clone(),
+            path: self.path.clone(),
+            file_type: self.file_type,
+            context: self.context.get_renamed_context(renames),
+        }
+    }
+}
+
 impl TryFrom<&FileSystemContextRule<'_>> for sexp::Sexp {
     type Error = ErrorItem;
 
@@ -1647,18 +1659,6 @@ impl TryFrom<&FileSystemContextRule<'_>> for sexp::Sexp {
                     )))
                 }
             }
-        }
-    }
-}
-
-impl FileSystemContextRule<'_> {
-    fn get_renamed_statement(&self, renames: &BTreeMap<String, String>) -> Self {
-        FileSystemContextRule {
-            fscontext_type: self.fscontext_type.clone(),
-            fs_name: self.fs_name.clone(),
-            path: self.path.clone(),
-            file_type: self.file_type,
-            context: self.context.get_renamed_context(renames),
         }
     }
 }
@@ -3889,10 +3889,16 @@ mod tests {
             let mut renames = BTreeMap::new();
             renames.insert("old_name".to_string(), "new_name".to_string());
             let renamed_statement = statement.get_renamed_statement(&renames);
-            // Since this is a controlled test these should always unrwap
-            let sexp = Sexp::try_from(&renamed_statement).unwrap();
-            assert!(sexp.to_string().contains("new_name"));
-            assert!(!sexp.to_string().contains("old_name"));
+            match Sexp::try_from(&renamed_statement) {
+                Ok(sexp) => {
+                    assert!(sexp.to_string().contains("new_name"));
+                    assert!(!sexp.to_string().contains("old_name"));
+                }
+                Err(_) => {
+                    // We should never get here in testing but if we do assert false
+                    assert!(false);
+                }
+            }
         }
     }
 }
