@@ -1357,6 +1357,21 @@ mod tests {
             ],
             &[],
             0,
+        )
+    }
+
+    #[test]
+    fn invalid_parent_call() {
+        error_policy_test!("parent_call.cas", 1, ErrorItem::Compile(_));
+    }
+
+    #[test]
+    fn valid_parent_call() {
+        valid_policy_test(
+            "parent_call.cas",
+            &["call foo-read (bar dom)"],
+            &["call foo-read (foo dom)"],
+            0,
         );
     }
 }

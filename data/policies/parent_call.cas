@@ -1,0 +1,15 @@
+virtual resource bar {
+	fn read(domain source) {
+		allow(source, this, file, read);
+	}
+}
+
+resource foo inherits bar {
+    fn read(domain source) {
+		allow(source, this, dir, read);
+	}
+}
+
+domain dom {
+    foo<bar>.read(this);
+}
