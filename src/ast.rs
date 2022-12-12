@@ -413,6 +413,7 @@ pub enum BuiltIns {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FuncCall {
     pub class_name: Option<CascadeString>,
+    pub parent_name: Option<CascadeString>,
     pub name: CascadeString,
     // The second element is an optional typecast
     pub args: Vec<(Argument, Option<CascadeString>)>,
@@ -422,19 +423,26 @@ pub struct FuncCall {
 impl FuncCall {
     pub fn new_with_casts(
         cn: Option<CascadeString>,
+        p: Option<CascadeString>,
         n: CascadeString,
         a: Vec<(Argument, Option<CascadeString>)>,
     ) -> FuncCall {
         FuncCall {
             class_name: cn,
+            parent_name: p,
             name: n,
             args: a,
             annotations: Annotations::new(),
         }
     }
 
-    pub fn new(cn: Option<CascadeString>, n: CascadeString, a: Vec<Argument>) -> FuncCall {
-        Self::new_with_casts(cn, n, a.into_iter().zip(iter::repeat(None)).collect())
+    pub fn new(
+        cn: Option<CascadeString>,
+        p: Option<CascadeString>,
+        n: CascadeString,
+        a: Vec<Argument>,
+    ) -> FuncCall {
+        Self::new_with_casts(cn, p, n, a.into_iter().zip(iter::repeat(None)).collect())
     }
 
     pub fn check_builtin(&self) -> Option<BuiltIns> {

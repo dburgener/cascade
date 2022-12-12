@@ -497,7 +497,12 @@ pub fn validate_derive_args<'a>(
         )?,
     ];
 
-    let fake_call = FuncCall::new(None, CascadeString::from("derive"), arguments.to_vec());
+    let fake_call = FuncCall::new(
+        None,
+        None,
+        CascadeString::from("derive"),
+        arguments.to_vec(),
+    );
 
     let valid_args = validate_arguments(
         &fake_call,
