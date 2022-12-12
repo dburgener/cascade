@@ -28,8 +28,8 @@ pub const SELF: &str = "self";
 pub const FS_TYPE: &str = "fs_type";
 
 pub const BUILT_IN_TYPES: &[&str] = &[
-    DOMAIN, RESOURCE, MODULE, "path", "string", CLASS, PERM, "context", SELF, FS_TYPE,
-    "xattr", "task", "trans", "genfscon", "*",
+    DOMAIN, RESOURCE, MODULE, "path", "string", CLASS, PERM, "context", SELF, FS_TYPE, "xattr",
+    "task", "trans", "genfscon", "*",
 ];
 
 pub const SYSTEM_CONFIG_DEFAULTS: &[(&str, &str)] =

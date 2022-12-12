@@ -1206,7 +1206,7 @@ mod tests {
     fn valid_self() {
         valid_policy_test("self.cas", &["allow qux self (file (read))"], &[]);
     }
-    
+
     #[test]
     fn valid_fs_context() {
         valid_policy_test(

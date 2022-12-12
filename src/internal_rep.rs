@@ -1722,7 +1722,8 @@ fn call_to_fsc_rules<'a>(
             None,
         )?,
     ];
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, Some(file))?;
+    let validated_args =
+        validate_arguments(c, &target_args, types, class_perms, context, Some(file))?;
     let mut args_iter = validated_args.iter();
     let mut ret = Vec::new();
 
