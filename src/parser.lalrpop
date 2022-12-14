@@ -128,7 +128,9 @@ Stmt: Statement = {
 
 StmtBody: Statement = {
 	<c:(<TypeName> ".")?> <n:NameDecl> "(" <a:Comma<CastArg>> ")" => Statement::Call(Box::new(FuncCall::new_with_casts(c, None, n, a))),
-	<c:(<TypeName> "<")> <p:(<TypeName> ">.")> <n:NameDecl> "(" <a:Comma<CastArg>> ")" => Statement::Call(Box::new(FuncCall::new_with_casts(Some(c), Some(p), n, a))),
+	//<c:(<TypeName> "<")> <p:(<TypeName> ">.")> <n:NameDecl> "(" <a:Comma<CastArg>> ")" => Statement::Call(Box::new(FuncCall::new_with_casts(Some(c), Some(p), n, a))),
+	//<c:(<TypeName> ".")> <p:(<TypeName> "::")> <n:NameDecl> "(" <a:Comma<CastArg>> ")" => Statement::Call(Box::new(FuncCall::new_with_casts(Some(c), Some(p), n, a))),
+	<c:(<TypeName> ".")?> <p:NameDecl> "::" <n:NameDecl> "(" <a:Comma<CastArg>> ")" => Statement::Call(Box::new(FuncCall::new_with_casts(c, Some(p), n, a))),
 	<l:LetBind> => Statement::LetBinding(Box::new(<>)),
 }
 

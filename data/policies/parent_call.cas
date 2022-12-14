@@ -11,5 +11,21 @@ resource foo inherits bar {
 }
 
 domain dom {
-	foo<bar>.read(this);
+	foo.bar::read(this);
+}
+
+virtual resource abc {
+	fn read(domain source) {
+		allow(source, this, file, read);
+	}
+}
+
+resource xyz inherits abc {
+	fn read(domain source) {
+		abc::read(source);
+	}
+}
+
+domain qwe {
+	xyz.read(this);
 }

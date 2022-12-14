@@ -1369,7 +1369,11 @@ mod tests {
     fn valid_parent_call() {
         valid_policy_test(
             "parent_call.cas",
-            &["call foo-read (bar dom)"],
+            &[
+                "call foo-read (bar dom)",
+                "call xyz-read (xyz qwe)",
+                "macro xyz-read ((type this) (type source)) (call abc-read (abc source))",
+            ],
             &["call foo-read (foo dom)"],
             0,
         );

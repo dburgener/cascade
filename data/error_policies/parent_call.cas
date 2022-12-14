@@ -11,5 +11,5 @@ resource foo inherits bar {
 }
 
 domain dom {
-	foo<qqq>.read(this);
+	foo.qqq::read(this);
 }
