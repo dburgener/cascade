@@ -343,17 +343,9 @@ pub fn build_func_map<'a>(
 }
 
 pub fn validate_fs_context_duplicates(
-    statements: &BTreeSet<ValidatedStatement>,
+    fsc_rules: BTreeMap<&String, BTreeSet<&FileSystemContextRule>>,
 ) -> Result<(), CascadeErrors> {
     let mut errors = CascadeErrors::new();
-    let mut fsc_rules: BTreeMap<&String, BTreeSet<&FileSystemContextRule>> = BTreeMap::new();
-
-    for statement in statements {
-        // Add all file system context rules to a new map to check for semi duplicates later
-        if let ValidatedStatement::FscRule(fs) = statement {
-            fsc_rules.entry(&fs.fs_name).or_default().insert(fs);
-        }
-    }
 
     'key_loop: for (_, v) in fsc_rules {
         // We only have 1 or 0 elements, thus we cannot have a semi duplicate
@@ -414,7 +406,15 @@ pub fn validate_fs_context_duplicates(
 pub fn validate_rules(statements: &BTreeSet<ValidatedStatement>) -> Result<(), CascadeErrors> {
     let mut errors = CascadeErrors::new();
 
-    if let Err(call_errors) = validate_fs_context_duplicates(statements) {
+    let mut fsc_rules: BTreeMap<&String, BTreeSet<&FileSystemContextRule>> = BTreeMap::new();
+    for statement in statements {
+        // Add all file system context rules to a new map to check for semi duplicates later
+        if let ValidatedStatement::FscRule(fs) = statement {
+            fsc_rules.entry(&fs.fs_name).or_default().insert(fs);
+        }
+    }
+
+    if let Err(call_errors) = validate_fs_context_duplicates(fsc_rules) {
         errors.append(call_errors);
     }
     errors.into_result(())
