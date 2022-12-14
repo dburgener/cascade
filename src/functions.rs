@@ -1772,6 +1772,40 @@ impl fmt::Display for FunctionArgument<'_> {
     }
 }
 
+// Validate that the parent provided both exists and is actually a parent of the current resource.
+fn validate_inheritance(
+    call: &FuncCall,
+    function_info: &FunctionInfo,
+    parent_name: &CascadeString,
+    file: &SimpleFile<String, String>,
+) -> Result<(), CascadeErrors> {
+    match function_info.class {
+        Some(class_info) => {
+            if !class_info.inherits.contains(parent_name) {
+                return Err(CascadeErrors::from(
+                    ErrorItem::make_compile_or_internal_error(
+                        "Invalid Parent",
+                        Some(file),
+                        parent_name.get_range(),
+                        "Resource does not inherit from given parent",
+                    ),
+                ));
+            }
+        }
+        None => {
+            return Err(CascadeErrors::from(
+                ErrorItem::make_compile_or_internal_error(
+                    "No such class",
+                    Some(file),
+                    call.get_name_range(),
+                    "",
+                ),
+            ));
+        }
+    };
+    Ok(())
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ValidatedStatement<'a> {
@@ -2009,12 +2043,29 @@ impl ValidatedCall {
         let cil_name = match &call.class_name {
             Some(class_name) => {
                 // Resolve aliases
-                match types.get(convert_class_name_if_this(class_name, parent_type)?.as_ref()) {
+                let tmp_str = match types
+                    .get(convert_class_name_if_this(class_name, parent_type)?.as_ref())
+                {
                     Some(type_name) => get_cil_name(Some(&type_name.name), &call.name),
                     None => call.get_cil_name(), // Expected to error out below
+                };
+                // If we have a parent name we really want to call that instead.
+                if let Some(parent_name) = &call.parent_name {
+                    tmp_str.replace(&class_name.to_string(), parent_name.to_string().as_ref())
+                } else {
+                    tmp_str
                 }
             }
-            None => call.get_cil_name(),
+            None => {
+                // If we have a parent name but no class name that means we are really
+                // looking for the parents function so append the parent's name
+                // to the function to find the correct one.
+                if let Some(parent_name) = &call.parent_name {
+                    parent_name.to_string() + "-" + &call.get_cil_name()
+                } else {
+                    call.get_cil_name()
+                }
+            }
         };
         let function_info = match functions.get(&cil_name) {
             Some(function_info) => function_info,
@@ -2040,10 +2091,23 @@ impl ValidatedCall {
             .into());
         }
 
-        // Each argument must match the type the function signature expects
-        let mut args = match &call.class_name {
-            Some(c) => vec![convert_class_name_if_this(c, parent_type)?.get_cil_name()],
-            None => Vec::new(),
+        if let Some(parent_name) = &call.parent_name {
+            validate_inheritance(call, function_info, parent_name, file)?;
+        }
+
+        // All unwraps here are safe due to if checks
+        let mut args = if call.class_name.is_none() && call.parent_name.is_some() {
+            vec![
+                convert_class_name_if_this(call.parent_name.as_ref().unwrap(), parent_type)?
+                    .get_cil_name(),
+            ]
+        } else if call.class_name.is_none() {
+            Vec::new()
+        } else {
+            vec![
+                convert_class_name_if_this(call.class_name.as_ref().unwrap(), parent_type)?
+                    .get_cil_name(),
+            ]
         };
 
         for arg in validate_arguments(

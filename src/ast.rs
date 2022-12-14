@@ -413,6 +413,10 @@ pub enum BuiltIns {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FuncCall {
     pub class_name: Option<CascadeString>,
+    // This is the name of the parent domain/resource
+    // if we are explicitly calling their version of
+    // a function.  If parent_name is None this will
+    // be a normal function call.
     pub parent_name: Option<CascadeString>,
     pub name: CascadeString,
     // The second element is an optional typecast

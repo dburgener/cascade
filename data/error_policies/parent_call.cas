@@ -5,11 +5,11 @@ virtual resource bar {
 }
 
 resource foo inherits bar {
-    fn read(domain source) {
+	fn read(domain source) {
 		allow(source, this, dir, read);
 	}
 }
 
 domain dom {
-    foo<qqq>.read(this);
+	foo<qqq>.read(this);
 }
