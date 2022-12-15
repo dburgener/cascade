@@ -258,12 +258,24 @@ level users conceptualize them.  In Cascade, all forms of labeling for a given
 resource are specified in its resource block.
 
 Runtime resource transitions are achieved through the resource_transition()
-built in function, which has the following prototypes:
+built in function, which has the following prototype:
 
 ```
-fn resource_transition(resource default, source domain, resource parent, class obj_class);
 fn resource_transition(resource default, source domain, resource parent, [class] obj_classes);
 ```
+
+File contexts are set through the file_context() function, which has the following prototype:
+
+```
+fn file_context(string path, [obj_class] file_type, resource file_context);
+```
+
+TODO: support full file_contexts, not just resources
+
+The file_type field must be a list from the following object classes: file, dir,
+lnk_file, chr_file, blk_file, sock_file, fifo_file, or the special keyword "any",
+that matches any of the listed object classes.  This determines what sort of
+object the label will apply to.
 
 The default field is first so that it can be passed in when called as a member
 function from resources.

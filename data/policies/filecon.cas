@@ -1,6 +1,11 @@
 resource foo {
 	file_context("/bin", [file dir], foo);
 	file_context("/etc", [any], this);
+	file_context("/dev/sda1", [blk_file], this);
+	file_context("/dev/tty.*", [chr_file], this);
+	file_context("/etc/somesymlink", [lnk_file], this);
+	file_context("/var/somepipe", [fifo_file], this);
+	file_context("/var/somesocket", [sock_file], this);
 	// Policies must include at least one av rule
 	allow(domain, foo, file, [read]);
 }
