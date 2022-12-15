@@ -765,7 +765,7 @@ fn check_required_config<'a>(
                     config_name
                 ),
                 Some(file),
-                None,
+                machine.name.get_range(),
                 &format!(
                     "Add a {} configuration to machine {}",
                     config_name, machine.name
