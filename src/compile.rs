@@ -375,7 +375,7 @@ pub fn validate_functions<'a>(
                     errors.append(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
                                 &format!("{} does not define a function named {}", setype.name, required_function_name),
                                 setype.declaration_file.as_ref(),
-                                parent.get_range(),
+                                setype.name.get_range(),
                                 // TODO: fix message
                                 &format!("All types inheriting {} are required to implement {} because it is marked as virtual", parent, required_function_name))))
                 }
