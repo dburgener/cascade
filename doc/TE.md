@@ -328,10 +328,18 @@ file_type [obj_class])`
     field.
 
 `xattr`, `task`, and `trans` all represent filesystems that support SELinux
-security contexts.  The filesystem itself has a labeled applied to it as a
-whole, which is the `fs_label` provided in this function.  Individual files
-may also have specific security contexts stored in their extended attributes
-if supported by the filesystem.
+security contexts.  The filesystem itself has a label applied to it as a
+whole, which is the `fs_label` provided in this function.
+* As stated above, `xattr` supports the security.selinux extended attribute.
+  This means objects on the filesystem have persistent labeling stored in this
+  attribute.
+* The `task` pseudo filesystem typically assigns the context of the creating
+  process to the object.
+* The `trans` pseudo filesystem typically assigns the context based on
+  the context of the creating process and the context associated with the
+  filesystem type.  This normally takes the form of a `resource_transition`
+  call.  If no `resource_transition` call is present, the object is assigned
+  the label of filesystem.
 
 `genfscon` represents filesystems that do not support SELinux security contexts.
 Generally a filesystem has a single default security context, `fs_label`

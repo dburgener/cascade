@@ -1,9 +1,12 @@
 resource foo {
     fs_context(foo, "ext3", xattr);
     fs_context(foo, "ext3", task);
+    fs_context(foo, "ext3", trans);
 
     fs_context(this, "sysfs", genfscon, "/zap", [dir]);
     fs_context(this, "sysfs", genfscon, "/zap", [file]);
+    fs_context(this, "sysfs", genfscon, "/zap", [any]);
+    fs_context(this, "sysfs", genfscon, "/zap");
 
     fs_context(this, "test", genfscon, "/zap/baa", [file]);
 
@@ -12,5 +15,9 @@ resource foo {
 }
 
 resource bar {
+    fs_context(this, "test", genfscon, "/zap/baa", [file]);
+}
+
+resource xyz {
     fs_context(this, "test", genfscon, "/zap/baa", [file]);
 }

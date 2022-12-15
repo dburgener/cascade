@@ -211,21 +211,6 @@ impl InvalidMachineError {
     }
 }
 
-#[derive(Error, Clone, Debug)]
-#[error("{diagnostic}")]
-pub struct InvalidFileSystemError {
-    pub diagnostic: Diag<usize>,
-}
-
-impl InvalidFileSystemError {
-    pub fn new(msg: &str) -> Self {
-        let diagnostic = Diagnostic::error().with_message(msg);
-        InvalidFileSystemError {
-            diagnostic: diagnostic.into(),
-        }
-    }
-}
-
 #[derive(Error, Debug)]
 pub enum ErrorItem {
     #[error("Compilation error: {0}")]
@@ -239,8 +224,6 @@ pub enum ErrorItem {
     IO(#[from] io::Error),
     #[error("Invalid machine error: {0}")]
     InvalidMachine(#[from] InvalidMachineError),
-    #[error("Invalid filesystem error: {0}")]
-    InvalidFileSystem(#[from] InvalidFileSystemError),
 }
 
 impl ErrorItem {
@@ -370,12 +353,6 @@ impl From<InvalidMachineError> for CascadeErrors {
     }
 }
 
-impl From<InvalidFileSystemError> for CascadeErrors {
-    fn from(error: InvalidFileSystemError) -> Self {
-        CascadeErrors::from(ErrorItem::from(error))
-    }
-}
-
 impl Iterator for CascadeErrors {
     type Item = ErrorItem;
     fn next(&mut self) -> Option<Self::Item> {
@@ -415,7 +392,8 @@ mod tests {
             "This is the word 'of' in file 1",
         );
 
-        error = error.add_additional_message(&file2, 12..16, "This is the word file in file 2");
+        error =
+            error.add_additional_message(&file2, 12..16, "This is the word file in file 2");
 
         let labels = error.diagnostic.inner.labels;
         assert_eq!(labels.len(), 2);

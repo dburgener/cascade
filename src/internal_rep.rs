@@ -18,8 +18,11 @@ use crate::ast::{
 };
 use crate::constants;
 use crate::context::{BlockType, Context as BlockContext};
-use crate::error::{CascadeErrors, CompileError, ErrorItem, InternalError, InvalidFileSystemError};
+use crate::error::{CascadeErrors, CompileError, ErrorItem, InternalError};
 use crate::obj_class::perm_list_to_sexp;
+
+extern crate derivative;
+use derivative::Derivative;
 
 const DEFAULT_USER: &str = "system_u";
 const DEFAULT_OBJECT_ROLE: &str = "object_r";
@@ -1591,14 +1594,24 @@ impl FromStr for FSContextType {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Derivative)]
+#[derivative(Clone, Debug, PartialEq, PartialOrd, Ord)]
 pub struct FileSystemContextRule<'a> {
     pub fscontext_type: FSContextType,
     pub fs_name: String,
     pub path: Option<String>,
     pub file_type: Option<FileType>,
     pub context: Context<'a>,
+    #[derivative(PartialEq = "ignore")]
+    #[derivative(PartialOrd = "ignore")]
+    #[derivative(Ord = "ignore")]
+    pub file: SimpleFile<String, String>,
+    #[derivative(PartialEq = "ignore")]
+    #[derivative(PartialOrd = "ignore")]
+    #[derivative(Ord = "ignore")]
+    pub func_call: FuncCall,
 }
+impl Eq for FileSystemContextRule<'_> {}
 
 impl FileSystemContextRule<'_> {
     fn get_renamed_statement(&self, renames: &BTreeMap<String, String>) -> Self {
@@ -1608,6 +1621,8 @@ impl FileSystemContextRule<'_> {
             path: self.path.clone(),
             file_type: self.file_type,
             context: self.context.get_renamed_context(renames),
+            file: self.file.clone(),
+            func_call: self.func_call.clone(),
         }
     }
 }
@@ -1650,13 +1665,15 @@ impl TryFrom<&FileSystemContextRule<'_>> for sexp::Sexp {
                         Sexp::from(&f.context),
                     ]))
                 } else {
-                    Err(ErrorItem::InvalidFileSystem(InvalidFileSystemError::new(
-                        &format!(
-                            "Genfscon missing path.\n No path given for genfscon rule:\
-                        \n\tFilesystem name: {}\n\tContext: {}",
-                            f.fs_name, f.context,
-                        ),
-                    )))
+                    // We should never get here since we are defaulting to "/"
+                    // when we call this normally but if someone calls this in
+                    // an unexpected way we will get this call.
+                    Err(ErrorItem::make_compile_or_internal_error(
+                        "Genfscon missing path",
+                        Some(&f.file),
+                        f.func_call.get_name_range(),
+                        "Path must be given for genfscon",
+                    ))
                 }
             }
         }
@@ -1784,6 +1801,8 @@ fn call_to_fsc_rules<'a>(
                     path: None,
                     file_type: None,
                     context: fs_context.clone(),
+                    file: file.clone(),
+                    func_call: c.clone(),
                 });
             }
             let mut errors = CascadeErrors::new();
@@ -1815,6 +1834,8 @@ fn call_to_fsc_rules<'a>(
                     path: Some(regex_string),
                     file_type: None,
                     context: fs_context.clone(),
+                    file: file.clone(),
+                    func_call: c.clone(),
                 });
             } else {
                 for file_type in file_types {
@@ -1836,6 +1857,8 @@ fn call_to_fsc_rules<'a>(
                         path: Some(regex_string.clone()),
                         file_type: Some(file_type),
                         context: fs_context.clone(),
+                        file: file.clone(),
+                        func_call: c.clone(),
                     });
                 }
             }
@@ -3896,8 +3919,8 @@ mod tests {
                     assert!(!sexp.to_string().contains("old_name"));
                 }
                 Err(_) => {
-                    // We should never get here in testing but if we do assert false
-                    assert!(false);
+                    // We should never get here in testing, but if we do panic
+                    panic!();
                 }
             }
         }

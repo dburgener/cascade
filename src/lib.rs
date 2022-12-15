@@ -410,7 +410,7 @@ mod tests {
         }
         let file_out_path = &[filename, "_test.cil"].concat();
         let cil_out_path = &[filename, "_test_out_policy"].concat();
-        let mut out_file = fs::File::create(&file_out_path).unwrap();
+        let mut out_file = fs::File::create(file_out_path).unwrap();
         out_file.write_all(policy_contents.as_bytes()).unwrap();
         let output = Command::new("secilc")
             .arg(["--output=", cil_out_path].concat())
@@ -1232,7 +1232,7 @@ mod tests {
 
     #[test]
     fn invalid_fs_context_dup() {
-        error_policy_test!("fs_context_dup.cas", 3, ErrorItem::InvalidFileSystem(_));
+        error_policy_test!("fs_context_dup.cas", 3, ErrorItem::Compile(_));
     }
 
     #[test]
