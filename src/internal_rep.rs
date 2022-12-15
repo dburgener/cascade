@@ -1374,6 +1374,9 @@ pub enum FileType {
     Any,
 }
 
+// These are the CIL strings for the target CIL
+// Valid values are listed here:
+// https://github.com/SELinuxProject/selinux/blob/master/secilc/docs/cil_file_labeling_statements.md
 impl fmt::Display for FileType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -1393,17 +1396,22 @@ impl fmt::Display for FileType {
     }
 }
 
+// These are the strings inputted in Cascade
+// They also need to pass a check as being a valid object class, or the keyword "any", so they must
+// match object class names
+// If we want to add more human readable options in the future, we should add them to the object
+// classes as well.
 impl FromStr for FileType {
     type Err = ();
     fn from_str(s: &str) -> Result<FileType, ()> {
         match s {
             "file" => Ok(FileType::File),
             "dir" => Ok(FileType::Directory),
-            "symlink" => Ok(FileType::SymLink),
-            "char_dev" => Ok(FileType::CharDev),
-            "block_dev" => Ok(FileType::BlockDev),
-            "socket" => Ok(FileType::Socket),
-            "pipe" => Ok(FileType::Pipe),
+            "lnk_file" => Ok(FileType::SymLink),
+            "chr_file" => Ok(FileType::CharDev),
+            "blk_file" => Ok(FileType::BlockDev),
+            "sock_file" => Ok(FileType::Socket),
+            "fifo_file" => Ok(FileType::Pipe),
             "any" => Ok(FileType::Any),
             _ => Err(()),
         }
