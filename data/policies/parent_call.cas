@@ -29,3 +29,7 @@ resource xyz inherits abc {
 domain qwe {
 	xyz.read(this);
 }
+
+domain asd {
+	abc::read(this);
+}
