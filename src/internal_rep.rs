@@ -1642,6 +1642,126 @@ fn call_to_domain_transition<'a>(
     })
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ResourcetransRule<'a> {
+    pub default: Cow<'a, CascadeString>,
+    pub domain: Cow<'a, CascadeString>,
+    pub parent: Cow<'a, CascadeString>,
+    pub file_type: FileType, // Should this be Cow too?
+}
+
+impl From<&ResourcetransRule<'_>> for sexp::Sexp {
+    fn from(r: &ResourcetransRule) -> Self {
+        list(&[
+            atom_s("typetransition"),
+            atom_s(&r.domain.get_cil_name()),
+            atom_s(&r.parent.get_cil_name()),
+            Sexp::Atom(Atom::S(r.file_type.to_string())),
+            atom_s(&r.default.get_cil_name()),
+        ])
+    }
+}
+
+fn call_to_resource_transition<'a>(
+    c: &'a FuncCall,
+    types: &'a TypeMap,
+    class_perms: &ClassList,
+    context: &BlockContext<'a>,
+    file: &'a SimpleFile<String, String>,
+) -> Result<Vec<ResourcetransRule<'a>>, CascadeErrors> {
+    let target_args = vec![
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: CascadeString::from(constants::RESOURCE),
+                is_list_param: false,
+                name: CascadeString::from("default"),
+                default: None,
+            },
+            types,
+            None,
+        )?,
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: CascadeString::from(constants::DOMAIN),
+                is_list_param: false,
+                name: CascadeString::from("domain"),
+                default: None,
+            },
+            types,
+            None,
+        )?,
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: CascadeString::from(constants::RESOURCE),
+                is_list_param: false,
+                name: CascadeString::from("parent"),
+                default: None,
+            },
+            types,
+            None,
+        )?,
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: CascadeString::from("obj_class"), //TODO: not really
+                is_list_param: true,
+                name: CascadeString::from("file_type"),
+                default: Some(Argument::List(vec![])),
+            },
+            types,
+            None,
+        )?,
+    ];
+
+    let validated_args =
+        validate_arguments(c, &target_args, types, class_perms, context, Some(file))?;
+    let mut args_iter = validated_args.into_iter();
+    let mut ret = Vec::new();
+
+    let default = args_iter
+        .next()
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
+        .get_name_or_string(context)?;
+    let domain = args_iter
+        .next()
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
+        .get_name_or_string(context)?;
+    let parent = args_iter
+        .next()
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
+        .get_name_or_string(context)?;
+    let file_types = args_iter
+        .next()
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
+        .get_list(context)?;
+
+    if args_iter.next().is_some() {
+        return Err(ErrorItem::Internal(InternalError::new()).into());
+    }
+
+    for file_type in file_types {
+        let file_type = match file_type.to_string().parse::<FileType>() {
+            Ok(f) => f,
+            Err(_) => {
+                return Err(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
+                    "Not a valid file type",
+                    Some(file),
+                    file_type.get_range(),
+                    "",
+                )))
+            }
+        };
+
+        ret.push(ResourcetransRule {
+            default: Cow::Owned(default.clone()),
+            domain: Cow::Owned(domain.clone()),
+            parent: Cow::Owned(parent.clone()),
+            file_type,
+        });
+    }
+
+    Ok(ret)
+}
+
 fn check_associated_call(
     annotation: &Annotation,
     funcdecl: &FuncDecl,
@@ -2091,6 +2211,7 @@ impl TryFrom<&FunctionInfo<'_>> for sexp::Sexp {
                         ValidatedStatement::Call(c) => macro_cil.push(Sexp::from(&**c)),
                         ValidatedStatement::AvRule(a) => macro_cil.push(Sexp::from(a)),
                         ValidatedStatement::FcRule(f) => macro_cil.push(Sexp::from(f)),
+                        ValidatedStatement::ResourcetransRule(r) => macro_cil.push(Sexp::from(r)),
                         ValidatedStatement::DomtransRule(d) => macro_cil.push(Sexp::from(d)),
                     }
                 }
@@ -2176,6 +2297,7 @@ pub enum ValidatedStatement<'a> {
     Call(Box<ValidatedCall>),
     AvRule(AvRule<'a>),
     FcRule(FileContextRule<'a>),
+    ResourcetransRule(ResourcetransRule<'a>),
     DomtransRule(DomtransRule<'a>),
 }
 
@@ -2217,6 +2339,23 @@ impl<'a> ValidatedStatement<'a> {
                                 "Not allowed here",
                             ),
                         ))
+                    }
+                }
+                Some(BuiltIns::ResourceTransition) => {
+                    if in_resource {
+                        Ok(
+                            call_to_resource_transition(c, types, class_perms, &*context, file)?
+                                .into_iter()
+                                .map(ValidatedStatement::ResourcetransRule)
+                                .collect(),
+                        )
+                    } else {
+                        Err(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
+                            "resource_transition() calls are not allowed in domains",
+                            Some(file),
+                            c.name.get_range(),
+                            "Not allowed here",
+                        )))
                     }
                 }
                 Some(BuiltIns::DomainTransition) => {
@@ -2290,6 +2429,9 @@ impl<'a> ValidatedStatement<'a> {
             ValidatedStatement::DomtransRule(d) => {
                 ValidatedStatement::DomtransRule(d.get_renamed_statement(renames))
             }
+            // Not 100% sure what to do here since we are dealing with everything as cascade strings
+            // like domtrans is.  With some testing it looks like nothing?
+            ValidatedStatement::ResourcetransRule(_) => self.clone(),
         }
     }
 }
@@ -2300,6 +2442,7 @@ impl From<&ValidatedStatement<'_>> for sexp::Sexp {
             ValidatedStatement::Call(c) => Sexp::from(&**c),
             ValidatedStatement::AvRule(a) => Sexp::from(a),
             ValidatedStatement::FcRule(f) => Sexp::from(f),
+            ValidatedStatement::ResourcetransRule(r) => Sexp::from(r),
             ValidatedStatement::DomtransRule(d) => Sexp::from(d),
         }
     }

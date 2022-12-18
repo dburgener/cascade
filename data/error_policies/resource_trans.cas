@@ -1,0 +1,16 @@
+resource foo {
+    resource_transition(this, domain, bar, [quack]);
+    
+    resource_transition(aaa, zap, bar, [file]);
+    resource_transition(foo, bbb, bar, [file]);
+    resource_transition(foo, zap, ccc, [file]);
+
+	// Policies must include at least one av rule
+	allow(domain, foo, file, [read]);
+}
+
+resource bar {}
+
+domain zap {
+    resource_transition(foo, this, bar, [file dir]);
+}
