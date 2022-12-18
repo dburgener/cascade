@@ -1781,7 +1781,10 @@ fn validate_inheritance(
 ) -> Result<(), CascadeErrors> {
     match function_info.class {
         Some(class_info) => {
-            if !class_info.inherits.contains(parent_name) {
+            // In the case where we parent::func it will look like we are our own parent and thats fine
+            // In the more normal case of class.parent::func check that the parent is actually our parent
+            if !class_info.inherits.contains(parent_name) && class_info.name != parent_name.as_ref()
+            {
                 return Err(CascadeErrors::from(
                     ErrorItem::make_compile_or_internal_error(
                         "Invalid Parent",
