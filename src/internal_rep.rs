@@ -1668,12 +1668,7 @@ impl TryFrom<&FileSystemContextRule<'_>> for sexp::Sexp {
                     // We should never get here since we are defaulting to "/"
                     // when we call this normally but if someone calls this in
                     // an unexpected way we will get this call.
-                    Err(ErrorItem::make_compile_or_internal_error(
-                        "Genfscon missing path",
-                        Some(&f.file),
-                        f.func_call.get_name_range(),
-                        "Path must be given for genfscon",
-                    ))
+                    Err(ErrorItem::Internal(InternalError::new()))
                 }
             }
         }

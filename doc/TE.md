@@ -436,12 +436,15 @@ Example using additional fields:
 domain foo { ... } 
 ```
 
-The following arguments may be specified: source: The scontext field of a denial
-target: The tcontext field of a denial class: The tclass field of a denial perm:
-Any permission listed in a denial hint: A text string to display when using
-newaudit2allow attack: Set to True to indicate that this denial should be
-treated as a possible security incident cve: Reference a CVE associated with
-this denial
+The following arguments may be specified:
+* source: The scontext field of a denial
+* target: The tcontext field of a denial
+* class: The tclass field of a denial
+* perm: Any permission listed in a denial
+* hint: A text string to display when using newaudit2allow
+* attack: Set to True to indicate that this denial should be treated as a
+possible security incident
+* cve: Reference a CVE associated with this denial
 
 ### ignore annotation
 
