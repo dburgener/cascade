@@ -90,6 +90,20 @@ impl CompileError {
     }
 }
 
+pub fn add_or_create_compile_error(
+    error: Option<CompileError>,
+    msg: &str,
+    file: &SimpleFile<String, String>,
+    range: Option<Range<usize>>,
+    help: &str,
+) -> CompileError {
+    if let Some(unwrapped_error) = error {
+        unwrapped_error.add_additional_message(file, range, help)
+    } else {
+        CompileError::new(msg, file, range, help)
+    }
+}
+
 #[derive(Error, Clone, Debug)]
 #[error("{backtrace:?}")]
 pub struct InternalError {
