@@ -772,6 +772,18 @@ pub fn argument_to_typeinfo_vec<'a>(
     Ok(ret)
 }
 
+fn rename_cow<'a>(
+    cow_str: &CascadeString,
+    renames: &BTreeMap<String, String>,
+) -> Cow<'a, CascadeString> {
+    Cow::Owned(CascadeString::from(
+        renames
+            .get::<str>(cow_str.as_ref())
+            .unwrap_or(&cow_str.to_string())
+            .clone(),
+    ))
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AvRuleFlavor {
     Allow,
@@ -792,18 +804,6 @@ pub struct AvRule<'a> {
 
 impl AvRule<'_> {
     fn get_renamed_statement(&self, renames: &BTreeMap<String, String>) -> Self {
-        fn rename_cow<'a>(
-            cow_str: &CascadeString,
-            renames: &BTreeMap<String, String>,
-        ) -> Cow<'a, CascadeString> {
-            Cow::Owned(CascadeString::from(
-                renames
-                    .get::<str>(cow_str.as_ref())
-                    .unwrap_or(&cow_str.to_string())
-                    .clone(),
-            ))
-        }
-
         AvRule {
             av_rule_flavor: self.av_rule_flavor,
             source: rename_cow(&self.source, renames),
@@ -890,6 +890,8 @@ impl<'a> Context<'a> {
     }
 
     fn get_renamed_context(&self, renames: &BTreeMap<String, String>) -> Self {
+        // The global rename_cow works on CascadeStrings.  In this local case we work on &strs
+        // instead
         fn rename_cow<'a>(cow_str: &str, renames: &BTreeMap<String, String>) -> Cow<'a, str> {
             let new_str: &str = cow_str.borrow();
             Cow::Owned(renames.get(new_str).unwrap_or(&new_str.to_string()).clone())
@@ -1555,6 +1557,16 @@ impl From<&DomtransRule<'_>> for sexp::Sexp {
             atom_s("process"),
             atom_s(&d.target.get_cil_name()),
         ])
+    }
+}
+
+impl DomtransRule<'_> {
+    fn get_renamed_statement(&self, renames: &BTreeMap<String, String>) -> Self {
+        DomtransRule {
+            source: rename_cow(&self.source, renames),
+            target: rename_cow(&self.target, renames),
+            executable: rename_cow(&self.executable, renames),
+        }
     }
 }
 
@@ -2267,9 +2279,9 @@ impl<'a> ValidatedStatement<'a> {
             ValidatedStatement::FcRule(f) => {
                 ValidatedStatement::FcRule(f.get_renamed_statement(renames))
             }
-            // DomtransRule is probably broken on derive anyways. It uses TypeInfos directly rather
-            // than strings.  This probably means that deriving a DomTrans using "this" is broken
-            ValidatedStatement::DomtransRule(_) => self.clone(),
+            ValidatedStatement::DomtransRule(d) => {
+                ValidatedStatement::DomtransRule(d.get_renamed_statement(renames))
+            }
         }
     }
 }
@@ -3357,7 +3369,13 @@ mod tests {
             context: Context::new(false, None, None, Cow::Borrowed("old_name"), None, None),
         });
 
-        for statement in [statement1, statement2, statement3] {
+        let statement4 = ValidatedStatement::DomtransRule(DomtransRule {
+            source: Cow::Owned(CascadeString::from("old_name")),
+            target: Cow::Owned(CascadeString::from("old_name")),
+            executable: Cow::Owned(CascadeString::from("old_name")),
+        });
+
+        for statement in [statement1, statement2, statement3, statement4] {
             let mut renames = BTreeMap::new();
             renames.insert("old_name".to_string(), "new_name".to_string());
             let renamed_statement = statement.get_renamed_statement(&renames);
