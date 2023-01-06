@@ -164,7 +164,7 @@ pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
 
     // '*' is a special case.  It can be used to mean "all" of the things.  For now, the meaning of
     // "all" is only defined for strings (in annotation contexts where the annotation is
-    // responsible for figuring it out) and perms (all permissions for a given object
+    // responsible for figuring it out) and perms (all permissions for a given object)
     if let Some(t) = built_in_types.get_mut("*") {
         t.inherits = vec![
             CascadeString::from("string"),

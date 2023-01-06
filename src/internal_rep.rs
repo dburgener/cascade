@@ -606,7 +606,7 @@ pub fn validate_derive_args<'a>(
                 param_type: CascadeString::from("string"),
                 is_list_param: true,
                 name: CascadeString::from("functions"),
-                default: Some(Argument::Var("all".into())),
+                default: Some(Argument::Var("*".into())),
             },
             types,
             None,
@@ -663,7 +663,7 @@ pub fn validate_derive_args<'a>(
                     "No such type",
                     file,
                     name.get_range(),
-                    "This type does not exist.",
+                    "This type does not exist",
                 )
             })?;
             if &target_type.name == name {
