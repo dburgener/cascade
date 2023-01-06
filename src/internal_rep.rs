@@ -1753,12 +1753,14 @@ fn call_to_resource_transition<'a>(
         let file_type = match file_type.to_string().parse::<FileType>() {
             Ok(f) => f,
             Err(_) => {
-                return Err(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
-                    "Not a valid file type",
-                    Some(file),
-                    file_type.get_range(),
-                    "",
-                )))
+                return Err(CascadeErrors::from(
+                    ErrorItem::make_compile_or_internal_error(
+                        "Not a valid file type",
+                        Some(file),
+                        file_type.get_range(),
+                        "",
+                    ),
+                ))
             }
         };
 
@@ -2361,12 +2363,14 @@ impl<'a> ValidatedStatement<'a> {
                                 .collect(),
                         )
                     } else {
-                        Err(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
-                            "resource_transition() calls are not allowed in domains",
-                            Some(file),
-                            c.name.get_range(),
-                            "Not allowed here",
-                        )))
+                        Err(CascadeErrors::from(
+                            ErrorItem::make_compile_or_internal_error(
+                                "resource_transition() calls are not allowed in domains",
+                                Some(file),
+                                c.name.get_range(),
+                                "Not allowed here",
+                            ),
+                        ))
                     }
                 }
                 Some(BuiltIns::DomainTransition) => {
