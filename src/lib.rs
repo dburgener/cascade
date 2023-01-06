@@ -17,6 +17,7 @@ mod internal_rep;
 mod machine;
 mod obj_class;
 mod sexp_internal;
+mod warning;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
