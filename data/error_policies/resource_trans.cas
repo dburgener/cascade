@@ -5,8 +5,8 @@ resource foo {
     resource_transition(foo, bbb, bar, [file]);
     resource_transition(foo, zap, ccc, [file]);
 
-	// Policies must include at least one av rule
-	allow(domain, foo, file, [read]);
+    // Policies must include at least one av rule
+    allow(domain, foo, file, [read]);
 }
 
 resource bar {}

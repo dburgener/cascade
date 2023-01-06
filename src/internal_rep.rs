@@ -1647,7 +1647,18 @@ pub struct ResourcetransRule<'a> {
     pub default: Cow<'a, CascadeString>,
     pub domain: Cow<'a, CascadeString>,
     pub parent: Cow<'a, CascadeString>,
-    pub file_type: FileType, // Should this be Cow too?
+    pub file_type: FileType,
+}
+
+impl ResourcetransRule<'_> {
+    fn get_renamed_statement(&self, renames: &BTreeMap<String, String>) -> Self {
+        ResourcetransRule {
+            default: rename_cow(&self.default, renames),
+            domain: rename_cow(&self.domain, renames),
+            parent: rename_cow(&self.parent, renames),
+            file_type: self.file_type,
+        }
+    }
 }
 
 impl From<&ResourcetransRule<'_>> for sexp::Sexp {
@@ -2429,9 +2440,9 @@ impl<'a> ValidatedStatement<'a> {
             ValidatedStatement::DomtransRule(d) => {
                 ValidatedStatement::DomtransRule(d.get_renamed_statement(renames))
             }
-            // Not 100% sure what to do here since we are dealing with everything as cascade strings
-            // like domtrans is.  With some testing it looks like nothing?
-            ValidatedStatement::ResourcetransRule(_) => self.clone(),
+            ValidatedStatement::ResourcetransRule(r) => {
+                ValidatedStatement::ResourcetransRule(r.get_renamed_statement(renames))
+            }
         }
     }
 }
