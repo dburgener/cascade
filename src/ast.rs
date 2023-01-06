@@ -385,6 +385,7 @@ impl Statement {
 pub enum BuiltIns {
     AvRule,
     FileContext,
+    ResourceTransition,
     DomainTransition,
 }
 
@@ -424,6 +425,9 @@ impl FuncCall {
         }
         if self.name == constants::FILE_CONTEXT_FUNCTION_NAME {
             return Some(BuiltIns::FileContext);
+        }
+        if self.name == constants::RESOURCE_TRANS_FUNCTION_NAME {
+            return Some(BuiltIns::ResourceTransition);
         }
         if self.name == constants::DOMTRANS_FUNCTION_NAME {
             return Some(BuiltIns::DomainTransition);

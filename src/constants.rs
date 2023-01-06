@@ -5,6 +5,7 @@ pub const DONTAUDIT_FUNCTION_NAME: &str = "dontaudit";
 pub const AUDITALLOW_FUNCTION_NAME: &str = "auditallow";
 pub const NEVERALLOW_FUNCTION_NAME: &str = "neverallow";
 pub const FILE_CONTEXT_FUNCTION_NAME: &str = "file_context";
+pub const RESOURCE_TRANS_FUNCTION_NAME: &str = "resource_transition";
 pub const DOMTRANS_FUNCTION_NAME: &str = "domain_transition";
 pub const SYSTEM_TYPE: &str = "machine_type";
 pub const MONOLITHIC: &str = "monolithic";

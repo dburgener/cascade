@@ -1206,4 +1206,21 @@ mod tests {
     fn valid_self() {
         valid_policy_test("self.cas", &["allow qux self (file (read))"], &[]);
     }
+
+    #[test]
+    fn invalid_resourcetrans() {
+        error_policy_test!("resource_trans.cas", 5, ErrorItem::Compile(_));
+    }
+
+    #[test]
+    fn valid_resourcetrans() {
+        valid_policy_test(
+            "resource_trans.cas",
+            &[
+                "(typetransition domain bar file foo)",
+                "(typetransition domain bar dir foo)",
+            ],
+            &[],
+        );
+    }
 }
