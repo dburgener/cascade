@@ -1746,12 +1746,14 @@ fn call_to_fsc_rules<'a>(
     let fs_context = match Context::try_from(context_str.to_string()) {
         Ok(c) => c,
         Err(_) => {
-            return Err(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
-                "Invalid context",
-                Some(file),
-                context_str.get_range(),
-                "Cannot parse this into a context",
-            )))
+            return Err(CascadeErrors::from(
+                ErrorItem::make_compile_or_internal_error(
+                    "Invalid context",
+                    Some(file),
+                    context_str.get_range(),
+                    "Cannot parse this into a context",
+                ),
+            ))
         }
     };
     let fs_name = args_iter
@@ -1766,12 +1768,14 @@ fn call_to_fsc_rules<'a>(
     let fscontext_type = match fscontext_str.to_string().parse::<FSContextType>() {
         Ok(f) => f,
         Err(_) => {
-            return Err(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
-                "Not a valid file system type",
-                Some(file),
-                fscontext_str.get_range(),
-                "File system type must be 'xattr', 'task', 'trans', or 'genfscon'",
-            )));
+            return Err(CascadeErrors::from(
+                ErrorItem::make_compile_or_internal_error(
+                    "Not a valid file system type",
+                    Some(file),
+                    fscontext_str.get_range(),
+                    "File system type must be 'xattr', 'task', 'trans', or 'genfscon'",
+                ),
+            ));
         }
     };
     let regex_string_arg = args_iter
@@ -1802,20 +1806,24 @@ fn call_to_fsc_rules<'a>(
             }
             let mut errors = CascadeErrors::new();
             if !file_types.is_empty() {
-                errors.append(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
-                    "File types can only be provided for 'genfscon'",
-                    Some(file),
-                    file_types_arg.get_range(),
-                    "",
-                )));
+                errors.append(CascadeErrors::from(
+                    ErrorItem::make_compile_or_internal_error(
+                        "File types can only be provided for 'genfscon'",
+                        Some(file),
+                        file_types_arg.get_range(),
+                        "",
+                    ),
+                ));
             }
             if regex_string_arg.get_range().is_some() {
-                errors.append(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
-                    "File path can only be provided for 'genfscon'",
-                    Some(file),
-                    regex_string_arg.get_range(),
-                    "",
-                )));
+                errors.append(CascadeErrors::from(
+                    ErrorItem::make_compile_or_internal_error(
+                        "File path can only be provided for 'genfscon'",
+                        Some(file),
+                        regex_string_arg.get_range(),
+                        "",
+                    ),
+                ));
             }
             if !errors.is_empty() {
                 return Err(errors);
@@ -1837,12 +1845,14 @@ fn call_to_fsc_rules<'a>(
                     let file_type = match file_type.to_string().parse::<FileType>() {
                         Ok(f) => f,
                         Err(_) => {
-                            return Err(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
-                                "Not a valid file type",
-                                Some(file),
-                                file_type.get_range(),
-                                "",
-                            )))
+                            return Err(CascadeErrors::from(
+                                ErrorItem::make_compile_or_internal_error(
+                                    "Not a valid file type",
+                                    Some(file),
+                                    file_type.get_range(),
+                                    "",
+                                ),
+                            ))
                         }
                     };
 
@@ -2700,12 +2710,14 @@ impl<'a> ValidatedStatement<'a> {
                             .map(ValidatedStatement::FscRule)
                             .collect())
                     } else {
-                        Err(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
-                            "fs_context() calls are only allowed in resources",
-                            Some(file),
-                            c.name.get_range(),
-                            "Not allowed here",
-                        )))
+                        Err(CascadeErrors::from(
+                            ErrorItem::make_compile_or_internal_error(
+                                "fs_context() calls are only allowed in resources",
+                                Some(file),
+                                c.name.get_range(),
+                                "Not allowed here",
+                            ),
+                        ))
                     }
                 }
                 Some(BuiltIns::DomainTransition) => {

@@ -94,7 +94,7 @@ pub fn add_or_create_compile_error(
     error: Option<CompileError>,
     msg: &str,
     file: &SimpleFile<String, String>,
-    range: Option<Range<usize>>,
+    range: Range<usize>,
     help: &str,
 ) -> CompileError {
     if let Some(unwrapped_error) = error {
@@ -406,8 +406,7 @@ mod tests {
             "This is the word 'of' in file 1",
         );
 
-        error =
-            error.add_additional_message(&file2, 12..16, "This is the word file in file 2");
+        error = error.add_additional_message(&file2, 12..16, "This is the word file in file 2");
 
         let labels = error.diagnostic.inner.labels;
         assert_eq!(labels.len(), 2);

@@ -361,7 +361,7 @@ pub fn validate_fs_context_duplicates(
             match rule.fscontext_type {
                 // If we ever see a duplicate of xattr task or trans we know something is wrong
                 FSContextType::XAttr | FSContextType::Task | FSContextType::Trans => {
-                    let mut range: Range<usize> = 0..0;
+                    let mut range: Range<usize> = 1..1;
                     for arg in &rule.func_call.args {
                         if let Argument::Quote(cas_arg) = &arg.0 {
                             if *cas_arg == rule.fs_name {
@@ -392,7 +392,8 @@ pub fn validate_fs_context_duplicates(
                                     // need to add a new error message
                                     if let Some(unwrapped_error) = error {
                                         error = Some(unwrapped_error.add_additional_message(&inner_rule.file,
-                                            inner_range.unwrap_or_default(),
+                                            // The unwrap in the unwrap_or is safe since we know we have a function call w/ range at this point
+                                            inner_range.unwrap_or_else(||inner_rule.func_call.get_name_range().unwrap()),
                                             &format!("Found duplicate genfscon rules for filesystem {} with differing contexts: {}", inner_rule.fs_name, inner_rule.context)));
                                     } else {
                                         let outer_range: Option<Range<usize>> =
@@ -401,11 +402,13 @@ pub fn validate_fs_context_duplicates(
                                         error = Some(CompileError::new(
                                             "Duplicate genfscon contexts",
                                             &rule.file,
-                                            outer_range.unwrap_or_default(),
+                                            // The unwrap in the unwrap_or is safe since we know we have a function call w/ range at this point
+                                            outer_range.unwrap_or_else(||rule.func_call.get_name_range().unwrap()),
                                             &format!("Found duplicate genfscon rules for filesystem {} with differing contexts: {}", rule.fs_name, rule.context)));
                                         // We just made the error we are okay to unwrap it
                                         error = Some(error.unwrap().add_additional_message(&inner_rule.file,
-                                            inner_range.unwrap_or_default(),
+                                            // The unwrap in the unwrap_or is safe since we know we have a function call w/ range at this point
+                                            inner_range.unwrap_or_else(||inner_rule.func_call.get_name_range().unwrap()),
                                             &format!("Found duplicate genfscon rules for filesystem {} with differing contexts: {}", inner_rule.fs_name, inner_rule.context)));
                                     }
                                 // Our paths are the same but our file types differ, we must also have a file type.
@@ -431,7 +434,8 @@ pub fn validate_fs_context_duplicates(
                                     // need to add a new error message
                                     if let Some(unwrapped_error) = error {
                                         error = Some(unwrapped_error.add_additional_message(&inner_rule.file,
-                                            inner_range.unwrap_or_default(),
+                                            // The unwrap in the unwrap_or is safe since we know we have a function call w/ range at this point
+                                            inner_range.unwrap_or_else(||inner_rule.func_call.get_name_range().unwrap()),
                                             &format!("Found duplicate genfscon rules for filesystem {} with differing file types", inner_rule.fs_name)));
                                     } else {
                                         // Just like above we need to look through the outer function's args to get the correct range
@@ -452,11 +456,13 @@ pub fn validate_fs_context_duplicates(
                                         error = Some(CompileError::new(
                                             "Duplicate genfscon file types",
                                             &inner_rule.file,
-                                            outer_range.unwrap_or_default(),
+                                            // The unwrap in the unwrap_or is safe since we know we have a function call w/ range at this point
+                                            outer_range.unwrap_or_else(||rule.func_call.get_name_range().unwrap()),
                                             &format!("Found duplicate genfscon rules for filesystem {} with differing file types", rule.fs_name)));
                                         // We just made the error we are safe to unwrap
                                         error = Some(error.unwrap().add_additional_message(&inner_rule.file,
-                                            inner_range.unwrap_or_default(),
+                                            // The unwrap in the unwrap_or is safe since we know we have a function call w/ range at this point
+                                            inner_range.unwrap_or_else(||inner_rule.func_call.get_name_range().unwrap()),
                                             &format!("Found duplicate genfscon rules for filesystem {} with differing file types", inner_rule.fs_name)));
                                     }
                                 }
