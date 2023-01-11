@@ -5,7 +5,6 @@ use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::TryFrom;
-use std::ops::Range;
 
 use crate::ast::{
     Argument, CascadeString, Declaration, Expression, FuncCall, LetBinding, Machine, Module,
@@ -347,32 +346,25 @@ pub fn build_func_map<'a>(
 }
 
 pub fn validate_fs_context_duplicates(
-    fsc_rules: BTreeMap<&String, BTreeSet<&FileSystemContextRule>>,
+    fsc_rules: BTreeMap<String, BTreeSet<&FileSystemContextRule>>,
 ) -> Result<(), CascadeErrors> {
     let mut errors = CascadeErrors::new();
 
-    'key_loop: for (_, v) in fsc_rules {
+    'key_loop: for v in fsc_rules.values() {
         // We only have 1 or 0 elements, thus we cannot have a semi duplicate
         if v.len() <= 1 {
             continue;
         }
         let mut error: Option<CompileError> = None;
-        for rule in &v {
+        for rule in v {
             match rule.fscontext_type {
                 // If we ever see a duplicate of xattr task or trans we know something is wrong
                 FSContextType::XAttr | FSContextType::Task | FSContextType::Trans => {
-                    let mut range: Range<usize> = 1..1;
-                    for arg in &rule.func_call.args {
-                        if let Argument::Quote(cas_arg) = &arg.0 {
-                            if *cas_arg == rule.fs_name {
-                                range = cas_arg.get_range().unwrap_or_default();
-                            }
-                        }
-                    }
                     error = Some(add_or_create_compile_error(error,
                         "Duplicate filesystem context.",
                         &rule.file,
-                        range,
+                        // TODO once Issue #92 is resolved we would rather do a unwrap_or make internal error
+                        rule.fs_name.get_range().unwrap_or_default(),
                         &format!("Found multiple different filesystem type declarations for filesystem: {}", rule.fs_name)));
                 }
                 FSContextType::GenFSCon => {
@@ -380,89 +372,48 @@ pub fn validate_fs_context_duplicates(
                     // If we find a genfscon with the same path, they must have the same context and object type.
                     if let Some(path) = &rule.path {
                         // Look through the rules again
-                        for inner_rule in &v {
+                        for inner_rule in v {
                             // Only check path if it was provided as part of the rule
                             if let Some(inner_path) = &inner_rule.path {
                                 // If our paths match, check if our contexts match
                                 if path == inner_path && rule.context != inner_rule.context {
-                                    // In this case we are safe in knowing args[0] is what we need.
-                                    let inner_range: Option<Range<usize>> =
-                                        inner_rule.func_call.args[0].0.get_range();
                                     // error is not None so we have already found something, so we just
                                     // need to add a new error message
                                     if let Some(unwrapped_error) = error {
                                         error = Some(unwrapped_error.add_additional_message(&inner_rule.file,
-                                            // The unwrap in the unwrap_or is safe since we know we have a function call w/ range at this point
-                                            inner_range.unwrap_or_else(||inner_rule.func_call.get_name_range().unwrap()),
+                                            inner_rule.context_range.clone(),
                                             &format!("Found duplicate genfscon rules for filesystem {} with differing contexts: {}", inner_rule.fs_name, inner_rule.context)));
                                     } else {
-                                        let outer_range: Option<Range<usize>> =
-                                            rule.func_call.args[0].0.get_range();
                                         // error is none so we need to make a new one
-                                        error = Some(CompileError::new(
+                                        let tmp_error = CompileError::new(
                                             "Duplicate genfscon contexts",
                                             &rule.file,
-                                            // The unwrap in the unwrap_or is safe since we know we have a function call w/ range at this point
-                                            outer_range.unwrap_or_else(||rule.func_call.get_name_range().unwrap()),
-                                            &format!("Found duplicate genfscon rules for filesystem {} with differing contexts: {}", rule.fs_name, rule.context)));
-                                        // We just made the error we are okay to unwrap it
-                                        error = Some(error.unwrap().add_additional_message(&inner_rule.file,
-                                            // The unwrap in the unwrap_or is safe since we know we have a function call w/ range at this point
-                                            inner_range.unwrap_or_else(||inner_rule.func_call.get_name_range().unwrap()),
+                                            rule.context_range.clone(),
+                                            &format!("Found duplicate genfscon rules for filesystem {} with differing contexts: {}", rule.fs_name, rule.context));
+                                        error = Some(tmp_error.add_additional_message(&inner_rule.file,
+                                            inner_rule.context_range.clone(),
                                             &format!("Found duplicate genfscon rules for filesystem {} with differing contexts: {}", inner_rule.fs_name, inner_rule.context)));
                                     }
-                                // Our paths are the same but our file types differ, we must also have a file type.
+                                // Our paths are the same but our file types differ. We must also have a file type.
                                 } else if path == inner_path
                                     && rule.file_type != inner_rule.file_type
                                     && rule.file_type.is_some()
                                 {
-                                    let mut inner_range: Option<Range<usize>> = None;
-                                    // We need to look through the function's args to get the range on the file type arg we are looking for
-                                    for arg in &inner_rule.func_call.args {
-                                        if let Argument::List(cas_args) = &arg.0 {
-                                            for cas_arg in cas_args {
-                                                // unwrap is safe here due to else if above
-                                                if *cas_arg
-                                                    == inner_rule.file_type.unwrap().to_string()
-                                                {
-                                                    inner_range = cas_arg.get_range();
-                                                }
-                                            }
-                                        }
-                                    }
                                     // error is not None so we have already found something, so we just
                                     // need to add a new error message
                                     if let Some(unwrapped_error) = error {
                                         error = Some(unwrapped_error.add_additional_message(&inner_rule.file,
-                                            // The unwrap in the unwrap_or is safe since we know we have a function call w/ range at this point
-                                            inner_range.unwrap_or_else(||inner_rule.func_call.get_name_range().unwrap()),
+                                            inner_rule.file_type_range.clone(),
                                             &format!("Found duplicate genfscon rules for filesystem {} with differing file types", inner_rule.fs_name)));
                                     } else {
-                                        // Just like above we need to look through the outer function's args to get the correct range
-                                        let mut outer_range: Option<Range<usize>> = None;
-                                        for arg in &rule.func_call.args {
-                                            if let Argument::List(cas_args) = &arg.0 {
-                                                for cas_arg in cas_args {
-                                                    // unwrap is safe here to else if above
-                                                    if *cas_arg
-                                                        == rule.file_type.unwrap().to_string()
-                                                    {
-                                                        outer_range = cas_arg.get_range();
-                                                    }
-                                                }
-                                            }
-                                        }
                                         // error is none so we need to make a new one.
-                                        error = Some(CompileError::new(
+                                        let tmp_error = CompileError::new(
                                             "Duplicate genfscon file types",
-                                            &inner_rule.file,
-                                            // The unwrap in the unwrap_or is safe since we know we have a function call w/ range at this point
-                                            outer_range.unwrap_or_else(||rule.func_call.get_name_range().unwrap()),
-                                            &format!("Found duplicate genfscon rules for filesystem {} with differing file types", rule.fs_name)));
-                                        // We just made the error we are safe to unwrap
-                                        error = Some(error.unwrap().add_additional_message(&inner_rule.file,
-                                            // The unwrap in the unwrap_or is safe since we know we have a function call w/ range at this point
-                                            inner_range.unwrap_or_else(||inner_rule.func_call.get_name_range().unwrap()),
+                                            &rule.file,
+                                            rule.file_type_range.clone(),
+                                            &format!("Found duplicate genfscon rules for filesystem {} with differing file types", rule.fs_name));
+                                        error = Some(tmp_error.add_additional_message(&inner_rule.file,
+                                            inner_rule.file_type_range.clone(),
                                             &format!("Found duplicate genfscon rules for filesystem {} with differing file types", inner_rule.fs_name)));
                                     }
                                 }
@@ -490,11 +441,14 @@ pub fn validate_fs_context_duplicates(
 pub fn validate_rules(statements: &BTreeSet<ValidatedStatement>) -> Result<(), CascadeErrors> {
     let mut errors = CascadeErrors::new();
 
-    let mut fsc_rules: BTreeMap<&String, BTreeSet<&FileSystemContextRule>> = BTreeMap::new();
+    let mut fsc_rules: BTreeMap<String, BTreeSet<&FileSystemContextRule>> = BTreeMap::new();
     for statement in statements {
         // Add all file system context rules to a new map to check for semi duplicates later
         if let ValidatedStatement::FscRule(fs) = statement {
-            fsc_rules.entry(&fs.fs_name).or_default().insert(fs);
+            fsc_rules
+                .entry(fs.fs_name.to_string())
+                .or_default()
+                .insert(fs);
         }
     }
 

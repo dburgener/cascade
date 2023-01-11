@@ -21,9 +21,6 @@ use crate::context::{BlockType, Context as BlockContext};
 use crate::error::{CascadeErrors, CompileError, ErrorItem, InternalError};
 use crate::obj_class::perm_list_to_sexp;
 
-extern crate derivative;
-use derivative::Derivative;
-
 const DEFAULT_USER: &str = "system_u";
 const DEFAULT_OBJECT_ROLE: &str = "object_r";
 const DEFAULT_DOMAIN_ROLE: &str = "system_r";
@@ -1594,24 +1591,53 @@ impl FromStr for FSContextType {
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Clone, Debug, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Debug)]
 pub struct FileSystemContextRule<'a> {
     pub fscontext_type: FSContextType,
-    pub fs_name: String,
-    pub path: Option<String>,
+    pub fs_name: CascadeString,
+    pub path: Option<CascadeString>,
     pub file_type: Option<FileType>,
     pub context: Context<'a>,
-    #[derivative(PartialEq = "ignore")]
-    #[derivative(PartialOrd = "ignore")]
-    #[derivative(Ord = "ignore")]
     pub file: SimpleFile<String, String>,
-    #[derivative(PartialEq = "ignore")]
-    #[derivative(PartialOrd = "ignore")]
-    #[derivative(Ord = "ignore")]
-    pub func_call: FuncCall,
+    pub file_type_range: Range<usize>, //Note: if a file type is not given this will be the range of the function name
+    pub context_range: Range<usize>,
 }
 impl Eq for FileSystemContextRule<'_> {}
+
+impl PartialEq for FileSystemContextRule<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.fscontext_type == other.fscontext_type
+            && self.fs_name == other.fs_name
+            && self.path == other.path
+            && self.file_type == other.file_type
+            && self.context == other.context
+    }
+}
+
+impl PartialOrd for FileSystemContextRule<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for FileSystemContextRule<'_> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        (
+            &self.fscontext_type,
+            &self.fs_name,
+            &self.path,
+            self.file_type,
+            &self.context,
+        )
+            .cmp(&(
+                &other.fscontext_type,
+                &other.fs_name,
+                &other.path,
+                other.file_type,
+                &other.context,
+            ))
+    }
+}
 
 impl FileSystemContextRule<'_> {
     fn get_renamed_statement(&self, renames: &BTreeMap<String, String>) -> Self {
@@ -1622,7 +1648,8 @@ impl FileSystemContextRule<'_> {
             file_type: self.file_type,
             context: self.context.get_renamed_context(renames),
             file: self.file.clone(),
-            func_call: self.func_call.clone(),
+            file_type_range: self.file_type_range.clone(),
+            context_range: self.context_range.clone(),
         }
     }
 }
@@ -1635,7 +1662,7 @@ impl TryFrom<&FileSystemContextRule<'_>> for sexp::Sexp {
             FSContextType::XAttr | FSContextType::Task | FSContextType::Trans => Ok(list(&[
                 atom_s("fsuse"),
                 Sexp::Atom(Atom::S(f.fscontext_type.to_string())),
-                atom_s(f.fs_name.trim_matches('"')),
+                atom_s(f.fs_name.to_string().trim_matches('"')),
                 Sexp::from(&f.context),
             ])),
             FSContextType::GenFSCon => {
@@ -1649,7 +1676,7 @@ impl TryFrom<&FileSystemContextRule<'_>> for sexp::Sexp {
                         if false {
                             return Ok(list(&[
                                 atom_s("genfscon"),
-                                atom_s(f.fs_name.trim_matches('"')),
+                                atom_s(f.fs_name.to_string().trim_matches('"')),
                                 atom_s(p.as_ref()),
                                 Sexp::Atom(Atom::S(file_type.to_string())),
                                 Sexp::from(&f.context),
@@ -1660,7 +1687,7 @@ impl TryFrom<&FileSystemContextRule<'_>> for sexp::Sexp {
                     // reduce redundant lines of code
                     Ok(list(&[
                         atom_s("genfscon"),
-                        atom_s(f.fs_name.trim_matches('"')),
+                        atom_s(f.fs_name.to_string().trim_matches('"')),
                         atom_s(p.as_ref()),
                         Sexp::from(&f.context),
                     ]))
@@ -1739,10 +1766,10 @@ fn call_to_fsc_rules<'a>(
     let mut args_iter = validated_args.iter();
     let mut ret = Vec::new();
 
-    let context_str = args_iter
+    let context_str_arg = args_iter
         .next()
-        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
-        .get_name_or_string(context)?;
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?;
+    let context_str = context_str_arg.get_name_or_string(context)?;
     let fs_context = match Context::try_from(context_str.to_string()) {
         Ok(c) => c,
         Err(_) => {
@@ -1756,11 +1783,13 @@ fn call_to_fsc_rules<'a>(
             ))
         }
     };
+
+    // BUG: There is an issue with get_name_or_string in which the range of the
+    // returned CascadeString will be None.
     let fs_name = args_iter
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
-        .get_name_or_string(context)?
-        .to_string();
+        .get_name_or_string(context)?;
     let fscontext_str = args_iter
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
@@ -1781,7 +1810,8 @@ fn call_to_fsc_rules<'a>(
     let regex_string_arg = args_iter
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?;
-    let regex_string = regex_string_arg.get_name_or_string(context)?.to_string();
+    let regex_string = regex_string_arg.get_name_or_string(context)?;
+
     let file_types_arg = args_iter
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?;
@@ -1801,7 +1831,11 @@ fn call_to_fsc_rules<'a>(
                     file_type: None,
                     context: fs_context.clone(),
                     file: file.clone(),
-                    func_call: c.clone(),
+                    // file_type_range shouldn't ever be used for xattr, task, or trans but I would rather not
+                    // have to deal with Option/unwrap stuff later
+                    file_type_range: c.get_name_range().unwrap_or_default(),
+                    // TODO once Issue #92 is resolved we would rather do a unwrap_or make internal error
+                    context_range: context_str_arg.get_range().unwrap_or_default(),
                 });
             }
             let mut errors = CascadeErrors::new();
@@ -1838,7 +1872,11 @@ fn call_to_fsc_rules<'a>(
                     file_type: None,
                     context: fs_context.clone(),
                     file: file.clone(),
-                    func_call: c.clone(),
+                    // file_type_range shouldn't need to be used here since file_type is None, but I would rather not
+                    // have to deal with Option/unwrap stuff later
+                    file_type_range: c.get_name_range().unwrap_or_default(),
+                    // TODO once Issue #92 is resolved we would rather do a unwrap_or make internal error
+                    context_range: context_str_arg.get_range().unwrap_or_default(),
                 });
             } else {
                 for file_type in file_types {
@@ -1863,7 +1901,11 @@ fn call_to_fsc_rules<'a>(
                         file_type: Some(file_type),
                         context: fs_context.clone(),
                         file: file.clone(),
-                        func_call: c.clone(),
+                        file_type_range: file_types_arg
+                            .get_range()
+                            .unwrap_or_else(|| c.get_name_range().unwrap_or_default()),
+                        // TODO once Issue #92 is resolved we would rather do a unwrap_or make internal error
+                        context_range: context_str_arg.get_range().unwrap_or_default(),
                     });
                 }
             }
