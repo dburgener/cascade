@@ -434,6 +434,7 @@ impl FuncCall {
             return Some(BuiltIns::FileSystemContext);
         }
         if self.name == constants::DOMTRANS_FUNCTION_NAME {
+            return Some(BuiltIns::DomainTransition);
         }
         None
     }
