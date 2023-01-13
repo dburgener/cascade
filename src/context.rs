@@ -116,11 +116,11 @@ impl<'a> Context<'a> {
     // returns None
     // If the object is not in the context, then the string is valid elsewhere,
     // so just return the string
-    pub fn get_name_or_string(&self, arg: &str) -> Option<CascadeString> {
-        match self.symbols.get(&CascadeString::from(arg)) {
-            None => Some(CascadeString::from(arg)),
+    pub fn get_name_or_string(&self, arg: &CascadeString) -> Option<CascadeString> {
+        match self.symbols.get(arg) {
+            None => Some(arg.clone()),
             Some(BindableObject::Type(t)) => Some(t.name.clone()),
-            Some(BindableObject::Argument(_)) => Some(CascadeString::from(arg)),
+            Some(BindableObject::Argument(_)) => Some(arg.clone()),
             Some(BindableObject::Class(s)) => Some(CascadeString::from(s.as_ref())),
             Some(BindableObject::TypeList(_))
             | Some(BindableObject::PermList(_))
@@ -136,7 +136,7 @@ impl<'a> Context<'a> {
             }
             // Unwrap() is safe here because all of the get_name_or_string() None cases are handled
             // in get_list()
-            _ => vec![self.get_name_or_string(arg).unwrap()],
+            _ => vec![self.get_name_or_string(&CascadeString::from(arg)).unwrap()],
         }
     }
 
@@ -173,12 +173,14 @@ impl<'a> Context<'a> {
                     .map(|s| s.to_string())
                     .collect(),
             ),
-            BindableObject::Class(c) => match self.get_name_or_string(&c) {
-                Some(s) => BindableObject::Class(s.to_string()),
-                None => BindableObject::ClassList(
-                    self.get_list(&c).iter().map(|s| s.to_string()).collect(),
-                ),
-            },
+            BindableObject::Class(c) => {
+                match self.get_name_or_string(&CascadeString::from(c.as_ref())) {
+                    Some(s) => BindableObject::Class(s.to_string()),
+                    None => BindableObject::ClassList(
+                        self.get_list(&c).iter().map(|s| s.to_string()).collect(),
+                    ),
+                }
+            }
         }
     }
 
@@ -299,5 +301,27 @@ mod tests {
         assert_eq!(&context.convert_arg_this("foo"), "foo");
         assert_eq!(&context.convert_arg_this("this"), "this");
         assert_eq!(&context.convert_arg_this("this.foo"), "domain.foo");
+    }
+
+    #[test]
+    fn test_get_name_or_string() {
+        let tm = compile::get_built_in_types_map().unwrap();
+        let mut context = Context::new(BlockType::Domain, &tm, tm.get("domain"));
+        context.insert_binding(
+            CascadeString::new("foo".to_string(), 10..12),
+            BindableObject::Type(tm.get("domain").unwrap()),
+        );
+
+        let foo_string = context
+            .get_name_or_string(&CascadeString::new("foo".to_string(), 0..1))
+            .unwrap();
+        assert_eq!(foo_string.get_range(), None); // The range of the builtin domain
+        assert_eq!(foo_string.as_ref(), "domain");
+
+        let domain_string = context
+            .get_name_or_string(&CascadeString::new("domain".to_string(), 1..2))
+            .unwrap();
+        assert_eq!(domain_string.get_range(), Some(1..2)); // The range of the reference to domain we looked up
+        assert_eq!(domain_string.as_ref(), "domain");
     }
 }
