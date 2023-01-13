@@ -22,6 +22,7 @@ use crate::internal_rep::{
     FunctionMap, MachineMap, ModuleMap, Sid, TypeInfo, TypeMap, ValidatedCall, ValidatedMachine,
     ValidatedModule, ValidatedStatement,
 };
+use crate::unwrap_or_return;
 
 use codespan_reporting::files::SimpleFile;
 
@@ -363,8 +364,7 @@ pub fn validate_fs_context_duplicates(
                     error = Some(add_or_create_compile_error(error,
                         "Duplicate filesystem context.",
                         &rule.file,
-                        // TODO once Issue #92 is resolved we would rather do a unwrap_or make internal error
-                        rule.fs_name.get_range().unwrap_or_default(),
+                        unwrap_or_return!(rule.fs_name.get_range(), Err(CascadeErrors::from(InternalError::new()))),
                         &format!("Found multiple different filesystem type declarations for filesystem: {}", rule.fs_name)));
                 }
                 FSContextType::GenFSCon => {

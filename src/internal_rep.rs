@@ -21,6 +21,16 @@ use crate::context::{BlockType, Context as BlockContext};
 use crate::error::{CascadeErrors, CompileError, ErrorItem, InternalError};
 use crate::obj_class::perm_list_to_sexp;
 
+#[macro_export]
+macro_rules! unwrap_or_return {
+    ($e:expr, $r:expr) => {
+        match $e {
+            Some(e) => e,
+            None => return $r,
+        }
+    };
+}
+
 const DEFAULT_USER: &str = "system_u";
 const DEFAULT_OBJECT_ROLE: &str = "object_r";
 const DEFAULT_DOMAIN_ROLE: &str = "system_r";
@@ -1784,8 +1794,6 @@ fn call_to_fsc_rules<'a>(
         }
     };
 
-    // BUG: There is an issue with get_name_or_string in which the range of the
-    // returned CascadeString will be None.
     let fs_name = args_iter
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
@@ -1832,10 +1840,12 @@ fn call_to_fsc_rules<'a>(
                     context: fs_context.clone(),
                     file: file.clone(),
                     // file_type_range shouldn't ever be used for xattr, task, or trans but I would rather not
-                    // have to deal with Option/unwrap stuff later
+                    // have to deal with Option stuff later
                     file_type_range: c.get_name_range().unwrap_or_default(),
-                    // TODO once Issue #92 is resolved we would rather do a unwrap_or make internal error
-                    context_range: context_str_arg.get_range().unwrap_or_default(),
+                    context_range: unwrap_or_return!(
+                        context_str_arg.get_range(),
+                        Err(CascadeErrors::from(InternalError::new()))
+                    ),
                 });
             }
             let mut errors = CascadeErrors::new();
@@ -1873,10 +1883,12 @@ fn call_to_fsc_rules<'a>(
                     context: fs_context.clone(),
                     file: file.clone(),
                     // file_type_range shouldn't need to be used here since file_type is None, but I would rather not
-                    // have to deal with Option/unwrap stuff later
+                    // have to deal with Option stuff later
                     file_type_range: c.get_name_range().unwrap_or_default(),
-                    // TODO once Issue #92 is resolved we would rather do a unwrap_or make internal error
-                    context_range: context_str_arg.get_range().unwrap_or_default(),
+                    context_range: unwrap_or_return!(
+                        context_str_arg.get_range(),
+                        Err(CascadeErrors::from(InternalError::new()))
+                    ),
                 });
             } else {
                 for file_type in file_types {
@@ -1904,8 +1916,10 @@ fn call_to_fsc_rules<'a>(
                         file_type_range: file_types_arg
                             .get_range()
                             .unwrap_or_else(|| c.get_name_range().unwrap_or_default()),
-                        // TODO once Issue #92 is resolved we would rather do a unwrap_or make internal error
-                        context_range: context_str_arg.get_range().unwrap_or_default(),
+                        context_range: unwrap_or_return!(
+                            context_str_arg.get_range(),
+                            Err(CascadeErrors::from(InternalError::new()))
+                        ),
                     });
                 }
             }
