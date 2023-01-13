@@ -2750,7 +2750,7 @@ impl<'a> TypeInstance<'a> {
                     }
                 } else {
                     context
-                        .get_name_or_string(s.as_ref())
+                        .get_name_or_string(s)
                         .ok_or_else(|| InternalError::new().into())
                 }
             }
