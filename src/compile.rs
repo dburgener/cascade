@@ -5,6 +5,7 @@ use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::TryFrom;
+use std::ops::Range;
 
 use crate::ast::{
     Argument, CascadeString, Declaration, Expression, FuncCall, LetBinding, Machine, Module,
@@ -22,7 +23,6 @@ use crate::internal_rep::{
     FunctionMap, MachineMap, ModuleMap, Sid, TypeInfo, TypeMap, ValidatedCall, ValidatedMachine,
     ValidatedModule, ValidatedStatement,
 };
-use crate::unwrap_or_return;
 
 use codespan_reporting::files::SimpleFile;
 
@@ -346,6 +346,34 @@ pub fn build_func_map<'a>(
     Ok(decl_map)
 }
 
+// Helper function to deal with the case where we need to either create a
+// new error or add to an existing one, but specifically for this issue
+// we need to create a new error and immediately add to it.
+#[allow(clippy::too_many_arguments)]
+fn new_error_helper(
+    error: Option<CompileError>,
+    msg: &str,
+    file_a: &SimpleFile<String, String>,
+    file_b: &SimpleFile<String, String>,
+    range_a: Range<usize>,
+    range_b: Range<usize>,
+    help_a: &str,
+    help_b: &str,
+) -> CompileError {
+    let mut tmp_error;
+    // error is not None so we have already found something, so we just
+    // need to add a new error message
+    if let Some(unwrapped_error) = error {
+        tmp_error = unwrapped_error.add_additional_message(file_a, range_a, help_a);
+    } else {
+        // error is none so we need to make a new one
+        tmp_error = CompileError::new(msg, file_b, range_b, help_b);
+        tmp_error = tmp_error.add_additional_message(file_a, range_a, help_a);
+    }
+
+    tmp_error
+}
+
 pub fn validate_fs_context_duplicates(
     fsc_rules: BTreeMap<String, BTreeSet<&FileSystemContextRule>>,
 ) -> Result<(), CascadeErrors> {
@@ -364,7 +392,7 @@ pub fn validate_fs_context_duplicates(
                     error = Some(add_or_create_compile_error(error,
                         "Duplicate filesystem context.",
                         &rule.file,
-                        unwrap_or_return!(rule.fs_name.get_range(), Err(CascadeErrors::from(InternalError::new()))),
+                        rule.fs_name.get_range().ok_or_else(||CascadeErrors::from(InternalError::new()))?,
                         &format!("Found multiple different filesystem type declarations for filesystem: {}", rule.fs_name)));
                 }
                 FSContextType::GenFSCon => {
@@ -377,45 +405,27 @@ pub fn validate_fs_context_duplicates(
                             if let Some(inner_path) = &inner_rule.path {
                                 // If our paths match, check if our contexts match
                                 if path == inner_path && rule.context != inner_rule.context {
-                                    // error is not None so we have already found something, so we just
-                                    // need to add a new error message
-                                    if let Some(unwrapped_error) = error {
-                                        error = Some(unwrapped_error.add_additional_message(&inner_rule.file,
-                                            inner_rule.context_range.clone(),
-                                            &format!("Found duplicate genfscon rules for filesystem {} with differing contexts: {}", inner_rule.fs_name, inner_rule.context)));
-                                    } else {
-                                        // error is none so we need to make a new one
-                                        let tmp_error = CompileError::new(
-                                            "Duplicate genfscon contexts",
-                                            &rule.file,
-                                            rule.context_range.clone(),
-                                            &format!("Found duplicate genfscon rules for filesystem {} with differing contexts: {}", rule.fs_name, rule.context));
-                                        error = Some(tmp_error.add_additional_message(&inner_rule.file,
-                                            inner_rule.context_range.clone(),
-                                            &format!("Found duplicate genfscon rules for filesystem {} with differing contexts: {}", inner_rule.fs_name, inner_rule.context)));
-                                    }
+                                    error = Some(new_error_helper(error,
+                                        "Duplicate genfscon contexts",
+                                        &inner_rule.file,
+                                        &rule.file,
+                                        inner_rule.context_range.clone(),
+                                        rule.context_range.clone(),
+                                        &format!("Found duplicate genfscon rules for filesystem {} with differing contexts: {}", inner_rule.fs_name, inner_rule.context),
+                                        &format!("Found duplicate genfscon rules for filesystem {} with differing contexts: {}", rule.fs_name, rule.context)));
                                 // Our paths are the same but our file types differ. We must also have a file type.
                                 } else if path == inner_path
                                     && rule.file_type != inner_rule.file_type
                                     && rule.file_type.is_some()
                                 {
-                                    // error is not None so we have already found something, so we just
-                                    // need to add a new error message
-                                    if let Some(unwrapped_error) = error {
-                                        error = Some(unwrapped_error.add_additional_message(&inner_rule.file,
-                                            inner_rule.file_type_range.clone(),
-                                            &format!("Found duplicate genfscon rules for filesystem {} with differing file types", inner_rule.fs_name)));
-                                    } else {
-                                        // error is none so we need to make a new one.
-                                        let tmp_error = CompileError::new(
-                                            "Duplicate genfscon file types",
-                                            &rule.file,
-                                            rule.file_type_range.clone(),
-                                            &format!("Found duplicate genfscon rules for filesystem {} with differing file types", rule.fs_name));
-                                        error = Some(tmp_error.add_additional_message(&inner_rule.file,
-                                            inner_rule.file_type_range.clone(),
-                                            &format!("Found duplicate genfscon rules for filesystem {} with differing file types", inner_rule.fs_name)));
-                                    }
+                                    error = Some(new_error_helper(error,
+                                        "Duplicate genfscon file types",
+                                        &inner_rule.file,
+                                        &rule.file,
+                                        inner_rule.file_type_range.clone(),
+                                        rule.file_type_range.clone(),
+                                        &format!("Found duplicate genfscon rules for filesystem {} with differing file types", inner_rule.fs_name),
+                                        &format!("Found duplicate genfscon rules for filesystem {} with differing file types", rule.fs_name)));
                                 }
                             }
                         }
