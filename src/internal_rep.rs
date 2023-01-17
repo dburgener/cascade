@@ -1597,10 +1597,11 @@ pub struct FileSystemContextRule<'a> {
     pub fs_name: CascadeString,
     pub path: Option<CascadeString>,
     pub file_type: Option<FileType>,
+    //Note: if a file type is not given this will be the range of the function name
+    pub file_type_range: Range<usize>,
     pub context: Context<'a>,
-    pub file: SimpleFile<String, String>,
-    pub file_type_range: Range<usize>, //Note: if a file type is not given this will be the range of the function name
     pub context_range: Range<usize>,
+    pub file: SimpleFile<String, String>,
 }
 impl Eq for FileSystemContextRule<'_> {}
 
@@ -1827,14 +1828,14 @@ fn call_to_fsc_rules<'a>(
                     fs_name,
                     path: None,
                     file_type: None,
-                    context: fs_context.clone(),
-                    file: file.clone(),
                     // file_type_range shouldn't ever be used for xattr, task, or trans but I would rather not
                     // have to deal with Option stuff later
                     file_type_range: c.get_name_range().unwrap_or_default(),
+                    context: fs_context.clone(),
                     context_range: context_str_arg
                         .get_range()
                         .ok_or_else(|| CascadeErrors::from(InternalError::new()))?,
+                    file: file.clone(),
                 });
             }
             let mut errors = CascadeErrors::new();
@@ -1869,14 +1870,14 @@ fn call_to_fsc_rules<'a>(
                     fs_name,
                     path: Some(regex_string),
                     file_type: None,
-                    context: fs_context.clone(),
-                    file: file.clone(),
                     // file_type_range shouldn't need to be used here since file_type is None, but I would rather not
                     // have to deal with Option stuff later
                     file_type_range: c.get_name_range().unwrap_or_default(),
+                    context: fs_context.clone(),
                     context_range: context_str_arg
                         .get_range()
                         .ok_or_else(|| CascadeErrors::from(InternalError::new()))?,
+                    file: file.clone(),
                 });
             } else {
                 for file_type in file_types {
@@ -1899,14 +1900,14 @@ fn call_to_fsc_rules<'a>(
                         fs_name: fs_name.clone(),
                         path: Some(regex_string.clone()),
                         file_type: Some(file_type),
-                        context: fs_context.clone(),
-                        file: file.clone(),
                         file_type_range: file_types_arg
                             .get_range()
                             .unwrap_or_else(|| c.get_name_range().unwrap_or_default()),
+                        context: fs_context.clone(),
                         context_range: context_str_arg
                             .get_range()
                             .ok_or_else(|| CascadeErrors::from(InternalError::new()))?,
+                        file: file.clone(),
                     });
                 }
             }
@@ -3963,16 +3964,9 @@ mod tests {
             let mut renames = BTreeMap::new();
             renames.insert("old_name".to_string(), "new_name".to_string());
             let renamed_statement = statement.get_renamed_statement(&renames);
-            match Sexp::try_from(&renamed_statement) {
-                Ok(sexp) => {
-                    assert!(sexp.to_string().contains("new_name"));
-                    assert!(!sexp.to_string().contains("old_name"));
-                }
-                Err(_) => {
-                    // We should never get here in testing, but if we do panic
-                    panic!();
-                }
-            }
+            let sexp = Sexp::try_from(&renamed_statement).unwrap();
+            assert!(sexp.to_string().contains("new_name"));
+            assert!(!sexp.to_string().contains("old_name"));
         }
     }
 }

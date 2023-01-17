@@ -360,18 +360,18 @@ fn new_error_helper(
     help_a: &str,
     help_b: &str,
 ) -> CompileError {
-    let mut tmp_error;
+    let mut ret;
     // error is not None so we have already found something, so we just
     // need to add a new error message
     if let Some(unwrapped_error) = error {
-        tmp_error = unwrapped_error.add_additional_message(file_a, range_a, help_a);
+        ret = unwrapped_error.add_additional_message(file_a, range_a, help_a);
     } else {
         // error is none so we need to make a new one
-        tmp_error = CompileError::new(msg, file_b, range_b, help_b);
-        tmp_error = tmp_error.add_additional_message(file_a, range_a, help_a);
+        ret = CompileError::new(msg, file_b, range_b, help_b);
+        ret = ret.add_additional_message(file_a, range_a, help_a);
     }
 
-    tmp_error
+    ret
 }
 
 pub fn validate_fs_context_duplicates(
