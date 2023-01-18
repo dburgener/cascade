@@ -410,7 +410,7 @@ mod tests {
         }
         let file_out_path = &[filename, "_test.cil"].concat();
         let cil_out_path = &[filename, "_test_out_policy"].concat();
-        let mut out_file = fs::File::create(&file_out_path).unwrap();
+        let mut out_file = fs::File::create(file_out_path).unwrap();
         out_file.write_all(policy_contents.as_bytes()).unwrap();
         let output = Command::new("secilc")
             .arg(["--output=", cil_out_path].concat())
@@ -1205,6 +1205,34 @@ mod tests {
     #[test]
     fn valid_self() {
         valid_policy_test("self.cas", &["allow qux self (file (read))"], &[]);
+    }
+
+    #[test]
+    fn valid_fs_context() {
+        valid_policy_test(
+            "fs_context.cas",
+            &[
+                "fsuse xattr ext3 (system_u object_r foo ((s0) (s0)))",
+                "fsuse task sockfs (system_u object_r foo ((s0) (s0)))",
+                "fsuse trans tmpfs (system_u object_r foo ((s0) (s0)))",
+                "genfscon proc \"/\" (system_u object_r foo ((s0) (s0)))",
+                // TODO re-add when secilc check is in place
+                // "genfscon sysfs \"/zap\" dir (system_u object_r foo ((s0) (s0)))",
+                // "genfscon sysfs \"/zap/baa\" file (system_u object_r bar ((s0) (s0)))",
+                "genfscon cgroup \"/\" (system_u object_r foo ((s0) (s0)))",
+            ],
+            &[],
+        );
+    }
+
+    #[test]
+    fn invalid_fs_context() {
+        error_policy_test!("fs_context.cas", 9, ErrorItem::Compile(_));
+    }
+
+    #[test]
+    fn invalid_fs_context_dup() {
+        error_policy_test!("fs_context_dup.cas", 3, ErrorItem::Compile(_));
     }
 
     #[test]

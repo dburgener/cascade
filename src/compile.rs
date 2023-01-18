@@ -5,6 +5,7 @@ use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::TryFrom;
+use std::ops::Range;
 
 use crate::ast::{
     Argument, CascadeString, Declaration, Expression, FuncCall, LetBinding, Machine, Module,
@@ -12,12 +13,15 @@ use crate::ast::{
 };
 use crate::constants;
 use crate::context::{BlockType, Context as BlockContext};
-use crate::error::{CascadeErrors, ErrorItem, InternalError};
+use crate::error::{
+    add_or_create_compile_error, CascadeErrors, CompileError, ErrorItem, InternalError,
+};
 use crate::internal_rep::{
     argument_to_typeinfo, argument_to_typeinfo_vec, generate_sid_rules, type_slice_to_variant,
     validate_derive_args, Annotated, AnnotationInfo, ArgForValidation, Associated, BoundTypeInfo,
-    ClassList, Context, FunctionArgument, FunctionInfo, FunctionMap, MachineMap, ModuleMap, Sid,
-    TypeInfo, TypeMap, ValidatedCall, ValidatedMachine, ValidatedModule, ValidatedStatement,
+    ClassList, Context, FSContextType, FileSystemContextRule, FunctionArgument, FunctionInfo,
+    FunctionMap, MachineMap, ModuleMap, Sid, TypeInfo, TypeMap, ValidatedCall, ValidatedMachine,
+    ValidatedModule, ValidatedStatement,
 };
 
 use codespan_reporting::files::SimpleFile;
@@ -49,7 +53,7 @@ pub fn generate_sexp(
     // TODO: The rest of compilation
     let cil_types = type_list_to_sexp(type_decl_list, type_map);
     let headers = generate_cil_headers(classlist, *machine_configurations);
-    let cil_rules = rules_list_to_sexp(policy_rules);
+    let cil_rules = rules_list_to_sexp(policy_rules)?;
     let cil_macros = func_map_to_sexp(func_map)?;
     let sid_statements =
         generate_sid_rules(generate_sids("kernel_sid", "security_sid", "unlabeled_sid"));
@@ -217,6 +221,19 @@ pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
     if let Some(i) = built_in_types.get_mut(constants::SELF) {
         i.inherits = vec![CascadeString::from(constants::RESOURCE)];
     }
+    // Add xattr, task, trans, and genfscon as children of fs_type
+    if let Some(i) = built_in_types.get_mut("xattr") {
+        i.inherits = vec![CascadeString::from(constants::FS_TYPE)];
+    }
+    if let Some(i) = built_in_types.get_mut("task") {
+        i.inherits = vec![CascadeString::from(constants::FS_TYPE)];
+    }
+    if let Some(i) = built_in_types.get_mut("trans") {
+        i.inherits = vec![CascadeString::from(constants::FS_TYPE)];
+    }
+    if let Some(i) = built_in_types.get_mut("genfscon") {
+        i.inherits = vec![CascadeString::from(constants::FS_TYPE)];
+    }
 
     Ok(built_in_types)
 }
@@ -327,6 +344,128 @@ pub fn build_func_map<'a>(
     }
 
     Ok(decl_map)
+}
+
+// Helper function to deal with the case where we need to either create a
+// new error or add to an existing one, but specifically for this issue
+// we need to create a new error and immediately add to it.
+#[allow(clippy::too_many_arguments)]
+fn new_error_helper(
+    error: Option<CompileError>,
+    msg: &str,
+    file_a: &SimpleFile<String, String>,
+    file_b: &SimpleFile<String, String>,
+    range_a: Range<usize>,
+    range_b: Range<usize>,
+    help_a: &str,
+    help_b: &str,
+) -> CompileError {
+    let mut ret;
+    // error is not None so we have already found something, so we just
+    // need to add a new error message
+    if let Some(unwrapped_error) = error {
+        ret = unwrapped_error.add_additional_message(file_a, range_a, help_a);
+    } else {
+        // error is none so we need to make a new one
+        ret = CompileError::new(msg, file_b, range_b, help_b);
+        ret = ret.add_additional_message(file_a, range_a, help_a);
+    }
+
+    ret
+}
+
+pub fn validate_fs_context_duplicates(
+    fsc_rules: BTreeMap<String, BTreeSet<&FileSystemContextRule>>,
+) -> Result<(), CascadeErrors> {
+    let mut errors = CascadeErrors::new();
+
+    'key_loop: for v in fsc_rules.values() {
+        // We only have 1 or 0 elements, thus we cannot have a semi duplicate
+        if v.len() <= 1 {
+            continue;
+        }
+        let mut error: Option<CompileError> = None;
+        for rule in v {
+            match rule.fscontext_type {
+                // If we ever see a duplicate of xattr task or trans we know something is wrong
+                FSContextType::XAttr | FSContextType::Task | FSContextType::Trans => {
+                    error = Some(add_or_create_compile_error(error,
+                        "Duplicate filesystem context.",
+                        &rule.file,
+                        rule.fs_name.get_range().ok_or_else(||CascadeErrors::from(InternalError::new()))?,
+                        &format!("Found multiple different filesystem type declarations for filesystem: {}", rule.fs_name)));
+                }
+                FSContextType::GenFSCon => {
+                    // genfscon gets more complicated.  We can have similar rules as long as the paths are different.
+                    // If we find a genfscon with the same path, they must have the same context and object type.
+                    if let Some(path) = &rule.path {
+                        // Look through the rules again
+                        for inner_rule in v {
+                            // Only check path if it was provided as part of the rule
+                            if let Some(inner_path) = &inner_rule.path {
+                                // If our paths match, check if our contexts match
+                                if path == inner_path && rule.context != inner_rule.context {
+                                    error = Some(new_error_helper(error,
+                                        "Duplicate genfscon contexts",
+                                        &inner_rule.file,
+                                        &rule.file,
+                                        inner_rule.context_range.clone(),
+                                        rule.context_range.clone(),
+                                        &format!("Found duplicate genfscon rules for filesystem {} with differing contexts: {}", inner_rule.fs_name, inner_rule.context),
+                                        &format!("Found duplicate genfscon rules for filesystem {} with differing contexts: {}", rule.fs_name, rule.context)));
+                                // Our paths are the same but our file types differ. We must also have a file type.
+                                } else if path == inner_path
+                                    && rule.file_type != inner_rule.file_type
+                                    && rule.file_type.is_some()
+                                {
+                                    error = Some(new_error_helper(error,
+                                        "Duplicate genfscon file types",
+                                        &inner_rule.file,
+                                        &rule.file,
+                                        inner_rule.file_type_range.clone(),
+                                        rule.file_type_range.clone(),
+                                        &format!("Found duplicate genfscon rules for filesystem {} with differing file types", inner_rule.fs_name),
+                                        &format!("Found duplicate genfscon rules for filesystem {} with differing file types", rule.fs_name)));
+                                }
+                            }
+                        }
+                        // If we have found an error we don't want to look through
+                        // the inner loop again because it will cause duplicate errors
+                        // in the "other" matching directions.
+                        // So an error for A -> B and B -> A
+                        if let Some(unwraped_error) = error {
+                            errors.add_error(unwraped_error);
+                            continue 'key_loop;
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(unwraped_error) = error {
+            errors.add_error(unwraped_error);
+        }
+    }
+    errors.into_result(())
+}
+
+pub fn validate_rules(statements: &BTreeSet<ValidatedStatement>) -> Result<(), CascadeErrors> {
+    let mut errors = CascadeErrors::new();
+
+    let mut fsc_rules: BTreeMap<String, BTreeSet<&FileSystemContextRule>> = BTreeMap::new();
+    for statement in statements {
+        // Add all file system context rules to a new map to check for semi duplicates later
+        if let ValidatedStatement::FscRule(fs) = statement {
+            fsc_rules
+                .entry(fs.fs_name.to_string())
+                .or_default()
+                .insert(fs);
+        }
+    }
+
+    if let Err(call_errors) = validate_fs_context_duplicates(fsc_rules) {
+        errors.append(call_errors);
+    }
+    errors.into_result(())
 }
 
 // Mutate hash map to set the validated body
@@ -808,6 +947,8 @@ pub fn get_reduced_infos<'a>(
 
     // Get the policy rules
     let new_policy_rules = get_policy_rules(policies, &new_type_map, classlist, &new_func_map)?;
+
+    validate_rules(&new_policy_rules)?;
 
     // generate_sexp(...) is called at this step because new_func_map and new_policy_rules,
     // which are needed for the generate_sexp call, cannot be returned from this function.
@@ -1594,11 +1735,12 @@ fn get_rules_vec_for_type(ti: &TypeInfo, s: sexp::Sexp, type_map: &TypeMap) -> V
     ret
 }
 
-fn rules_list_to_sexp<'a, T>(rules: T) -> Vec<sexp::Sexp>
+fn rules_list_to_sexp<'a, T>(rules: T) -> Result<Vec<sexp::Sexp>, ErrorItem>
 where
     T: IntoIterator<Item = ValidatedStatement<'a>>,
 {
-    rules.into_iter().map(|r| Sexp::from(&r)).collect()
+    let ret: Result<Vec<_>, _> = rules.into_iter().map(|r| Sexp::try_from(&r)).collect();
+    ret
 }
 
 fn generate_sids<'a>(

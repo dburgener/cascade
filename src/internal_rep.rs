@@ -995,6 +995,16 @@ impl<'a> TryFrom<String> for Context<'a> {
     }
 }
 
+impl<'a> fmt::Display for Context<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}:{}:{}:{} - {}",
+            self.user, self.role, self.setype, self.mls_low, self.mls_high,
+        )
+    }
+}
+
 pub struct Sid<'a> {
     name: &'a str,
     context: Context<'a>,
@@ -1540,6 +1550,368 @@ fn call_to_fc_rules<'a>(
             file_type,
             context: context.clone(),
         });
+    }
+
+    Ok(ret)
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum FSContextType {
+    XAttr,
+    Task,
+    Trans,
+    GenFSCon,
+}
+
+impl fmt::Display for FSContextType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                FSContextType::XAttr => "xattr",
+                FSContextType::Task => "task",
+                FSContextType::Trans => "trans",
+                FSContextType::GenFSCon => "genfscon",
+            }
+        )
+    }
+}
+
+impl FromStr for FSContextType {
+    type Err = ();
+    fn from_str(s: &str) -> Result<FSContextType, ()> {
+        match s {
+            "xattr" => Ok(FSContextType::XAttr),
+            "task" => Ok(FSContextType::Task),
+            "trans" => Ok(FSContextType::Trans),
+            "genfscon" => Ok(FSContextType::GenFSCon),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct FileSystemContextRule<'a> {
+    pub fscontext_type: FSContextType,
+    pub fs_name: CascadeString,
+    pub path: Option<CascadeString>,
+    pub file_type: Option<FileType>,
+    //Note: if a file type is not given this will be the range of the function name
+    pub file_type_range: Range<usize>,
+    pub context: Context<'a>,
+    pub context_range: Range<usize>,
+    pub file: SimpleFile<String, String>,
+}
+impl Eq for FileSystemContextRule<'_> {}
+
+impl PartialEq for FileSystemContextRule<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.fscontext_type == other.fscontext_type
+            && self.fs_name == other.fs_name
+            && self.path == other.path
+            && self.file_type == other.file_type
+            && self.context == other.context
+    }
+}
+
+impl PartialOrd for FileSystemContextRule<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for FileSystemContextRule<'_> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        (
+            &self.fscontext_type,
+            &self.fs_name,
+            &self.path,
+            self.file_type,
+            &self.context,
+        )
+            .cmp(&(
+                &other.fscontext_type,
+                &other.fs_name,
+                &other.path,
+                other.file_type,
+                &other.context,
+            ))
+    }
+}
+
+impl FileSystemContextRule<'_> {
+    fn get_renamed_statement(&self, renames: &BTreeMap<String, String>) -> Self {
+        FileSystemContextRule {
+            fscontext_type: self.fscontext_type.clone(),
+            fs_name: self.fs_name.clone(),
+            path: self.path.clone(),
+            file_type: self.file_type,
+            context: self.context.get_renamed_context(renames),
+            file: self.file.clone(),
+            file_type_range: self.file_type_range.clone(),
+            context_range: self.context_range.clone(),
+        }
+    }
+}
+
+impl TryFrom<&FileSystemContextRule<'_>> for sexp::Sexp {
+    type Error = ErrorItem;
+
+    fn try_from(f: &FileSystemContextRule) -> Result<sexp::Sexp, ErrorItem> {
+        match f.fscontext_type {
+            FSContextType::XAttr | FSContextType::Task | FSContextType::Trans => Ok(list(&[
+                atom_s("fsuse"),
+                Sexp::Atom(Atom::S(f.fscontext_type.to_string())),
+                atom_s(f.fs_name.to_string().trim_matches('"')),
+                Sexp::from(&f.context),
+            ])),
+            FSContextType::GenFSCon => {
+                if let Some(p) = &f.path {
+                    if let Some(file_type) = &f.file_type {
+                        // TODO add secilc check here. Right now our github pipeline
+                        // supports an older version of secilc.  So to get things moving forward
+                        // we are forcing the old behavior.  The new behavior has been tested locally.
+                        // REMEMBER TO UPDATE THE TESTS
+                        // if secilc/libsepol version is new enough {
+                        if false {
+                            return Ok(list(&[
+                                atom_s("genfscon"),
+                                atom_s(f.fs_name.to_string().trim_matches('"')),
+                                atom_s(p.as_ref()),
+                                Sexp::Atom(Atom::S(file_type.to_string())),
+                                Sexp::from(&f.context),
+                            ]));
+                        }
+                    }
+                    // We are purposefully falling through without an else to
+                    // reduce redundant lines of code
+                    Ok(list(&[
+                        atom_s("genfscon"),
+                        atom_s(f.fs_name.to_string().trim_matches('"')),
+                        atom_s(p.as_ref()),
+                        Sexp::from(&f.context),
+                    ]))
+                } else {
+                    // We should never get here since we are defaulting to "/"
+                    // when we call this normally but if someone calls this in
+                    // an unexpected way we will get this call.
+                    Err(ErrorItem::Internal(InternalError::new()))
+                }
+            }
+        }
+    }
+}
+
+fn call_to_fsc_rules<'a>(
+    c: &'a FuncCall,
+    types: &'a TypeMap,
+    class_perms: &ClassList,
+    context: &BlockContext<'a>,
+    file: &'a SimpleFile<String, String>,
+) -> Result<Vec<FileSystemContextRule<'a>>, CascadeErrors> {
+    let target_args = vec![
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: CascadeString::from(constants::RESOURCE),
+                is_list_param: false,
+                name: CascadeString::from("fs_label"),
+                default: None,
+            },
+            types,
+            None,
+        )?,
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: CascadeString::from("string"),
+                is_list_param: false,
+                name: CascadeString::from("fs_name"),
+                default: None,
+            },
+            types,
+            None,
+        )?,
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: CascadeString::from("fs_type"),
+                is_list_param: false,
+                name: CascadeString::from("fscontext_type"),
+                default: None,
+            },
+            types,
+            None,
+        )?,
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: CascadeString::from("path"),
+                is_list_param: false,
+                name: CascadeString::from("path_regex"),
+                default: Some(Argument::Quote(CascadeString::from("\"/\""))),
+            },
+            types,
+            None,
+        )?,
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: CascadeString::from("obj_class"), //TODO: not really
+                is_list_param: true,
+                name: CascadeString::from("file_type"),
+                default: Some(Argument::List(vec![])),
+            },
+            types,
+            None,
+        )?,
+    ];
+    let validated_args =
+        validate_arguments(c, &target_args, types, class_perms, context, Some(file))?;
+    let mut args_iter = validated_args.iter();
+    let mut ret = Vec::new();
+
+    let context_str_arg = args_iter
+        .next()
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?;
+    let context_str = context_str_arg.get_name_or_string(context)?;
+    let fs_context = match Context::try_from(context_str.to_string()) {
+        Ok(c) => c,
+        Err(_) => {
+            return Err(CascadeErrors::from(
+                ErrorItem::make_compile_or_internal_error(
+                    "Invalid context",
+                    Some(file),
+                    context_str.get_range(),
+                    "Cannot parse this into a context",
+                ),
+            ))
+        }
+    };
+
+    let fs_name = args_iter
+        .next()
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
+        .get_name_or_string(context)?;
+    let fscontext_str = args_iter
+        .next()
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
+        .get_name_or_string(context)?;
+    let fscontext_type = match fscontext_str.to_string().parse::<FSContextType>() {
+        Ok(f) => f,
+        Err(_) => {
+            return Err(CascadeErrors::from(
+                ErrorItem::make_compile_or_internal_error(
+                    "Not a valid file system type",
+                    Some(file),
+                    fscontext_str.get_range(),
+                    "File system type must be 'xattr', 'task', 'trans', or 'genfscon'",
+                ),
+            ));
+        }
+    };
+    let regex_string_arg = args_iter
+        .next()
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?;
+    let regex_string = regex_string_arg.get_name_or_string(context)?;
+
+    let file_types_arg = args_iter
+        .next()
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?;
+    let file_types = file_types_arg.get_list(context)?;
+
+    match fscontext_type {
+        FSContextType::XAttr | FSContextType::Task | FSContextType::Trans => {
+            // The 'regex_string_arg.get_range().is_none()' is a hacky way to
+            // to check if arg was actually provided or not.  Since we set the
+            // default for regex_string to "/" this is the only way I could find
+            // to test if the actual arg was passed or not
+            if regex_string_arg.get_range().is_none() && file_types.is_empty() {
+                ret.push(FileSystemContextRule {
+                    fscontext_type,
+                    fs_name,
+                    path: None,
+                    file_type: None,
+                    // file_type_range shouldn't ever be used for xattr, task, or trans but I would rather not
+                    // have to deal with Option stuff later
+                    file_type_range: c.get_name_range().unwrap_or_default(),
+                    context: fs_context.clone(),
+                    context_range: context_str_arg
+                        .get_range()
+                        .ok_or_else(|| CascadeErrors::from(InternalError::new()))?,
+                    file: file.clone(),
+                });
+            }
+            let mut errors = CascadeErrors::new();
+            if !file_types.is_empty() {
+                errors.append(CascadeErrors::from(
+                    ErrorItem::make_compile_or_internal_error(
+                        "File types can only be provided for 'genfscon'",
+                        Some(file),
+                        file_types_arg.get_range(),
+                        "",
+                    ),
+                ));
+            }
+            if regex_string_arg.get_range().is_some() {
+                errors.append(CascadeErrors::from(
+                    ErrorItem::make_compile_or_internal_error(
+                        "File path can only be provided for 'genfscon'",
+                        Some(file),
+                        regex_string_arg.get_range(),
+                        "",
+                    ),
+                ));
+            }
+            if !errors.is_empty() {
+                return Err(errors);
+            }
+        }
+        FSContextType::GenFSCon => {
+            if file_types.is_empty() {
+                ret.push(FileSystemContextRule {
+                    fscontext_type,
+                    fs_name,
+                    path: Some(regex_string),
+                    file_type: None,
+                    // file_type_range shouldn't need to be used here since file_type is None, but I would rather not
+                    // have to deal with Option stuff later
+                    file_type_range: c.get_name_range().unwrap_or_default(),
+                    context: fs_context.clone(),
+                    context_range: context_str_arg
+                        .get_range()
+                        .ok_or_else(|| CascadeErrors::from(InternalError::new()))?,
+                    file: file.clone(),
+                });
+            } else {
+                for file_type in file_types {
+                    let file_type = match file_type.to_string().parse::<FileType>() {
+                        Ok(f) => f,
+                        Err(_) => {
+                            return Err(CascadeErrors::from(
+                                ErrorItem::make_compile_or_internal_error(
+                                    "Not a valid file type",
+                                    Some(file),
+                                    file_type.get_range(),
+                                    "",
+                                ),
+                            ))
+                        }
+                    };
+
+                    ret.push(FileSystemContextRule {
+                        fscontext_type: fscontext_type.clone(),
+                        fs_name: fs_name.clone(),
+                        path: Some(regex_string.clone()),
+                        file_type: Some(file_type),
+                        file_type_range: file_types_arg
+                            .get_range()
+                            .unwrap_or_else(|| c.get_name_range().unwrap_or_default()),
+                        context: fs_context.clone(),
+                        context_range: context_str_arg
+                            .get_range()
+                            .ok_or_else(|| CascadeErrors::from(InternalError::new()))?,
+                        file: file.clone(),
+                    });
+                }
+            }
+        }
     }
 
     Ok(ret)
@@ -2225,6 +2597,7 @@ impl TryFrom<&FunctionInfo<'_>> for sexp::Sexp {
                         ValidatedStatement::AvRule(a) => macro_cil.push(Sexp::from(a)),
                         ValidatedStatement::FcRule(f) => macro_cil.push(Sexp::from(f)),
                         ValidatedStatement::ResourcetransRule(r) => macro_cil.push(Sexp::from(r)),
+                        ValidatedStatement::FscRule(fs) => macro_cil.push(Sexp::try_from(fs)?),
                         ValidatedStatement::DomtransRule(d) => macro_cil.push(Sexp::from(d)),
                     }
                 }
@@ -2311,6 +2684,7 @@ pub enum ValidatedStatement<'a> {
     AvRule(AvRule<'a>),
     FcRule(FileContextRule<'a>),
     ResourcetransRule(ResourcetransRule<'a>),
+    FscRule(FileSystemContextRule<'a>),
     DomtransRule(DomtransRule<'a>),
 }
 
@@ -2366,6 +2740,23 @@ impl<'a> ValidatedStatement<'a> {
                         Err(CascadeErrors::from(
                             ErrorItem::make_compile_or_internal_error(
                                 "resource_transition() calls are not allowed in domains",
+                                Some(file),
+                                c.name.get_range(),
+                                "Not allowed here",
+                            ),
+                        ))
+                    }
+                }
+                Some(BuiltIns::FileSystemContext) => {
+                    if in_resource {
+                        Ok(call_to_fsc_rules(c, types, class_perms, &*context, file)?
+                            .into_iter()
+                            .map(ValidatedStatement::FscRule)
+                            .collect())
+                    } else {
+                        Err(CascadeErrors::from(
+                            ErrorItem::make_compile_or_internal_error(
+                                "fs_context() calls are only allowed in resources",
                                 Some(file),
                                 c.name.get_range(),
                                 "Not allowed here",
@@ -2447,18 +2838,23 @@ impl<'a> ValidatedStatement<'a> {
             ValidatedStatement::ResourcetransRule(r) => {
                 ValidatedStatement::ResourcetransRule(r.get_renamed_statement(renames))
             }
+            ValidatedStatement::FscRule(f) => {
+                ValidatedStatement::FscRule(f.get_renamed_statement(renames))
+            }
         }
     }
 }
 
-impl From<&ValidatedStatement<'_>> for sexp::Sexp {
-    fn from(statement: &ValidatedStatement) -> sexp::Sexp {
+impl TryFrom<&ValidatedStatement<'_>> for sexp::Sexp {
+    type Error = ErrorItem;
+    fn try_from(statement: &ValidatedStatement) -> Result<sexp::Sexp, ErrorItem> {
         match statement {
-            ValidatedStatement::Call(c) => Sexp::from(&**c),
-            ValidatedStatement::AvRule(a) => Sexp::from(a),
-            ValidatedStatement::FcRule(f) => Sexp::from(f),
-            ValidatedStatement::ResourcetransRule(r) => Sexp::from(r),
-            ValidatedStatement::DomtransRule(d) => Sexp::from(d),
+            ValidatedStatement::Call(c) => Ok(Sexp::from(&**c)),
+            ValidatedStatement::AvRule(a) => Ok(Sexp::from(a)),
+            ValidatedStatement::FcRule(f) => Ok(Sexp::from(f)),
+            ValidatedStatement::ResourcetransRule(r) => Ok(Sexp::from(r)),
+            ValidatedStatement::FscRule(fs) => Sexp::try_from(fs),
+            ValidatedStatement::DomtransRule(d) => Ok(Sexp::from(d)),
         }
     }
 }
@@ -3568,7 +3964,7 @@ mod tests {
             let mut renames = BTreeMap::new();
             renames.insert("old_name".to_string(), "new_name".to_string());
             let renamed_statement = statement.get_renamed_statement(&renames);
-            let sexp = Sexp::from(&renamed_statement);
+            let sexp = Sexp::try_from(&renamed_statement).unwrap();
             assert!(sexp.to_string().contains("new_name"));
             assert!(!sexp.to_string().contains("old_name"));
         }

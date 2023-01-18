@@ -1,0 +1,20 @@
+resource foo {
+    fs_context(foo, "ext3", xattr);
+    fs_context(this, "sockfs", task);
+    fs_context(this, "tmpfs", trans);
+    fs_context(this, "tmpfs", trans);
+
+    fs_context(this, "proc", genfscon, "/");
+    fs_context(this, "proc", genfscon, "/");
+    fs_context(this, "cgroup", genfscon);
+    // TODO re-add when secilc check is in place
+    // fs_context(this, "sysfs", genfscon, "/zap", [dir]);
+
+    // Policies must include at least one av rule
+    allow(domain, foo, file, [read]);
+}
+
+// TODO re-add when secilc check is in place
+// resource bar {
+//    fs_context(this, "sysfs", genfscon, "/zap/baa", [file]);
+//}

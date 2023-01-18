@@ -4,12 +4,12 @@ type enforcement, objects on the system (processes, files, sockets, etc) are
 each assigned a unique identifier known as a type.  Policy rules specify how
 types may interact.
 
-Type Enforcement policies have a subject, which attempts to perform some
-action, an object which is acted upon, and a description of the action(s).  In
-SELinux this description is made up of an 'object class', which describes what
-sort of resource the object is, and permissions (such as read or write) which
-describe the access.  Permissions are defined in relation to object classes (so
-'listen' is a valid permission on sockets, but not on files).
+Type Enforcement policies have a subject, which attempts to perform some action,
+an object which is acted upon, and a description of the action(s).  In SELinux
+this description is made up of an 'object class', which describes what sort of
+resource the object is, and permissions (such as read or write) which describe
+the access.  Permissions are defined in relation to object classes (so 'listen'
+is a valid permission on sockets, but not on files).
 
 For more information, review the official SELinux documentation at
 https://selinuxproject.org/page/Main_Page
@@ -22,8 +22,8 @@ types from the language perspective, however there are also additional types,
 described below.  All other types in a policy must derive from one of the below
 types.
 
-A 'domain' is a type describing a process on a Linux system and therefore may
-be a subject in a TE rule.[1]  Domains may also be the object in a TE rule. Two
+A 'domain' is a type describing a process on a Linux system and therefore may be
+a subject in a TE rule.[1]  Domains may also be the object in a TE rule. Two
 common examples of this are:
 
 1. Files in /proc typically have labels matching the process they describe.
@@ -45,8 +45,8 @@ The block enclosed in curly braces may be used to specify access rules and
 member functions on this type.
 
 The rationale for this distinction between domains and resources is that it
-allows us to take advantage of this semantic knowledge at compile time for
-use in built in functions, syntax improvements and linting.
+allows us to take advantage of this semantic knowledge at compile time for use
+in built in functions, syntax improvements and linting.
 
 Cascade is statically typed and function calls must specify the types of their
 arguments.  For arguments that may be either domains or resources, the "type"
@@ -58,8 +58,8 @@ Additional built in types are listed below.
 Lists of objects of the same type are supported and specified by the syntax
 [type].
 
-[1] In the SELinux base policy language, non-domains may actually be subjects
-in certain contexts (e.g. the filesystem associate permission).  In Cascade we
+[1] In the SELinux base policy language, non-domains may actually be subjects in
+certain contexts (e.g. the filesystem associate permission).  In Cascade we
 enforce the rule that only domains may be subjects and handle situations where
 resources are subjects through another mechanism (to be determined).
 
@@ -86,10 +86,10 @@ extend foo {
 Policy authors can define functions using the keyword 'fn'.  Functions defined
 inside the curly block for a type will be member functions of that type, and
 will be able to refer to the containing type using the keyword 'this'.  To call
-a member function, you use the `.` operator, with the name of the type,
-followed by a `.`, followed by the function name.  For example if the read()
-function is defined on the `iptables_conf` resource, then it can be called
-using `iptables_conf.read()`.
+a member function, you use the `.` operator, with the name of the type, followed
+by a `.`, followed by the function name.  For example if the read() function is
+defined on the `iptables_conf` resource, then it can be called using
+`iptables_conf.read()`.
 
 If a function is called inside a curly block, Cascade will attempt to pass the
 type of the curly block as the first argument to the function.  If this is not
@@ -112,8 +112,8 @@ domain iptables {
 A function marked with the `virtual` keyword is not allowed to be called
 directly. The purpose of such functions is to be inherited and called on the
 child type. If a parent function is marked virtual the child *must* define it,
-either explicitely or via a derive (if some parent implementation exists).
-This is used to define an expected interface that children are guaranteed to
+either explicitely or via a derive (if some parent implementation exists). This
+is used to define an expected interface that children are guaranteed to
 implement.
 
 ### Type inheritance
@@ -124,19 +124,19 @@ Child types inherit the following from their parents:
 
 When inheriting from multiple types, different types may provide member
 functions with conflicting names (in object oriented language parlance, this is
-commonly refered to as "the diamond problem").  If that is the case, the
-derived type *must* override that member function with one of its own.  This
-can be done by manually defining a new funtion (which may call parent classes
-using the syntax classname::function_name()), or using the "derive" annotation.
-See the section on annotations for details on deriving.
+commonly refered to as "the diamond problem").  If that is the case, the derived
+type *must* override that member function with one of its own.  This can be done
+by manually defining a new funtion (which may call parent classes using the
+syntax classname::function_name()), or using the "derive" annotation. See the
+section on annotations for details on deriving.
 
 The common case for type inheritance will be inheriting from virtual types,
 which conveniently allows reference to all derived types, automatically
 generates common resources, and reduces boilerplate by including common
 functions.
 
-Inheriting from concrete types can be desirable for various applications, and
-is made more useful than previous cloning implementations by the resource
+Inheriting from concrete types can be desirable for various applications, and is
+made more useful than previous cloning implementations by the resource
 association mechanism, but is not currently supported in the current version.
 
 ### Virtual types
@@ -170,6 +170,11 @@ The following types are built in to the language:
 * user
 * mls
 * bool
+* fs_type
+* xattr
+* task
+* trans
+* genfscon
 * [T] (a list of any other types)
 
 TODO: Which of these can be in a standard library instead of the compiler?
@@ -188,8 +193,8 @@ Associating a resource with a domain does three things:
 
 1. It causes that resource to be grouped together with the domain when the  
 domain is included in a module or full system policy
-2. It calls any @associated_call member functions in the resource with the domain
-as the first argument.
+2. It calls any @associated_call member functions in the resource with the
+domain as the first argument.
 3. If the domain is inherited from, a child resource is automatically created  
 and is associated with the child class.  This resource is named  
 `[child name].[resource name]`.
@@ -204,11 +209,11 @@ Access vector rules define what happens on an access attempt.  They are defined
 on the quadruple of: source type, target type, target object class, permissions.
 
 There are five kinds of access vector rules provided by Cascade: allow,
-auditallow, dontaudit, neverallow, delete.  Allow rules grant access.
-Auditallow audit access when it is granted (by a separate allow rule). 
-Dontaudit rules disable auditing for denied access.  Neverallow rules are a
-compile time assertion that certain access should not be allowed.  Delete rules
-remove access if it is allowed elsewhere.
+auditallow, dontaudit, neverallow, delete.  Allow rules grant access. Auditallow
+audit access when it is granted (by a separate allow rule). Dontaudit rules
+disable auditing for denied access.  Neverallow rules are a compile time
+assertion that certain access should not be allowed.  Delete rules remove access
+if it is allowed elsewhere.
 
 These rules are defined by five built-in functions: allow(), audit(),
 dontaudit(), neverallow(), delete().  Note the rename from the SELinux base
@@ -222,9 +227,9 @@ fn allow(domain source, type target, class obj_class, [permission] perm);
 ```
 
 And likewise for audit(), dontaudit(), neverallow() and delete().  Lists of
-sources and targets are intentionally omitted to encourage clarity and readability.
-Policy authors are encouraged to create virtual types to specify groups and/or
-declare their own functions grouping related av rules.
+sources and targets are intentionally omitted to encourage clarity and
+readability. Policy authors are encouraged to create virtual types to specify
+groups and/or declare their own functions grouping related av rules.
 
 Note the use the makelist annotation to allow automatic coercion from a single
 class or permission to a list (See 'annotations' section).
@@ -249,8 +254,8 @@ Default contexts specify what labels should be applied to objects that cannot
 store labels in extended attributes.  For example, files on filesystems that do
 not support extended attributes would get default contexts.  Additionally,
 certain non-file objects such as ports or packets will get contexts on creation
-as defined by the policy (although packets have their own special handling
-which is outside the scope of this document).
+as defined by the policy (although packets have their own special handling which
+is outside the scope of this document).
 
 Reference Policy implementations treat these types of labeling independently,
 which reflects how they are handled at a kernel/system level, but not how high
@@ -284,11 +289,75 @@ TODO: Named resource transitions
 
 TODO: File context labeling
 
-This is under discussion now.  We agree that we should take advantage of the fact that we are parsing paths, not arbitrary strings to provide appropriate semantic checking.  Mickael to provide motivating use case for query syntax approach.
+This is under discussion now.  We agree that we should take advantage of the
+fact that we are parsing paths, not arbitrary strings to provide appropriate
+semantic checking.  Mickael to provide motivating use case for query syntax
+approach.
 
 TODO: default contexts.  This will be part of the next phase of design
 
-TODO: file_contexts.subs_dist (although is it necessary with advanced file_context handling features?)
+TODO: file_contexts.subs_dist (although is it necessary with advanced
+file_context handling features?)
+
+### Filesystem labeling
+
+All filesystems are labeled using the following prototype:
+
+`fs_context(resource fs_label, string fs_name, fs_type type, path path,
+file_type [obj_class])`
+
+* `fs_label` is the label you wish to apply to the filesystem.
+* `fs_name` is the OS recognized name for the filesystem. (e.g. "ext4", "proc",
+  "tmpfs")
+* `fs_type` must be one of the following options:
+  * `xattr`: Filesystems supporting the extended attribute security.selinux. The
+    labeling is persistent for filesystems that support extended attributes.
+  * `task`: For pseudo filesystems supporting task related services such as
+    pipes and sockets.
+  * `trans`: For pseudo filesystems such as pseudo terminals and temporary
+    objects.
+  * `genfscon`: Used to allocate a security context to filesystems that cannot
+    support any of the previous file labeling options
+* `path` is an optional path relative to root of the mounted filesystem.
+  Currently this is only valid for the proc filesystem, all other types must be
+  "/".  If not given, the field will default to "/".
+* `file_type` is an optional keyword representing a file type to apply the label
+  to. Valid values are the same as in the file_context function.  If not given,
+  [any] is assumed.
+  * Note: You must use SELinux userspace tools version 3.4 or newer to use this
+    field.
+
+`xattr`, `task`, and `trans` all represent filesystems that support SELinux
+security contexts.  The filesystem itself has a label applied to it as a
+whole, which is the `fs_label` provided in this function.
+* As stated above, `xattr` supports the security.selinux extended attribute.
+  This means objects on the filesystem have persistent labeling stored in this
+  attribute.
+* The `task` pseudo filesystem typically assigns the context of the creating
+  process to the object.
+* The `trans` pseudo filesystem typically assigns the context based on
+  the context of the creating process and the context associated with the
+  filesystem type.  This normally takes the form of a `resource_transition`
+  call.  If no `resource_transition` call is present, the object is assigned
+  the label of filesystem.
+
+`genfscon` represents filesystems that do not support SELinux security contexts.
+Generally a filesystem has a single default security context, `fs_label`
+provided in this function, assigned by `genfscon` from the root (/) that is
+inherited by all files and directories on that filesystem. The exception to this
+is the /proc filesystem, where directories can be labeled with a specific
+security context.
+
+This call must be part of a resource block.
+
+#### Examples
+fs_context(foo, "ext3", xattr);  
+fs_context(this, "sockfs", task);  
+fs_context(this, "tmpfs", trans);  
+
+fs_context(this, "cgroup", genfscon);  
+fs_context(this, "sysfs", genfscon, "/");  
+fs_context(this, "proc", genfscon, "/zap", [file]);  
 
 ## Constants
 
@@ -300,8 +369,8 @@ let read_file_perms = [ read, open, getattr ];
 ```
 
 The name `read_file_perms` can be used elsewhere and will be replaced at compile
-time with the list of permissions.  The compiler infers the type of the
-constant from what is assigned to it (this is case the type is [perm]).
+time with the list of permissions.  The compiler infers the type of the constant
+from what is assigned to it (this is case the type is [perm]).
 
 ## Annotations
 
@@ -368,14 +437,14 @@ domain foo { ... }
 ```
 
 The following arguments may be specified:
-source: The scontext field of a denial
-target: The tcontext field of a denial
-class: The tclass field of a denial
-perm: Any permission listed in a denial
-hint: A text string to display when using newaudit2allow
-attack: Set to True to indicate that this denial should be treated as a
+* source: The scontext field of a denial
+* target: The tcontext field of a denial
+* class: The tclass field of a denial
+* perm: Any permission listed in a denial
+* hint: A text string to display when using newaudit2allow
+* attack: Set to True to indicate that this denial should be treated as a
 possible security incident
-cve: Reference a CVE associated with this denial
+* cve: Reference a CVE associated with this denial
 
 ### ignore annotation
 
@@ -389,11 +458,11 @@ if (condition) {
 ```
 
 The above code would ordinarily display a warning because conditional
-definitions can lead to unexpected behavior.  If we wish to leave the code as
-is and suppress the warning, we can do so via this annotation.  Of course,
-warnings are typically supplied for good reason, and you should seriously
-consider whether you really want to suppress the warning rather than fixing
-the underlying issue.
+definitions can lead to unexpected behavior.  If we wish to leave the code as is
+and suppress the warning, we can do so via this annotation.  Of course, warnings
+are typically supplied for good reason, and you should seriously consider
+whether you really want to suppress the warning rather than fixing the
+underlying issue.
 
 ### makelist annotation
 
@@ -415,14 +484,12 @@ baz(bar); // Converts to [bar] because of annotation.  Would be a compiler error
 The alias annotation tells the compiler to provide an alternate name for
 referrering to the same item.
 
-This is often used for interoperability. For example, if one is renaming a
-type or function in an already deployed policy, one can provide an alias to the
-old name for backwards compatibility during a transition period until labels or
+This is often used for interoperability. For example, if one is renaming a type
+or function in an already deployed policy, one can provide an alias to the old
+name for backwards compatibility during a transition period until labels or
 callers have been updated.
 
-``
-@alias(bar)
-resource foo {}
+`` @alias(bar) resource foo {}
 ```
 
 ## Traits
