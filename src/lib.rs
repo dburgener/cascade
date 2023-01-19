@@ -5,6 +5,7 @@ extern crate lalrpop_util;
 
 extern crate thiserror;
 
+mod alias_map;
 mod ast;
 mod compile;
 mod constants;
