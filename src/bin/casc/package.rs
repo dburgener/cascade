@@ -94,6 +94,7 @@ where
 {
     let mut header = Header::new_gnu();
     header.set_size(file_contents.len().try_into().unwrap()); //TODO: handle error
+    header.set_mode(0o644);
     header.set_cksum();
     let out_path = Path::new(system_name).join(target_path);
     tar.append_data(&mut header, out_path, file_contents.as_bytes())
