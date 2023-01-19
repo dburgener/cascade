@@ -23,9 +23,9 @@ use crate::functions::{
 };
 use crate::internal_rep::{
     generate_sid_rules, type_slice_to_variant, validate_derive_args, Annotated, AnnotationInfo,
-    Associated, BoundTypeInfo, ClassList, Context, MachineMap, ModuleMap, Sid, TypeInfo, TypeMap,
-    ValidatedMachine, ValidatedModule,
+    Associated, BoundTypeInfo, ClassList, Context, Sid, TypeInfo, TypeMap,
 };
+use crate::machine::{MachineMap, ModuleMap, ValidatedMachine, ValidatedModule};
 
 use codespan_reporting::files::SimpleFile;
 

@@ -14,6 +14,7 @@ mod dbus;
 pub mod error;
 mod functions;
 mod internal_rep;
+mod machine;
 mod obj_class;
 mod sexp_internal;
 
@@ -22,7 +23,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use crate::ast::{Argument, CascadeString, Declaration, Expression, Policy, PolicyFile};
 use crate::error::{CascadeErrors, InternalError, InvalidMachineError, ParseErrorMsg};
 use crate::functions::FunctionMap;
-use crate::internal_rep::{MachineMap, ModuleMap, ValidatedMachine, ValidatedModule};
+use crate::machine::{MachineMap, ModuleMap, ValidatedMachine, ValidatedModule};
 
 use codespan_reporting::files::SimpleFile;
 use lalrpop_util::ParseError as LalrpopParseError;
