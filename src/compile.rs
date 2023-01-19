@@ -16,12 +16,15 @@ use crate::context::{BlockType, Context as BlockContext};
 use crate::error::{
     add_or_create_compile_error, CascadeErrors, CompileError, ErrorItem, InternalError,
 };
+use crate::functions::{
+    argument_to_typeinfo, argument_to_typeinfo_vec, ArgForValidation, FSContextType,
+    FileSystemContextRule, FunctionArgument, FunctionInfo, FunctionMap, ValidatedCall,
+    ValidatedStatement,
+};
 use crate::internal_rep::{
-    argument_to_typeinfo, argument_to_typeinfo_vec, generate_sid_rules, type_slice_to_variant,
-    validate_derive_args, Annotated, AnnotationInfo, ArgForValidation, Associated, BoundTypeInfo,
-    ClassList, Context, FSContextType, FileSystemContextRule, FunctionArgument, FunctionInfo,
-    FunctionMap, MachineMap, ModuleMap, Sid, TypeInfo, TypeMap, ValidatedCall, ValidatedMachine,
-    ValidatedModule, ValidatedStatement,
+    generate_sid_rules, type_slice_to_variant, validate_derive_args, Annotated, AnnotationInfo,
+    Associated, BoundTypeInfo, ClassList, Context, MachineMap, ModuleMap, Sid, TypeInfo, TypeMap,
+    ValidatedMachine, ValidatedModule,
 };
 
 use codespan_reporting::files::SimpleFile;

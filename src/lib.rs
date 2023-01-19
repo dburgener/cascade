@@ -21,7 +21,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::ast::{Argument, CascadeString, Declaration, Expression, Policy, PolicyFile};
 use crate::error::{CascadeErrors, InternalError, InvalidMachineError, ParseErrorMsg};
-use crate::internal_rep::{FunctionMap, MachineMap, ModuleMap, ValidatedMachine, ValidatedModule};
+use crate::functions::FunctionMap;
+use crate::internal_rep::{MachineMap, ModuleMap, ValidatedMachine, ValidatedModule};
 
 use codespan_reporting::files::SimpleFile;
 use lalrpop_util::ParseError as LalrpopParseError;
