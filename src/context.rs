@@ -6,10 +6,11 @@ use std::iter;
 use codespan_reporting::files::SimpleFile;
 
 use crate::ast::{Argument, CascadeString};
-use crate::internal_rep::{
-    argument_to_typeinfo, argument_to_typeinfo_vec, type_slice_to_variant, ArgForValidation,
-    ClassList, FunctionArgument, TypeInfo, TypeInstance, TypeMap,
+use crate::functions::{
+    argument_to_typeinfo, argument_to_typeinfo_vec, ArgForValidation, FunctionArgument,
 };
+use crate::internal_rep::{type_slice_to_variant, ClassList, TypeInfo, TypeInstance, TypeMap};
+
 use crate::CascadeErrors;
 
 #[derive(Clone, Debug)]
