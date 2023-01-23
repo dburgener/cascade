@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
-use crate::ast::{CascadeString, Policy, Declaration, DeclarationModifier, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, LetBinding, Virtualable, FuncCall, DeclaredArgument, Module, Machine, MachineBody, Port, IpAddr as AstIpAddr};
+use crate::ast::{CascadeString, Policy, Declaration, DeclarationModifier, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, LetBinding, Virtualable, FuncCall, DeclaredArgument, Module, Machine, MachineBody, Port, IpAddr as AstIpAddr, BoolDecl};
 use lalrpop_util::ErrorRecovery;
 use lalrpop_util::ParseError;
 use crate::error::ParseErrorMsg;
@@ -74,6 +74,7 @@ Decl: Declaration = {
 	FuncDecl => Declaration::Func(<>),
 	ModuleDecl => Declaration::Mod(<>),
 	MachineDecl => Declaration::Machine(<>),
+	BoolDecl => Declaration::Boolean(<>),
 }
 
 TypeDecl: Box<TypeDecl> = {
@@ -151,6 +152,15 @@ MachineDecl: Machine = {
 SysBody: MachineBody = {
 	"module" <n: NameDecl> ";" => MachineBody::Mod(n),
 	<l:LetBind> ";" => MachineBody::Config(l),
+}
+
+BoolDecl: BoolDecl = {
+	"boolean" <n: NameDecl> "{" <b: BoolBody*> "}" => BoolDecl::new(n,b)
+}
+
+#[inline]
+BoolBody: LetBinding = {
+	<LetBind> ";" => <>
 }
 
 Ann: Annotation = {

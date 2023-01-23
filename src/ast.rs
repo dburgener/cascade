@@ -218,6 +218,7 @@ pub enum Declaration {
     Func(Box<FuncDecl>),
     Mod(Module),
     Machine(Machine),
+    Boolean(BoolDecl),
 }
 
 impl Virtualable for Declaration {
@@ -227,6 +228,7 @@ impl Virtualable for Declaration {
             Declaration::Func(f) => f.set_virtual(range),
             Declaration::Mod(m) => m.set_virtual(range),
             Declaration::Machine(s) => s.set_virtual(range),
+            Declaration::Boolean(b) => b.set_virtual(range),
         }
     }
 
@@ -249,6 +251,10 @@ impl Virtualable for Declaration {
                 s.set_trait(range.clone())?;
                 s.set_virtual(range)
             }
+            Declaration::Boolean(b) => {
+                b.set_trait(range.clone())?;
+                b.set_virtual(range)
+            }
         }
     }
 }
@@ -260,6 +266,7 @@ impl Declaration {
             Declaration::Func(f) => f.annotations.push(annotation),
             Declaration::Mod(m) => m.annotations.push(annotation),
             Declaration::Machine(s) => s.annotations.push(annotation),
+            Declaration::Boolean(b) => b.annotations.push(annotation),
         }
     }
 }
@@ -813,6 +820,42 @@ impl Virtualable for Machine {
 pub enum MachineBody {
     Mod(CascadeString),
     Config(LetBinding),
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct BoolDecl {
+    name: CascadeString,
+    configs: Vec<LetBinding>,
+    annotations: Annotations,
+}
+
+impl BoolDecl {
+    // TODO: let bindings really would be more consistent (eg with machines)
+    pub fn new(name: CascadeString, body: Vec<LetBinding>) -> Self {
+        BoolDecl {
+            name,
+            configs: body,
+            annotations: Annotations::new(),
+        }
+    }
+}
+
+impl Virtualable for BoolDecl {
+    fn set_virtual(&mut self, range: Range<usize>) -> Result<(), ParseErrorMsg> {
+        Err(ParseErrorMsg::new(
+            "Booleans cannot be virtual".to_string(),
+            Some(range),
+            "Remove the virtual keyword".to_string(),
+        ))
+    }
+
+    fn set_trait(&mut self, range: Range<usize>) -> Result<(), ParseErrorMsg> {
+        Err(ParseErrorMsg::new(
+            "The trait keyword cannot be applied to booleans".to_string(),
+            Some(range),
+            "Remove the boolean keyword".to_string(),
+        ))
+    }
 }
 
 #[cfg(test)]

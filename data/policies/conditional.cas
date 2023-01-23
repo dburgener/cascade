@@ -1,3 +1,18 @@
+boolean some_bool {
+	let default = true;
+	let runtime = false;
+}
+
+boolean false_bool {
+	let default = false;
+	let runtime = false;
+}
+
+boolean runtime_bool {
+	let default = false;
+	let runtime = true;
+}
+
 resource foo {}
 
 domain bar {
@@ -11,7 +26,24 @@ domain bar {
 		allow(this, foo, file, entrypoint);
 	}
 
+	// Once we have full conditional support, this should evaluate to true
+	// and include this line
+	if (some_bool) {
+		allow(this, foo, file, append);
+	}
+
+	// default = false, not included
+	if (false_bool) {
+		allow(this, foo, file, getattr);
+	}
+
+	// This bool is setable at runtime, so it should appear in the policy
+	// gated by an SELinux boolean
+	if (runtime_bool) {
+		allow(this, foo, file, setattr);
+	}
+
 	// Without full conditional support, the above lines are just ignored
-	// TODO: implement full conditional support and remove this
+	// TODO: implement full conditional support and remove this 
 	allow(this, foo, file, getattr);
 }
