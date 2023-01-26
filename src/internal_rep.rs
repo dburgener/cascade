@@ -587,6 +587,8 @@ pub fn typeinfo_from_string<'a>(
         types.get("*")
     } else if coerce_strings {
         types.get("string")
+    } else if s == "true" || s == "false" {
+        types.get(constants::BOOLEAN)
     } else if class_perms.is_class(s) {
         types.get("obj_class")
     } else if class_perms.is_perm(s, context) {

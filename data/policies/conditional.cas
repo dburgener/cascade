@@ -1,5 +1,7 @@
 resource foo {}
 
+let my_tunable = false;
+
 domain bar {
 	if (true) {
 		allow(this, foo, file, write);
@@ -9,6 +11,10 @@ domain bar {
 
 	if (false) {
 		allow(this, foo, file, entrypoint);
+	}
+
+	if (my_tunable) {
+		allow(this, foo, file, getattr);
 	}
 
 	// Without full conditional support, the above lines are just ignored

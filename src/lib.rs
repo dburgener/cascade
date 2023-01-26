@@ -635,7 +635,9 @@ mod tests {
         valid_policy_test(
             "conditional.cas",
             &[], // TODO
-            &[],
+            &[
+                "my_tunable", // Tunables don't get passed through to CIL
+            ],
         );
     }
 
