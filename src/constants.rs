@@ -29,10 +29,11 @@ pub const SELF: &str = "self";
 pub const FS_TYPE: &str = "fs_type";
 pub const NUMBER: &str = "number";
 pub const IPADDR: &str = "ipaddr";
+pub const BOOLEAN: &str = "bool";
 
 pub const BUILT_IN_TYPES: &[&str] = &[
     DOMAIN, RESOURCE, MODULE, "path", "string", CLASS, PERM, "context", SELF, FS_TYPE, "xattr",
-    "task", "trans", "genfscon", "*", NUMBER, IPADDR,
+    "task", "trans", "genfscon", "*", NUMBER, IPADDR, BOOLEAN,
 ];
 
 pub const SYSTEM_CONFIG_DEFAULTS: &[(&str, &str)] =
