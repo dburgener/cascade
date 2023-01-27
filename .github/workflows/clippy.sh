@@ -2,6 +2,8 @@
 
 set -e -u -o pipefail
 
-rustup run stable cargo clippy -- -A clippy::new_without_default --deny warnings
+VERSION=${1:-stable}
 
-rustup run stable cargo clippy --tests -- -A clippy::new_without_default -A clippy::expect_fun_call
+rustup run ${VERSION} cargo clippy -- -A clippy::new_without_default --deny warnings
+
+rustup run ${VERSION} cargo clippy --tests -- -A clippy::new_without_default -A clippy::expect_fun_call

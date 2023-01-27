@@ -21,16 +21,28 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     needs: build
+    strategy:
+      matrix:
+        # We lock our failing tests on a known good version and
+        # informationally check the latest as well.  We should
+        # regularly update the known good once we know that tests
+        # pass on it
+        rust-toolchain: [ 1.65 ]
+        experimental: [false]
+        include:
+          - rust-toolchain: stable
+            experimental: true
     steps:
     - uses: actions/checkout@v3
     - name: Setup
-      run: .github/workflows/restore-nightly.sh
+      run: .github/workflows/restore-checks.sh ${{ matrix.rust-toolchain }}
     - name: Check format
-      run: .github/workflows/format.sh
+      run: .github/workflows/format.sh ${{ matrix.rust-toolchain }}
     - name: Check clippy
-      run: .github/workflows/clippy.sh
+      run: .github/workflows/clippy.sh ${{ matrix.rust-toolchain }}
+      continue-on-error: ${{ matrix.experimental }}
     - name: Check docs
-      run: .github/workflows/doc.sh
+      run: .github/workflows/doc.sh ${{ matrix.rust-toolchain }}
     - name: Nightly
       run: .github/workflows/nightly.sh
   test:
