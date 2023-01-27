@@ -2,4 +2,6 @@
 
 set -e -u -o pipefail
 
-rustup run stable cargo fmt --all -- --check
+VERSION=${1:-stable}
+
+rustup run ${VERSION} cargo fmt --all -- --check
