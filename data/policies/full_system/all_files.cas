@@ -25,6 +25,7 @@ resource all_files inherits file_like_objects {
 	fs_context(this, "nsfs", genfscon, "/");
 	fs_context(this, "btrfs", xattr);
 	fs_context(this, "ext4", xattr);
+	fs_context(this, "xfs", xattr);
 	fs_context(this, "devtmpfs", trans);
 	fs_context(this, "tmpfs", trans);
 	fs_context(this, "hugetlbfs", trans);
