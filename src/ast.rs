@@ -672,11 +672,11 @@ impl Argument {
 impl fmt::Display for Argument {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Argument::Var(a) => write!(f, "'{}'", a),
-            Argument::Named(n, a) => write!(f, "{}={}", n, a),
+            Argument::Var(a) => write!(f, "'{a}'"),
+            Argument::Named(n, a) => write!(f, "{n}={a}"),
             Argument::List(_) => write!(f, "[TODO]",),
-            Argument::Quote(a) => write!(f, "\"{}\"", a),
-            Argument::Port(p) => write!(f, "{}", p),
+            Argument::Quote(a) => write!(f, "\"{a}\""),
+            Argument::Port(p) => write!(f, "{p}"),
             Argument::IpAddr(i) => i.fmt(f),
         }
     }

@@ -382,7 +382,7 @@ impl fmt::Display for CascadeErrors {
             1 => "",
             _ => "s",
         };
-        writeln!(f, "{} error{}:", num_errors, s)?;
+        writeln!(f, "{num_errors} error{s}:")?;
         for (i, e) in self.errors.iter().enumerate() {
             writeln!(f, "{}: {:#?}", i + 1, e)?
         }

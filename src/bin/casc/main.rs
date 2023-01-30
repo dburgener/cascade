@@ -26,7 +26,7 @@ fn main() -> std::io::Result<()> {
             s
         }
         Err(e) => {
-            eprintln!("{}", e);
+            eprintln!("{e}");
             return Err(e);
         }
     };
@@ -101,7 +101,7 @@ fn print_error(error_list: CascadeErrors, color: ColorChoice) -> std::io::Result
         } else if let ErrorItem::Compile(c) = e {
             c.print_diagnostic(color);
         } else {
-            eprintln!("{}", e);
+            eprintln!("{e}");
         }
     }
     Err(Error::new(ErrorKind::InvalidData, "Invalid policy"))

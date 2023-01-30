@@ -30,7 +30,7 @@ pub fn build_package(
         .output()?;
     if !output.status.success() {
         if let Ok(stderr) = std::str::from_utf8(&output.stderr) {
-            eprintln!("{}", stderr);
+            eprintln!("{stderr}");
         }
         return Err(Error::new(
             ErrorKind::InvalidData,
@@ -52,7 +52,7 @@ pub fn build_package(
     let dbus_contexts = match generate_dbus_contexts() {
         Ok(contexts) => contexts,
         Err(e) => {
-            eprintln!("Failed generating dbus_contexts file: {}", e);
+            eprintln!("Failed generating dbus_contexts file: {e}");
             return Err(Error::new(
                 ErrorKind::InvalidData,
                 "Generation of dbus_contexts failed.  This is a Cascade bug",
