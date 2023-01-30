@@ -521,7 +521,7 @@ pub fn validate_functions<'a>(
                                 &format!("{} does not define a function named {}", setype.name, required_function_name),
                                 setype.declaration_file.as_ref(),
                                 setype.name.get_range(),
-                                &format!("All types inheriting {} are required to implement {} because it is marked as virtual", parent, required_function_name))))
+                                &format!("All types inheriting {parent} are required to implement {required_function_name} because it is marked as virtual"))))
                 }
             }
         }
@@ -721,10 +721,7 @@ fn validate_module_contents<'a>(
                             ),
                             Some(file),
                             content.get_range(),
-                            &format!(
-                                "{}s within modules must be declared elsewhere",
-                                content_type
-                            ),
+                            &format!("{content_type}s within modules must be declared elsewhere",),
                         ),
                     ))
                 }
@@ -735,10 +732,7 @@ fn validate_module_contents<'a>(
                     &format!("{} {} does not exist", content_type, content.as_ref()),
                     Some(file),
                     content.get_range(),
-                    &format!(
-                        "{}s within modules must be declared elsewhere",
-                        content_type
-                    ),
+                    &format!("{content_type}s within modules must be declared elsewhere",),
                 ),
             )),
         }
@@ -882,10 +876,7 @@ fn insert_config<'a>(
                         "Invalid configuration option",
                         Some(file),
                         a.get_range(),
-                        &format!(
-                            "The supported options for {} are {:?}",
-                            config_name, valid_values
-                        ),
+                        &format!("The supported options for {config_name} are {valid_values:?}"),
                     ),
                 ))
             }
@@ -904,10 +895,7 @@ fn check_required_config<'a>(
     if !configs.contains_key(&config_name.to_string()) {
         ret.append(CascadeErrors::from(
             ErrorItem::make_compile_or_internal_error(
-                &format!(
-                    "{} configuration must be included in the machine",
-                    config_name
-                ),
+                &format!("{config_name} configuration must be included in the machine",),
                 Some(file),
                 machine.name.get_range(),
                 &format!(

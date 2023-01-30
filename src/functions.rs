@@ -1494,7 +1494,7 @@ impl<'a> FunctionInfo<'a> {
                         ) {
                             (Some(first_range), Some(second_range)) => {
                                 return Err(CompileError::new(
-                                        &format!("In attempting to derive {}, parent functions do not have matching prototypes.", name),
+                                        &format!("In attempting to derive {name}, parent functions do not have matching prototypes."),
                                         first_parent.declaration_file,
                                         first_range,
                                         "This parent prototype...",
@@ -1517,7 +1517,7 @@ impl<'a> FunctionInfo<'a> {
                         ) {
                             (Some(first_range), Some(second_range)) => {
                                 return Err(CompileError::new(
-                                        &format!("In attempting to derive {}, parent functions do not have matching prototypes.", name),
+                                        &format!("In attempting to derive {name}, parent functions do not have matching prototypes."),
                                         first_parent.declaration_file,
                                         first_range,
                                         "This parent is annotated with @associated_call...",
@@ -1577,10 +1577,10 @@ impl<'a> FunctionInfo<'a> {
             Some(parent) => parent.args.clone(),
             None => {
                 return Err(ErrorItem::make_compile_or_internal_error(
-                    &format!("Unable to derive {}, because it has no parent implementations", name),
+                    &format!("Unable to derive {name}, because it has no parent implementations"),
                     Some(file),
                     name.get_range(),
-                    &format!("Attempted to derive an implementation of {}, but couldn't find any derivable parent implementations", name)).into());
+                    &format!("Attempted to derive an implementation of {name}, but couldn't find any derivable parent implementations")).into());
                 // TODO: A hint about the strategy might be useful
             }
         };
@@ -2235,11 +2235,11 @@ impl<'a> From<&'a Argument> for ArgForValidation<'a> {
 impl fmt::Display for ArgForValidation<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ArgForValidation::Var(a) => write!(f, "'{}'", a),
+            ArgForValidation::Var(a) => write!(f, "'{a}'"),
             ArgForValidation::List(_) => write!(f, "[TODO]",),
-            ArgForValidation::Quote(a) => write!(f, "\"{}\"", a),
-            ArgForValidation::Port(p) => write!(f, "{}", p),
-            ArgForValidation::IpAddr(i) => write!(f, "{}", i),
+            ArgForValidation::Quote(a) => write!(f, "\"{a}\""),
+            ArgForValidation::Port(p) => write!(f, "{p}"),
+            ArgForValidation::IpAddr(i) => write!(f, "{i}"),
         }
     }
 }
