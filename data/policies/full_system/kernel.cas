@@ -10,8 +10,8 @@ extend kernel_sid {
 	allow(this, domain:resource, dir, *);
 	allow(this, domain:resource, lnk_file, *);
 
-	allow(this, this: resource, capability, [ dac_read_search mknod net_admin sys_tty_config sys_admin sys_module sys_ptrace ]);
-	allow(this, this: resource, system, module_load);
+	allow(this, this: resource, capability, [ dac_read_search mknod net_admin sys_tty_config sys_admin sys_module sys_ptrace syslog ]);
+	allow(this, this: resource, system, [ module_load syslog_console ]);
 	allow(this, this: resource, process, [fork setcurrent]);
 	allow(this, this: resource, key, [ search ]);
 	allow(this, security_sid, security, compute_create);
