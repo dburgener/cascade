@@ -41,6 +41,7 @@ pub struct Context<'a> {
     type_map: &'a TypeMap,
     parent_type: Option<&'a TypeInfo>,
     block_type: BlockType,
+    parent_context: Option<&'a Context<'a>>,
 }
 
 impl<'a> Context<'a> {
@@ -54,6 +55,7 @@ impl<'a> Context<'a> {
             type_map: types,
             parent_type,
             block_type,
+            parent_context: None,
         }
     }
 
@@ -79,7 +81,7 @@ impl<'a> Context<'a> {
 
     pub fn symbol_in_context(&self, arg: &str) -> Option<&'a TypeInfo> {
         let arg = self.convert_arg_this(arg);
-        match self.symbols.get(&CascadeString::from(arg)) {
+        match self.symbols.get(&CascadeString::from(&arg as &str)) {
             Some(b) => match b {
                 BindableObject::Type(t) => Some(t),
                 // TypeList isn't natural to implement with the current API
@@ -90,7 +92,7 @@ impl<'a> Context<'a> {
                 }
                 BindableObject::Argument(a) => Some(a.param_type),
             },
-            None => None,
+            None => self.parent_context.and_then(|c| c.symbol_in_context(&arg)),
         }
     }
 
@@ -118,7 +120,7 @@ impl<'a> Context<'a> {
     // If the object is not in the context, then the string is valid elsewhere,
     // so just return the string
     pub fn get_name_or_string(&self, arg: &CascadeString) -> Option<CascadeString> {
-        match self.symbols.get(arg) {
+        match self.get_symbol(arg.as_ref()) {
             None => Some(arg.clone()),
             Some(BindableObject::Type(t)) => Some(t.name.clone()),
             Some(BindableObject::Argument(_)) => Some(arg.clone()),
@@ -130,7 +132,7 @@ impl<'a> Context<'a> {
     }
 
     pub fn get_list(&self, arg: &str) -> Vec<CascadeString> {
-        match self.symbols.get(&CascadeString::from(arg)) {
+        match self.get_symbol(arg) {
             Some(BindableObject::TypeList(tl)) => tl.iter().map(|t| t.name.clone()).collect(),
             Some(BindableObject::PermList(l)) | Some(BindableObject::ClassList(l)) => {
                 l.iter().map(|i| CascadeString::from(i as &str)).collect()
@@ -141,11 +143,15 @@ impl<'a> Context<'a> {
         }
     }
 
+    // Get the bindable object for a symbol, with recursion to parent contexts
+    fn get_symbol(&self, arg: &str) -> Option<&BindableObject<'a>> {
+        self.symbols
+            .get(&CascadeString::from(arg))
+            .or_else(|| self.parent_context.and_then(|c| c.get_symbol(arg)))
+    }
+
     pub fn symbol_is_arg(&self, arg: &str) -> bool {
-        matches!(
-            self.symbols.get(&CascadeString::from(arg)),
-            Some(BindableObject::Argument(_))
-        )
+        matches!(self.get_symbol(arg), Some(BindableObject::Argument(_)))
     }
 
     pub fn insert_binding(&mut self, name: CascadeString, binding: BindableObject<'a>) {
