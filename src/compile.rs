@@ -530,10 +530,10 @@ pub fn validate_functions<'a>(
     errors.into_result(functions)
 }
 
-fn derive_functions<'a, 'b>(
-    functions: &'a mut FunctionMap<'b>,
-    types: &'b TypeMap,
-    class_perms: &'b ClassList,
+fn derive_functions<'a>(
+    functions: &mut FunctionMap<'a>,
+    types: &'a TypeMap,
+    class_perms: &'a ClassList,
 ) -> Result<(), CascadeErrors> {
     for t in types.values() {
         for annotation in t.get_annotations() {
@@ -572,10 +572,10 @@ fn handle_derive<'a>(
     Ok(())
 }
 
-pub fn validate_modules<'a, 'b>(
-    policies: &'b [PolicyFile],
-    types: &'b TypeMap,
-    module_map: &'a mut ModuleMap<'b>,
+pub fn validate_modules<'a>(
+    policies: &'a [PolicyFile],
+    types: &'a TypeMap,
+    module_map: &mut ModuleMap<'a>,
 ) -> Result<(), CascadeErrors> {
     let mut errors = CascadeErrors::new();
 
@@ -656,9 +656,9 @@ pub fn validate_modules<'a, 'b>(
     errors.into_result(())
 }
 
-fn find_module_cycles<'a>(
+fn find_module_cycles(
     module_to_check: &Module,
-    modules_vec: &[(&SimpleFile<String, String>, &'a Module)],
+    modules_vec: &[(&SimpleFile<String, String>, &Module)],
     visited_modules: HashSet<&str>,
 ) -> Result<(), CascadeErrors> {
     let mut ret = CascadeErrors::new();
@@ -740,10 +740,10 @@ fn validate_module_contents<'a>(
     ret
 }
 
-pub fn validate_machines<'a, 'b>(
-    policies: &'b [PolicyFile],
-    module_map: &'b ModuleMap,
-    machine_map: &'a mut MachineMap<'b>,
+pub fn validate_machines<'a>(
+    policies: &'a [PolicyFile],
+    module_map: &'a ModuleMap,
+    machine_map: &mut MachineMap<'a>,
 ) -> Result<(), CascadeErrors> {
     let mut errors = CascadeErrors::new();
 
@@ -885,10 +885,10 @@ fn insert_config<'a>(
     ret.into_result(())
 }
 
-fn check_required_config<'a>(
+fn check_required_config(
     file: &SimpleFile<String, String>,
     machine: &Machine,
-    configs: &BTreeMap<String, &'a Argument>,
+    configs: &BTreeMap<String, &Argument>,
     config_name: &str,
 ) -> Result<(), CascadeErrors> {
     let mut ret = CascadeErrors::new();
@@ -1392,8 +1392,8 @@ fn inherit_annotations<'a>(
     })
 }
 
-pub fn apply_associate_annotations<'a>(
-    types: &'a TypeMap,
+pub fn apply_associate_annotations(
+    types: &TypeMap,
     funcs: &FunctionMap<'_>,
 ) -> Result<Vec<Expression>, CascadeErrors> {
     let mut errors = CascadeErrors::new();
