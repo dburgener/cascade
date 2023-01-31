@@ -41,6 +41,7 @@ pub fn compile_rules_one_file<'a>(
         func_map,
         classlist,
         None,
+        None,
         &p.file,
     )
 }
@@ -258,7 +259,7 @@ pub fn get_global_bindings(
                         &v,
                         types,
                         classlist,
-                        &BlockContext::new(BlockType::Global, tm_clone, None),
+                        &BlockContext::new(BlockType::Global, tm_clone, None, None),
                         Some(file),
                     )?;
                     let variant = type_slice_to_variant(&ti_vec, types)?;
@@ -272,7 +273,7 @@ pub fn get_global_bindings(
                         &a,
                         types,
                         classlist,
-                        &BlockContext::new(BlockType::Global, tm_clone, None),
+                        &BlockContext::new(BlockType::Global, tm_clone, None, None),
                         Some(file),
                     )?;
                     if ti.name.as_ref() == "perm" {
@@ -1574,8 +1575,10 @@ pub fn call_derived_associated_calls<'a>(
                         }) {
                             let call = make_associated_call(resource_name, f);
                             let args = vec![FunctionArgument::new_this_argument(t)];
+                            // TODO: Should there be a parent_context here?  I think this is
+                            // effectively a "fake" context since we're not really parsing the tree
                             let mut local_context =
-                                BlockContext::new(BlockType::Domain, types, Some(t));
+                                BlockContext::new(BlockType::Domain, types, Some(t), None);
                             local_context.insert_function_args(&args);
 
                             let validated_call = match ValidatedCall::new(
@@ -1610,6 +1613,7 @@ fn do_rules_pass<'a>(
     funcs: &'a FunctionMap<'a>,
     class_perms: &ClassList<'a>,
     parent_type: Option<&'a TypeInfo>,
+    parent_context: Option<&BlockContext<'_>>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<BTreeSet<ValidatedStatement<'a>>, CascadeErrors> {
     let mut ret = BTreeSet::new();
@@ -1630,18 +1634,29 @@ fn do_rules_pass<'a>(
         None => BlockType::Global,
     };
 
-    let mut local_context = BlockContext::new(block_type, types, parent_type);
+    let mut local_context = BlockContext::new(block_type, types, parent_type, parent_context);
     local_context.insert_function_args(&func_args);
 
     for e in exprs {
         match e {
+            Expression::Stmt(Statement::LetBinding(l)) => {
+                // Need to handle this special case here, otherwise ValidatedStatement::new()
+                // confuses the borrow checker because it might mutate local_context, or return
+                // data that references the context
+                if parent_type.is_some() {
+                    match local_context.insert_from_argument(&l.name, &l.value, class_perms, file) {
+                        Ok(()) => (),
+                        Err(e) => errors.append(e),
+                    }
+                }
+            }
             Expression::Stmt(s) => {
                 match ValidatedStatement::new(
                     s,
                     funcs,
                     types,
                     class_perms,
-                    &mut local_context,
+                    &local_context,
                     parent_type,
                     file,
                 ) {
@@ -1661,6 +1676,7 @@ fn do_rules_pass<'a>(
                     funcs,
                     class_perms,
                     Some(type_being_parsed),
+                    Some(&local_context),
                     file,
                 ) {
                     Ok(mut r) => ret.append(&mut r),
