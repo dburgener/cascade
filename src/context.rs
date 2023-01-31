@@ -49,13 +49,14 @@ impl<'a> Context<'a> {
         block_type: BlockType,
         types: &'a TypeMap,
         parent_type: Option<&'a TypeInfo>,
+        parent_context: Option<&'a Context<'a>>,
     ) -> Self {
         Context {
             symbols: BTreeMap::new(),
             type_map: types,
             parent_type,
             block_type,
-            parent_context: None,
+            parent_context,
         }
     }
 
@@ -64,7 +65,15 @@ impl<'a> Context<'a> {
         types: &'a TypeMap,
         parent_type: Option<&'a TypeInfo>,
     ) -> Self {
-        let mut context = Context::new(BlockType::Function, types, parent_type);
+        // This is only called in functions::validate_body(), to use the arguments in validating
+        // the body
+        // The contexts are actually constructed later, in do_rules_pass().  For now, if we set
+        // parent_context() to none, that's fine for the argument parsing thing, but we should look
+        // more closely at whether we need other bindings available during body validation.  The
+        // problem is that when we validate functions, we're just iterating over functions, not
+        // parsing the tree, so I guess we'd have to save contexts with the functions?  That might
+        // make sense, but it's a fairly large refactor
+        let mut context = Context::new(BlockType::Function, types, parent_type, None);
         context.insert_function_args(args);
         context
     }
@@ -248,7 +257,7 @@ mod tests {
     #[test]
     fn test_symbol_in_context() {
         let tm = compile::get_built_in_types_map().unwrap();
-        let mut context = Context::new(BlockType::Domain, &tm, None);
+        let mut context = Context::new(BlockType::Domain, &tm, None, None);
 
         context.insert_binding(
             CascadeString::from("foo"),
@@ -273,7 +282,7 @@ mod tests {
     #[test]
     fn test_insert_from_argument() {
         let tm = compile::get_built_in_types_map().unwrap();
-        let mut context = Context::new(BlockType::Domain, &tm, None);
+        let mut context = Context::new(BlockType::Domain, &tm, None, None);
         let cl = ClassList::new();
         let file = SimpleFile::<String, String>::new("name".to_string(), "source".to_string());
 
@@ -304,7 +313,7 @@ mod tests {
     #[test]
     fn test_convert_arg_this() {
         let tm = compile::get_built_in_types_map().unwrap();
-        let context = Context::new(BlockType::Domain, &tm, tm.get("domain"));
+        let context = Context::new(BlockType::Domain, &tm, tm.get("domain"), None);
         assert_eq!(&context.convert_arg_this("foo"), "foo");
         assert_eq!(&context.convert_arg_this("this"), "this");
         assert_eq!(&context.convert_arg_this("this.foo"), "domain.foo");
@@ -313,7 +322,7 @@ mod tests {
     #[test]
     fn test_get_name_or_string() {
         let tm = compile::get_built_in_types_map().unwrap();
-        let mut context = Context::new(BlockType::Domain, &tm, tm.get("domain"));
+        let mut context = Context::new(BlockType::Domain, &tm, tm.get("domain"), None);
         context.insert_binding(
             CascadeString::new("foo".to_string(), 10..12),
             BindableObject::Type(tm.get("domain").unwrap()),
@@ -330,5 +339,20 @@ mod tests {
             .unwrap();
         assert_eq!(domain_string.get_range(), Some(1..2)); // The range of the reference to domain we looked up
         assert_eq!(domain_string.as_ref(), "domain");
+    }
+
+    #[test]
+    fn test_nested_context() {
+        let tm = compile::get_built_in_types_map().unwrap();
+        let mut parent_context = Context::new(BlockType::Global, &tm, None, None);
+        parent_context.insert_binding(
+            CascadeString::new("foo".to_string(), 10..12),
+            BindableObject::Type(tm.get("domain").unwrap()),
+        );
+        let child_context = Context::new(BlockType::Domain, &tm, None, Some(&parent_context));
+        assert_eq!(
+            child_context.symbol_in_context("foo").unwrap().name,
+            "domain"
+        );
     }
 }

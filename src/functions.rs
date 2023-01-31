@@ -175,7 +175,7 @@ fn call_to_av_rule<'a>(
     c: &'a FuncCall,
     types: &'a TypeMap,
     class_perms: &ClassList,
-    context: &BlockContext<'a>,
+    context: &BlockContext<'_>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<BTreeSet<AvRule<'a>>, CascadeErrors> {
     let flavor = match c.name.as_ref() {
@@ -398,7 +398,7 @@ fn call_to_fc_rules<'a>(
     c: &'a FuncCall,
     types: &'a TypeMap,
     class_perms: &ClassList,
-    context: &BlockContext<'a>,
+    context: &BlockContext<'_>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<Vec<FileContextRule<'a>>, CascadeErrors> {
     let target_args = vec![
@@ -798,7 +798,7 @@ fn call_to_fsc_rules<'a>(
     c: &'a FuncCall,
     types: &'a TypeMap,
     class_perms: &ClassList,
-    context: &BlockContext<'a>,
+    context: &BlockContext<'_>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<Vec<FileSystemContextRule<'a>>, CascadeErrors> {
     let target_args = vec![
@@ -1041,7 +1041,7 @@ fn call_to_domain_transition<'a>(
     c: &'a FuncCall,
     types: &'a TypeMap,
     class_perms: &ClassList,
-    context: &BlockContext<'a>,
+    context: &BlockContext<'_>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<DomtransRule<'a>, CascadeErrors> {
     let target_args = vec![
@@ -1140,7 +1140,7 @@ fn call_to_resource_transition<'a>(
     c: &'a FuncCall,
     types: &'a TypeMap,
     class_perms: &ClassList,
-    context: &BlockContext<'a>,
+    context: &BlockContext<'_>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<Vec<ResourcetransRule<'a>>, CascadeErrors> {
     let target_args = vec![
@@ -1623,7 +1623,7 @@ impl<'a> FunctionInfo<'a> {
     ) -> Result<(), CascadeErrors> {
         let mut new_body = BTreeSet::new();
         let mut errors = CascadeErrors::new();
-        let mut local_context = BlockContext::new_from_args(&self.args, types, self.class);
+        let local_context = BlockContext::new_from_args(&self.args, types, self.class);
 
         for statement in self.original_body {
             // TODO: This needs to become global in a bit
@@ -1632,7 +1632,7 @@ impl<'a> FunctionInfo<'a> {
                 functions,
                 types,
                 class_perms,
-                &mut local_context,
+                &local_context,
                 self.class,
                 file,
             ) {
@@ -1787,7 +1787,7 @@ impl<'a> ValidatedStatement<'a> {
         functions: &FunctionMap<'a>,
         types: &'a TypeMap,
         class_perms: &ClassList<'a>,
-        context: &mut BlockContext<'a>,
+        context: &BlockContext<'_>,
         parent_type: Option<&'a TypeInfo>,
         file: &'a SimpleFile<String, String>,
     ) -> Result<BTreeSet<ValidatedStatement<'a>>, CascadeErrors> {
@@ -1806,7 +1806,7 @@ impl<'a> ValidatedStatement<'a> {
                 }
                 Some(BuiltIns::FileContext) => {
                     if in_resource {
-                        Ok(call_to_fc_rules(c, types, class_perms, &*context, file)?
+                        Ok(call_to_fc_rules(c, types, class_perms, context, file)?
                             .into_iter()
                             .map(ValidatedStatement::FcRule)
                             .collect())
@@ -1824,7 +1824,7 @@ impl<'a> ValidatedStatement<'a> {
                 Some(BuiltIns::ResourceTransition) => {
                     if in_resource {
                         Ok(
-                            call_to_resource_transition(c, types, class_perms, &*context, file)?
+                            call_to_resource_transition(c, types, class_perms, context, file)?
                                 .into_iter()
                                 .map(ValidatedStatement::ResourcetransRule)
                                 .collect(),
@@ -1842,7 +1842,7 @@ impl<'a> ValidatedStatement<'a> {
                 }
                 Some(BuiltIns::FileSystemContext) => {
                     if in_resource {
-                        Ok(call_to_fsc_rules(c, types, class_perms, &*context, file)?
+                        Ok(call_to_fsc_rules(c, types, class_perms, context, file)?
                             .into_iter()
                             .map(ValidatedStatement::FscRule)
                             .collect())
@@ -1865,7 +1865,7 @@ impl<'a> ValidatedStatement<'a> {
                             c,
                             types,
                             class_perms,
-                            &*context,
+                            context,
                             file,
                             parent_type.unwrap(),
                         )?)]
@@ -1889,7 +1889,7 @@ impl<'a> ValidatedStatement<'a> {
                                 c,
                                 types,
                                 class_perms,
-                                &*context,
+                                context,
                                 file,
                             )?))
                             .into_iter()
@@ -1912,23 +1912,15 @@ impl<'a> ValidatedStatement<'a> {
                     types,
                     class_perms,
                     parent_type,
-                    &*context,
+                    context,
                     file,
                 )?)))
                 .into_iter()
                 .collect()),
             },
-            Statement::LetBinding(l) => {
-                // Global scope let bindings were handled by get_global_bindings() in a previous
-                // pass
-                if parent_type.is_some() {
-                    context.insert_from_argument(&l.name, &l.value, class_perms, file)?;
-
-                    Ok(BTreeSet::default()) // TODO: This is where local scope let bindings should happen
-                } else {
-                    // Global scope, nothing to do here
-                    Ok(BTreeSet::default())
-                }
+            Statement::LetBinding(_) => {
+                // Handled in parent
+                Ok(BTreeSet::default())
             }
             Statement::IfBlock => {
                 // TODO, but silently skip for now
