@@ -78,6 +78,11 @@ impl<'a> Context<'a> {
         context
     }
 
+    // Remove all symbols from other and add to self
+    pub fn drain_symbols(&mut self, other: &mut Self) {
+        self.symbols.append(&mut other.symbols);
+    }
+
     pub fn insert_function_args(&mut self, args: &[FunctionArgument<'a>]) {
         for a in args {
             // a.name really should be an CascadeString rather than a String
@@ -308,6 +313,24 @@ mod tests {
             .symbol_in_context("bar")
             .expect("Bar not found in context");
         assert_eq!(val.name.to_string(), "resource".to_string());
+    }
+
+    #[test]
+    fn test_drain_symbols() {
+        let tm = compile::get_built_in_types_map().unwrap();
+        let mut context1 = Context::new(BlockType::Domain, &tm, tm.get("domain"), None);
+        let mut context2 = Context::new(BlockType::Domain, &tm, tm.get("domain"), None);
+
+        context2.insert_binding(
+            CascadeString::new("foo".to_string(), 10..12),
+            BindableObject::Type(tm.get("domain").unwrap()),
+        );
+
+        context1.drain_symbols(&mut context2);
+
+        assert_eq!(context1.symbol_in_context("foo").unwrap().name, "domain");
+
+        assert!(context2.symbol_in_context("foo").is_none());
     }
 
     #[test]
