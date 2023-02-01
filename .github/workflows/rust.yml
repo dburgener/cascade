@@ -39,8 +39,20 @@ jobs:
     - name: Check format
       run: .github/workflows/format.sh ${{ matrix.rust-toolchain }}
     - name: Check clippy
+      id: clippy
       run: .github/workflows/clippy.sh ${{ matrix.rust-toolchain }}
       continue-on-error: ${{ matrix.experimental }}
+    - name: Notify clippy failure
+      if: ${{ (steps.clippy.outcome != steps.clippy.conclusion) && matrix.experimental }}
+      uses: actions/github-script@v6
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: 'Stable clippy has failed for this run. A maintainer should check the logs. If known good clippy passed, this is non-fatal to the PR.'
+          })
     - name: Check docs
       run: .github/workflows/doc.sh ${{ matrix.rust-toolchain }}
     - name: Nightly
