@@ -34,7 +34,7 @@ pub fn argument_to_typeinfo<'a>(
     file: Option<&SimpleFile<String, String>>,
 ) -> Result<&'a TypeInfo, ErrorItem> {
     let t: Option<&TypeInfo> = match a {
-        ArgForValidation::Var(s) => match context.symbol_in_context(s.as_ref()) {
+        ArgForValidation::Var(s) => match context.symbol_in_context(s.as_ref(), types) {
             Some(res) => Some(res),
             // In annotations, we want to treat arguments as strings and the annotation is
             // responsible for understanding what they refer to.  This allows annotations to work
@@ -1623,7 +1623,7 @@ impl<'a> FunctionInfo<'a> {
     ) -> Result<(), CascadeErrors> {
         let mut new_body = BTreeSet::new();
         let mut errors = CascadeErrors::new();
-        let local_context = BlockContext::new_from_args(&self.args, types, self.class);
+        let local_context = BlockContext::new_from_args(&self.args, self.class);
 
         for statement in self.original_body {
             // TODO: This needs to become global in a bit
@@ -2283,7 +2283,7 @@ impl<'a> ArgForValidation<'a> {
         let check_validity = |s: &CascadeString| {
             if types.get(s.as_ref()).is_none()
                 && !context
-                    .symbol_in_context(s.as_ref())
+                    .symbol_in_context(s.as_ref(), types)
                     .map(|ti| ti.is_setype(types))
                     .unwrap_or(false)
             {

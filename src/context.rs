@@ -38,7 +38,6 @@ pub enum BlockType {
 #[derive(Clone, Debug)]
 pub struct Context<'a> {
     symbols: BTreeMap<CascadeString, BindableObject<'a>>,
-    type_map: &'a TypeMap,
     parent_type: Option<&'a TypeInfo>,
     block_type: BlockType,
     parent_context: Option<&'a Context<'a>>,
@@ -47,24 +46,18 @@ pub struct Context<'a> {
 impl<'a> Context<'a> {
     pub fn new(
         block_type: BlockType,
-        types: &'a TypeMap,
         parent_type: Option<&'a TypeInfo>,
         parent_context: Option<&'a Context<'a>>,
     ) -> Self {
         Context {
             symbols: BTreeMap::new(),
-            type_map: types,
             parent_type,
             block_type,
             parent_context,
         }
     }
 
-    pub fn new_from_args(
-        args: &[FunctionArgument<'a>],
-        types: &'a TypeMap,
-        parent_type: Option<&'a TypeInfo>,
-    ) -> Self {
+    pub fn new_from_args(args: &[FunctionArgument<'a>], parent_type: Option<&'a TypeInfo>) -> Self {
         // This is only called in functions::validate_body(), to use the arguments in validating
         // the body
         // The contexts are actually constructed later, in do_rules_pass().  For now, if we set
@@ -73,7 +66,7 @@ impl<'a> Context<'a> {
         // problem is that when we validate functions, we're just iterating over functions, not
         // parsing the tree, so I guess we'd have to save contexts with the functions?  That might
         // make sense, but it's a fairly large refactor
-        let mut context = Context::new(BlockType::Function, types, parent_type, None);
+        let mut context = Context::new(BlockType::Function, parent_type, None);
         context.insert_function_args(args);
         context
     }
@@ -93,20 +86,20 @@ impl<'a> Context<'a> {
         }
     }
 
-    pub fn symbol_in_context(&self, arg: &str) -> Option<&'a TypeInfo> {
+    pub fn symbol_in_context(&self, arg: &str, type_map: &'a TypeMap) -> Option<&'a TypeInfo> {
         let arg = self.convert_arg_this(arg);
         match self.symbols.get(&CascadeString::from(&arg as &str)) {
             Some(b) => match b {
                 BindableObject::Type(t) => Some(t),
                 // TypeList isn't natural to implement with the current API
                 BindableObject::TypeList(_) => todo!(),
-                BindableObject::PermList(_) => self.type_map.get("perm"),
-                BindableObject::Class(_) | BindableObject::ClassList(_) => {
-                    self.type_map.get("class")
-                }
+                BindableObject::PermList(_) => type_map.get("perm"),
+                BindableObject::Class(_) | BindableObject::ClassList(_) => type_map.get("class"),
                 BindableObject::Argument(a) => Some(a.param_type),
             },
-            None => self.parent_context.and_then(|c| c.symbol_in_context(&arg)),
+            None => self
+                .parent_context
+                .and_then(|c| c.symbol_in_context(&arg, type_map)),
         }
     }
 
@@ -210,16 +203,17 @@ impl<'a> Context<'a> {
         name: &CascadeString,
         arg: &Argument,
         class_perms: &ClassList,
+        type_map: &'a TypeMap,
         file: &SimpleFile<String, String>,
     ) -> Result<(), CascadeErrors> {
         let arg = ArgForValidation::from(arg);
         let obj = match &arg {
             ArgForValidation::List(v) => {
                 let arg_typeinfo_vec =
-                    argument_to_typeinfo_vec(v, self.type_map, class_perms, &*self, Some(file))?;
+                    argument_to_typeinfo_vec(v, type_map, class_perms, &*self, Some(file))?;
                 // TODO: classes
-                let variant = type_slice_to_variant(&arg_typeinfo_vec, self.type_map)?;
-                if variant.is_perm(self.type_map) {
+                let variant = type_slice_to_variant(&arg_typeinfo_vec, type_map)?;
+                if variant.is_perm(type_map) {
                     BindableObject::PermList(v.iter().map(|s| s.to_string()).collect())
                 } else {
                     BindableObject::TypeList(arg_typeinfo_vec)
@@ -227,14 +221,14 @@ impl<'a> Context<'a> {
             }
             _ => {
                 let arg_typeinfo =
-                    argument_to_typeinfo(&arg, self.type_map, class_perms, &*self, Some(file))?;
+                    argument_to_typeinfo(&arg, type_map, class_perms, &*self, Some(file))?;
                 let arg_typeinstance = TypeInstance::new(&arg, arg_typeinfo, Some(file), &*self);
                 // TODO: classes
-                if arg_typeinfo.is_perm(self.type_map) {
+                if arg_typeinfo.is_perm(type_map) {
                     BindableObject::PermList(vec![arg_typeinstance
                         .get_name_or_string(&*self)?
                         .to_string()])
-                } else if arg_typeinfo.is_class(self.type_map) {
+                } else if arg_typeinfo.is_class(type_map) {
                     BindableObject::Class(arg_typeinstance.get_name_or_string(&*self)?.to_string())
                 } else {
                     BindableObject::Type(arg_typeinfo)
@@ -262,7 +256,7 @@ mod tests {
     #[test]
     fn test_symbol_in_context() {
         let tm = compile::get_built_in_types_map().unwrap();
-        let mut context = Context::new(BlockType::Domain, &tm, None, None);
+        let mut context = Context::new(BlockType::Domain, None, None);
 
         context.insert_binding(
             CascadeString::from("foo"),
@@ -273,13 +267,13 @@ mod tests {
             BindableObject::Type(tm.get("domain").unwrap()),
         );
 
-        assert_eq!(None, context.symbol_in_context("bar"));
+        assert_eq!(None, context.symbol_in_context("bar", &tm));
         let perm_symbol = context
-            .symbol_in_context("foo")
+            .symbol_in_context("foo", &tm)
             .expect("Symbol foo not found in context");
         assert_eq!(perm_symbol.name.to_string(), "perm".to_string());
         let type_symbol = context
-            .symbol_in_context("baz")
+            .symbol_in_context("baz", &tm)
             .expect("Symbol baz not found in context");
         assert_eq!(type_symbol.name.to_string(), "domain".to_string());
     }
@@ -287,7 +281,7 @@ mod tests {
     #[test]
     fn test_insert_from_argument() {
         let tm = compile::get_built_in_types_map().unwrap();
-        let mut context = Context::new(BlockType::Domain, &tm, None, None);
+        let mut context = Context::new(BlockType::Domain, None, None);
         let cl = ClassList::new();
         let file = SimpleFile::<String, String>::new("name".to_string(), "source".to_string());
 
@@ -296,6 +290,7 @@ mod tests {
                 &CascadeString::from("foo"),
                 &Argument::Var(CascadeString::from("resource")),
                 &cl,
+                &tm,
                 &file,
             )
             .expect("Insert 'let foo = resource' failed");
@@ -305,12 +300,13 @@ mod tests {
                 &CascadeString::from("bar"),
                 &Argument::Var(CascadeString::from("foo")),
                 &cl,
+                &tm,
                 &file,
             )
             .expect("Insert 'let bar = foo' failed");
 
         let val = context
-            .symbol_in_context("bar")
+            .symbol_in_context("bar", &tm)
             .expect("Bar not found in context");
         assert_eq!(val.name.to_string(), "resource".to_string());
     }
@@ -318,8 +314,8 @@ mod tests {
     #[test]
     fn test_drain_symbols() {
         let tm = compile::get_built_in_types_map().unwrap();
-        let mut context1 = Context::new(BlockType::Domain, &tm, tm.get("domain"), None);
-        let mut context2 = Context::new(BlockType::Domain, &tm, tm.get("domain"), None);
+        let mut context1 = Context::new(BlockType::Domain, tm.get("domain"), None);
+        let mut context2 = Context::new(BlockType::Domain, tm.get("domain"), None);
 
         context2.insert_binding(
             CascadeString::new("foo".to_string(), 10..12),
@@ -328,15 +324,18 @@ mod tests {
 
         context1.drain_symbols(&mut context2);
 
-        assert_eq!(context1.symbol_in_context("foo").unwrap().name, "domain");
+        assert_eq!(
+            context1.symbol_in_context("foo", &tm).unwrap().name,
+            "domain"
+        );
 
-        assert!(context2.symbol_in_context("foo").is_none());
+        assert!(context2.symbol_in_context("foo", &tm).is_none());
     }
 
     #[test]
     fn test_convert_arg_this() {
         let tm = compile::get_built_in_types_map().unwrap();
-        let context = Context::new(BlockType::Domain, &tm, tm.get("domain"), None);
+        let context = Context::new(BlockType::Domain, tm.get("domain"), None);
         assert_eq!(&context.convert_arg_this("foo"), "foo");
         assert_eq!(&context.convert_arg_this("this"), "this");
         assert_eq!(&context.convert_arg_this("this.foo"), "domain.foo");
@@ -345,7 +344,7 @@ mod tests {
     #[test]
     fn test_get_name_or_string() {
         let tm = compile::get_built_in_types_map().unwrap();
-        let mut context = Context::new(BlockType::Domain, &tm, tm.get("domain"), None);
+        let mut context = Context::new(BlockType::Domain, tm.get("domain"), None);
         context.insert_binding(
             CascadeString::new("foo".to_string(), 10..12),
             BindableObject::Type(tm.get("domain").unwrap()),
@@ -367,14 +366,14 @@ mod tests {
     #[test]
     fn test_nested_context() {
         let tm = compile::get_built_in_types_map().unwrap();
-        let mut parent_context = Context::new(BlockType::Global, &tm, None, None);
+        let mut parent_context = Context::new(BlockType::Global, None, None);
         parent_context.insert_binding(
             CascadeString::new("foo".to_string(), 10..12),
             BindableObject::Type(tm.get("domain").unwrap()),
         );
-        let child_context = Context::new(BlockType::Domain, &tm, None, Some(&parent_context));
+        let child_context = Context::new(BlockType::Domain, None, Some(&parent_context));
         assert_eq!(
-            child_context.symbol_in_context("foo").unwrap().name,
+            child_context.symbol_in_context("foo", &tm).unwrap().name,
             "domain"
         );
     }

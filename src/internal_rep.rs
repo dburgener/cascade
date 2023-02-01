@@ -472,7 +472,7 @@ pub fn validate_derive_args<'a>(
     // TODO: We might actually be in a context here, once nested type declarations are supported
     // TODO: Even if we're not doing a nested type annotation, we should be in the global context I
     // think, at least as a parent
-    let local_context = BlockContext::new(BlockType::Annotation, types, None, None);
+    let local_context = BlockContext::new(BlockType::Annotation, None, None);
     let file = target_type.declaration_file.as_ref();
     let target_args = vec![
         FunctionArgument::new(
@@ -1130,8 +1130,7 @@ mod tests {
     fn typeinstance_test() {
         let type_info = TypeInfo::make_built_in("foo".to_string(), false);
         let file = SimpleFile::new("some_file.txt".to_string(), "contents".to_string());
-        let tm = TypeMap::new();
-        let context = BlockContext::new(BlockType::Global, &tm, None, None);
+        let context = BlockContext::new(BlockType::Global, None, None);
         let type_instance = TypeInstance {
             instance_value: TypeValue::SEType(Some(2..4)),
             type_info: Cow::Borrowed(&type_info),
