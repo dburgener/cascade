@@ -145,6 +145,7 @@
 (allow foo bar (file (entrypoint setattr)))
 (allow foo bar (file (read)))
 (allow foo bar (file (read open getattr)))
+(allow foo bar (file (write)))
 (auditallow foo bar (file (read open getattr)))
 (sid kernel)
 (sidcontext kernel (system_u system_r kernel_sid ((s0) (s0))))
