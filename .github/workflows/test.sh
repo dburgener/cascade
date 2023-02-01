@@ -2,4 +2,6 @@
 
 set -e -u -o pipefail
 
-rustup run stable cargo test --verbose
+VERSION=${1:-stable}
+
+rustup run ${VERSION} cargo test --verbose

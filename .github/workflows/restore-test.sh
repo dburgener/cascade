@@ -2,6 +2,8 @@
 
 set -e -u -o pipefail
 
+VERSION=${1:-stable}
+
 # Manually build secilc, rather than take the packaged version, so we can have control over version
 # Github actions will have already checked out the repo to the correct tag for this run
 sudo apt update
@@ -17,3 +19,10 @@ pushd selinux
 # with -fcommon
 sudo make -j16 CFLAGS="-Wno-error=stringop-truncation -fcommon -pipe -fPIC" -C libsepol install
 sudo make -j16 -C secilc install
+
+# https://nickb.dev/blog/azure-pipelines-for-rust-projects
+curl --proto '=https' -sSf https://sh.rustup.rs | sh -s -- -y
+export PATH="${PATH}:${HOME}/.cargo/bin"
+echo "##vso[task.setvariable variable=PATH;]${PATH}"
+
+rustup toolchain install ${VERSION}
