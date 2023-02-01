@@ -255,10 +255,10 @@ fn call_to_av_rule<'a>(
     }
 
     for p in &perms {
-        class_perms.verify_permission(&class, p, file)?;
+        class_perms.verify_permission(&class, p, context, file)?;
     }
 
-    let perms = class_perms.expand_perm_list(perms.iter().collect());
+    let perms = ClassList::expand_perm_list(perms.iter().collect(), context);
 
     let av_rules = if is_collapsed_class(class.as_ref()) {
         let mut split_perms = (Vec::new(), Vec::new());
@@ -1619,11 +1619,12 @@ impl<'a> FunctionInfo<'a> {
         functions: &'a FunctionMap<'a>,
         types: &'a TypeMap,
         class_perms: &'a ClassList,
+        context: &BlockContext<'_>,
         file: &'a SimpleFile<String, String>,
     ) -> Result<(), CascadeErrors> {
         let mut new_body = BTreeSet::new();
         let mut errors = CascadeErrors::new();
-        let local_context = BlockContext::new_from_args(&self.args, self.class);
+        let local_context = BlockContext::new_from_args(&self.args, self.class, context);
 
         for statement in self.original_body {
             // TODO: This needs to become global in a bit

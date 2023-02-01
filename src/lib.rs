@@ -21,6 +21,7 @@ mod sexp_internal;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::ast::{Argument, CascadeString, Declaration, Expression, Policy, PolicyFile};
+use crate::context::{BlockType, Context};
 use crate::error::{CascadeErrors, InternalError, InvalidMachineError, ParseErrorMsg};
 use crate::functions::FunctionMap;
 use crate::machine::{MachineMap, ModuleMap, ValidatedMachine, ValidatedModule};
@@ -106,7 +107,7 @@ fn compile_machine_policies_internal(
     let mut errors = CascadeErrors::new();
 
     // Generic initialization
-    let mut classlist = obj_class::make_classlist();
+    let classlist = obj_class::make_classlist();
     let mut type_map = compile::get_built_in_types_map()?;
     let mut module_map = ModuleMap::new();
     let mut machine_map = MachineMap::new();
@@ -123,18 +124,6 @@ fn compile_machine_policies_internal(
     }
 
     // Stops if something went wrong for this major step.
-    errors = errors.into_result_self()?;
-
-    for p in &policies {
-        match compile::get_global_bindings(p, &mut type_map, &mut classlist, &p.file) {
-            Ok(()) => {}
-            Err(e) => {
-                errors.append(e);
-                continue;
-            }
-        }
-    }
-
     errors = errors.into_result_self()?;
 
     // Generate type aliases
@@ -182,6 +171,28 @@ fn compile_machine_policies_internal(
         }
     }
     // Stops if something went wrong for this major step.
+    errors = errors.into_result_self()?;
+
+    // It would be really nice to do this earlier, but we can't maintain immutable references into
+    // the type_map across the mutable reference in extend_type_map().  I *think* it's okay to do
+    // it this late, but if we end up needing the global context in build_func_map() or
+    // extend_type_map(), we'll need to decouple the type_map references
+    let mut contexts = Vec::new();
+    for p in &policies {
+        match compile::get_global_bindings(p, &type_map, &classlist, &p.file) {
+            Ok(c) => contexts.push(c),
+            Err(e) => {
+                errors.append(e);
+                continue;
+            }
+        }
+    }
+
+    let mut global_context = Context::new(BlockType::Global, None, None);
+    for mut c in contexts {
+        global_context.drain_symbols(&mut c);
+    }
+
     errors = errors.into_result_self()?;
 
     // Validate modules
@@ -237,6 +248,7 @@ fn compile_machine_policies_internal(
                     machine,
                     &type_map,
                     &module_map,
+                    &global_context,
                 )?;
 
                 let machine_cil = generate_cil(machine_cil_tree);

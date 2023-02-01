@@ -57,16 +57,17 @@ impl<'a> Context<'a> {
         }
     }
 
-    pub fn new_from_args(args: &[FunctionArgument<'a>], parent_type: Option<&'a TypeInfo>) -> Self {
+    pub fn new_from_args(
+        args: &[FunctionArgument<'a>],
+        parent_type: Option<&'a TypeInfo>,
+        parent_context: &'a Context<'a>,
+    ) -> Self {
         // This is only called in functions::validate_body(), to use the arguments in validating
         // the body
-        // The contexts are actually constructed later, in do_rules_pass().  For now, if we set
-        // parent_context() to none, that's fine for the argument parsing thing, but we should look
-        // more closely at whether we need other bindings available during body validation.  The
-        // problem is that when we validate functions, we're just iterating over functions, not
-        // parsing the tree, so I guess we'd have to save contexts with the functions?  That might
-        // make sense, but it's a fairly large refactor
-        let mut context = Context::new(BlockType::Function, parent_type, None);
+        // The local contexts are actually constructed later, in do_rules_pass().  We can set the
+        // global context as a parent, but that won't make let bindings in the direct parent
+        // available
+        let mut context = Context::new(BlockType::Function, parent_type, Some(parent_context));
         context.insert_function_args(args);
         context
     }
@@ -159,6 +160,10 @@ impl<'a> Context<'a> {
 
     pub fn symbol_is_arg(&self, arg: &str) -> bool {
         matches!(self.get_symbol(arg), Some(BindableObject::Argument(_)))
+    }
+
+    pub fn symbol_is_perm(&self, arg: &str) -> bool {
+        matches!(self.get_symbol(arg), Some(BindableObject::PermList(_)))
     }
 
     pub fn insert_binding(&mut self, name: CascadeString, binding: BindableObject<'a>) {
