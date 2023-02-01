@@ -8,8 +8,7 @@ let rw_file_perms = [ read_file_perms write ];
 
 resource bar {}
 
-// TODO: re-add once global binding is using Contexts
-//let baz = bar;
+let baz = bar;
 
 domain foo {
 
@@ -21,5 +20,5 @@ domain foo {
 	allow(foo, bar, file, binding_with_annotation);
 	allow(this, bar, file, internal_binding);
 	allow(this, bar, file, nested_binding);
-	//allow(foo, baz, file, write);
+	allow(foo, baz, file, write);
 }
