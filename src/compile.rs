@@ -249,7 +249,6 @@ pub fn get_global_bindings(
     classlist: &mut ClassList,
     file: &SimpleFile<String, String>,
 ) -> Result<(), CascadeErrors> {
-    let tm_clone = &types.clone(); // Temporary workaround to get it compiling
     for e in &p.policy.exprs {
         if let Expression::Stmt(Statement::LetBinding(l)) = e {
             let let_rvalue = ArgForValidation::from(&l.value);
@@ -259,7 +258,7 @@ pub fn get_global_bindings(
                         &v,
                         types,
                         classlist,
-                        &BlockContext::new(BlockType::Global, tm_clone, None, None),
+                        &BlockContext::new(BlockType::Global, None, None),
                         Some(file),
                     )?;
                     let variant = type_slice_to_variant(&ti_vec, types)?;
@@ -273,7 +272,7 @@ pub fn get_global_bindings(
                         &a,
                         types,
                         classlist,
-                        &BlockContext::new(BlockType::Global, tm_clone, None, None),
+                        &BlockContext::new(BlockType::Global, None, None),
                         Some(file),
                     )?;
                     if ti.name.as_ref() == "perm" {
@@ -1578,7 +1577,7 @@ pub fn call_derived_associated_calls<'a>(
                             // TODO: Should there be a parent_context here?  I think this is
                             // effectively a "fake" context since we're not really parsing the tree
                             let mut local_context =
-                                BlockContext::new(BlockType::Domain, types, Some(t), None);
+                                BlockContext::new(BlockType::Domain, Some(t), None);
                             local_context.insert_function_args(&args);
 
                             let validated_call = match ValidatedCall::new(
@@ -1634,7 +1633,7 @@ fn do_rules_pass<'a>(
         None => BlockType::Global,
     };
 
-    let mut local_context = BlockContext::new(block_type, types, parent_type, parent_context);
+    let mut local_context = BlockContext::new(block_type, parent_type, parent_context);
     local_context.insert_function_args(&func_args);
 
     for e in exprs {
@@ -1644,7 +1643,13 @@ fn do_rules_pass<'a>(
                 // confuses the borrow checker because it might mutate local_context, or return
                 // data that references the context
                 if parent_type.is_some() {
-                    match local_context.insert_from_argument(&l.name, &l.value, class_perms, file) {
+                    match local_context.insert_from_argument(
+                        &l.name,
+                        &l.value,
+                        class_perms,
+                        types,
+                        file,
+                    ) {
                         Ok(()) => (),
                         Err(e) => errors.append(e),
                     }
