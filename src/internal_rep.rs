@@ -589,7 +589,7 @@ pub fn typeinfo_from_string<'a>(
         types.get("string")
     } else if class_perms.is_class(s) {
         types.get("obj_class")
-    } else if class_perms.is_perm(s) {
+    } else if class_perms.is_perm(s, context) {
         types.get("perm")
     } else {
         types.get(&context.convert_arg_this(s))
@@ -821,15 +821,12 @@ impl<'a> Class<'a> {
 
 pub struct ClassList<'a> {
     pub classes: BTreeMap<&'a str, Class<'a>>,
-    // It might be nice to just reference the strings in the policy, but the lifetimes get *really* messy, so it should simplify everything just to own these types
-    pub perm_sets: BTreeMap<String, Vec<String>>,
 }
 
 impl<'a> ClassList<'a> {
     pub fn new() -> Self {
         ClassList {
             classes: BTreeMap::new(),
-            perm_sets: BTreeMap::new(),
         }
     }
 
@@ -865,8 +862,11 @@ impl<'a> ClassList<'a> {
         &self,
         class: &CascadeString,
         permission: &CascadeString,
+        context: &BlockContext<'_>,
         file: &SimpleFile<String, String>,
     ) -> Result<(), ErrorItem> {
+        let resolved_class = context.get_name_or_string(class);
+        let class = resolved_class.as_ref().unwrap_or(class);
         let class_struct = match self.classes.get(class.as_ref()) {
             Some(c) => c,
             None => {
@@ -879,14 +879,18 @@ impl<'a> ClassList<'a> {
             }
         };
 
+        //let permission = context.get_name_or_string(permission);
         if permission.as_ref() == "*" {
             // * matches all valid object classes
             return Ok(());
         }
 
-        if let Some(perm_vec) = self.perm_sets.get(&permission.to_string()) {
+        // get_list may return a list of one item
+        let perm_vec = context.get_list(permission.as_ref());
+        if perm_vec.first() != Some(permission) {
+            // We resolved to something other than what was passed in
             for p in perm_vec {
-                self.verify_permission(class, &p.as_str().into(), file)?;
+                self.verify_permission(class, &p.as_ref().into(), context, file)?;
             }
             return Ok(());
         }
@@ -906,7 +910,7 @@ impl<'a> ClassList<'a> {
                     Some(range) => CascadeString::new(s.to_string(), range),
                     None => CascadeString::from(s.to_string()),
                 };
-                return self.verify_permission(&hll_string, permission, file);
+                return self.verify_permission(&hll_string, permission, context, file);
             }
 
             Err(ErrorItem::make_compile_or_internal_error(
@@ -930,11 +934,11 @@ impl<'a> ClassList<'a> {
         self.classes.get(class).is_some()
     }
 
-    pub fn is_perm(&self, perm: &str) -> bool {
+    pub fn is_perm(&self, perm: &str, context: &BlockContext) -> bool {
         if perm == "*" {
             return true;
         }
-        if self.perm_sets.get(perm).is_some() {
+        if context.symbol_is_perm(perm) {
             return true;
         }
         for class in self.classes.values() {
@@ -945,19 +949,22 @@ impl<'a> ClassList<'a> {
         false
     }
 
-    pub fn insert_perm_set(&mut self, set_name: &str, perms: Vec<String>) {
-        self.perm_sets.insert(set_name.to_string(), perms);
-    }
-
-    pub fn expand_perm_list(&self, perms: Vec<&CascadeString>) -> Vec<CascadeString> {
+    pub fn expand_perm_list(
+        perms: Vec<&CascadeString>,
+        context: &BlockContext,
+    ) -> Vec<CascadeString> {
         let mut ret = Vec::new();
         for p in perms {
-            if let Some(pset) = self.perm_sets.get(&p.to_string()) {
+            let pset = context.get_list(p.as_ref());
+            if pset.first() != Some(p) {
                 let pset_strings: Vec<CascadeString> = pset
                     .iter()
-                    .map(|s| CascadeString::from(s.as_str()))
+                    .map(|s| CascadeString::from(s.as_ref()))
                     .collect();
-                ret.append(&mut self.expand_perm_list(pset_strings.iter().collect()));
+                ret.append(&mut Self::expand_perm_list(
+                    pset_strings.iter().collect(),
+                    context,
+                ));
             } else {
                 ret.push(p.clone());
             }
@@ -1204,14 +1211,15 @@ mod tests {
     #[test]
     fn classlist_test() {
         let mut classlist = ClassList::new();
+        let context = BlockContext::new(BlockType::Global, None, None);
         classlist.add_class("file", vec!["read", "write"]);
         classlist.add_class("capability", vec!["mac_override", "mac_admin"]);
 
         assert!(classlist.is_class("file"));
         assert!(classlist.is_class("capability"));
         assert!(!classlist.is_class("foo"));
-        assert!(classlist.is_perm("read"));
-        assert!(!classlist.is_perm("bar"));
+        assert!(classlist.is_perm("read", &context));
+        assert!(!classlist.is_perm("bar", &context));
 
         let cil = classlist.generate_class_perm_cil();
 
@@ -1227,17 +1235,10 @@ mod tests {
     }
 
     #[test]
-    fn perm_set_test() {
-        let mut classlist = ClassList::new();
-        classlist.insert_perm_set("read_file_perms", vec!["read".into(), "getattr".into()]);
-        assert!(classlist.is_perm("read_file_perms"));
-        assert!(!classlist.is_perm("read"));
-    }
-
-    #[test]
     fn verify_permissions_test() {
         let fake_file = SimpleFile::new(String::new(), String::new());
         let mut classlist = ClassList::new();
+        let context = BlockContext::new(BlockType::Global, None, None);
         classlist.add_class("foo", vec!["bar", "baz"]);
         classlist.add_class("capability", vec!["cap_foo"]);
         classlist.add_class("capability2", vec!["cap_bar"]);
@@ -1245,21 +1246,27 @@ mod tests {
         classlist.add_class("process2", vec!["foo"]);
 
         assert!(classlist
-            .verify_permission(&"foo".into(), &"bar".into(), &fake_file)
+            .verify_permission(&"foo".into(), &"bar".into(), &context, &fake_file)
             .is_ok());
         assert!(classlist
-            .verify_permission(&"foo".into(), &"baz".into(), &fake_file)
+            .verify_permission(&"foo".into(), &"baz".into(), &context, &fake_file)
             .is_ok());
         assert!(classlist
-            .verify_permission(&"capability".into(), &"cap_bar".into(), &fake_file)
+            .verify_permission(
+                &"capability".into(),
+                &"cap_bar".into(),
+                &context,
+                &fake_file
+            )
             .is_ok());
         assert!(classlist
-            .verify_permission(&"process".into(), &"foo".into(), &fake_file)
+            .verify_permission(&"process".into(), &"foo".into(), &context, &fake_file)
             .is_ok());
 
         match classlist.verify_permission(
             &CascadeString::new("bar".to_string(), 0..1),
             &CascadeString::new("baz".to_string(), 0..1),
+            &context,
             &fake_file,
         ) {
             Ok(_) => panic!("Nonexistent class verified"),
@@ -1275,6 +1282,7 @@ mod tests {
         match classlist.verify_permission(
             &CascadeString::new("foo".to_string(), 0..1),
             &CascadeString::new("cap_bar".to_string(), 0..1),
+            &context,
             &fake_file,
         ) {
             Ok(_) => panic!("Nonexistent permission verified"),

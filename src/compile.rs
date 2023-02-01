@@ -17,13 +17,12 @@ use crate::error::{
     add_or_create_compile_error, CascadeErrors, CompileError, ErrorItem, InternalError,
 };
 use crate::functions::{
-    argument_to_typeinfo, argument_to_typeinfo_vec, ArgForValidation, FSContextType,
-    FileSystemContextRule, FunctionArgument, FunctionInfo, FunctionMap, ValidatedCall,
-    ValidatedStatement,
+    FSContextType, FileSystemContextRule, FunctionArgument, FunctionInfo, FunctionMap,
+    ValidatedCall, ValidatedStatement,
 };
 use crate::internal_rep::{
-    generate_sid_rules, type_slice_to_variant, validate_derive_args, Annotated, AnnotationInfo,
-    Associated, BoundTypeInfo, ClassList, Context, Sid, TypeInfo, TypeMap,
+    generate_sid_rules, validate_derive_args, Annotated, AnnotationInfo, Associated, BoundTypeInfo,
+    ClassList, Context, Sid, TypeInfo, TypeMap,
 };
 use crate::machine::{MachineMap, ModuleMap, ValidatedMachine, ValidatedModule};
 
@@ -34,6 +33,7 @@ pub fn compile_rules_one_file<'a>(
     classlist: &'a ClassList<'a>,
     type_map: &'a TypeMap,
     func_map: &'a FunctionMap<'a>,
+    global_context: &'a BlockContext<'a>,
 ) -> Result<BTreeSet<ValidatedStatement<'a>>, CascadeErrors> {
     do_rules_pass(
         &p.policy.exprs,
@@ -41,7 +41,7 @@ pub fn compile_rules_one_file<'a>(
         func_map,
         classlist,
         None,
-        None,
+        Some(global_context),
         &p.file,
     )
 }
@@ -242,70 +242,19 @@ pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
     Ok(built_in_types)
 }
 
-// TODO: Rewrite entirely with context.  Clones are temporary
-pub fn get_global_bindings(
+pub fn get_global_bindings<'a>(
     p: &PolicyFile,
-    types: &mut TypeMap,
-    classlist: &mut ClassList,
+    types: &'a TypeMap,
+    classlist: &ClassList,
     file: &SimpleFile<String, String>,
-) -> Result<(), CascadeErrors> {
+) -> Result<BlockContext<'a>, CascadeErrors> {
+    let mut ret = BlockContext::new(BlockType::Global, None, None);
     for e in &p.policy.exprs {
         if let Expression::Stmt(Statement::LetBinding(l)) = e {
-            let let_rvalue = ArgForValidation::from(&l.value);
-            let (variant, bound_type) = match let_rvalue {
-                ArgForValidation::List(v) => {
-                    let ti_vec = argument_to_typeinfo_vec(
-                        &v,
-                        types,
-                        classlist,
-                        &BlockContext::new(BlockType::Global, None, None),
-                        Some(file),
-                    )?;
-                    let variant = type_slice_to_variant(&ti_vec, types)?;
-                    (
-                        variant.name.as_ref(),
-                        BoundTypeInfo::List(v.iter().map(|s| s.to_string()).collect()),
-                    )
-                }
-                a => {
-                    let ti = argument_to_typeinfo(
-                        &a,
-                        types,
-                        classlist,
-                        &BlockContext::new(BlockType::Global, None, None),
-                        Some(file),
-                    )?;
-                    if ti.name.as_ref() == "perm" {
-                        (
-                            "perm",
-                            match a {
-                                ArgForValidation::Var(s) => BoundTypeInfo::Single(s.to_string()),
-                                _ => return Err(InternalError::new().into()),
-                            },
-                        )
-                    } else {
-                        (
-                            ti.name.as_ref(),
-                            BoundTypeInfo::Single(ti.name.to_string().clone()),
-                        )
-                    }
-                }
-            };
-            if variant == "perm" {
-                classlist.insert_perm_set(l.name.as_ref(), bound_type.get_contents_as_vec())
-            } else {
-                let new_type = TypeInfo::new_bound_type(
-                    l.name.clone(),
-                    variant,
-                    file,
-                    bound_type,
-                    &l.annotations,
-                )?;
-                types.insert(l.name.to_string(), new_type)?;
-            }
+            ret.insert_from_argument(&l.name, &l.value, classlist, types, file)?;
         }
     }
-    Ok(())
+    Ok(ret)
 }
 
 pub fn build_func_map<'a>(
@@ -477,15 +426,19 @@ pub fn validate_functions<'a>(
     types: &'a TypeMap,
     class_perms: &'a ClassList,
     functions_copy: &'a FunctionMap<'a>,
+    context: &'a BlockContext<'a>,
 ) -> Result<FunctionMap<'a>, CascadeErrors> {
     let mut errors = CascadeErrors::new();
     let mut classes_to_required_functions: BTreeMap<&CascadeString, BTreeSet<&str>> =
         BTreeMap::new();
+    // TODO: We pass the global context in here, but most function declarations are in a type
+    // block, and should have bindings in that block exposed
     for function in functions.values_mut() {
         match function.validate_body(
             functions_copy,
             types,
             class_perms,
+            context,
             function.declaration_file,
         ) {
             Ok(_) => (),
@@ -915,6 +868,7 @@ pub fn get_reduced_infos(
     machine: &ValidatedMachine,
     type_map: &TypeMap,
     module_map: &ModuleMap,
+    global_context: &BlockContext<'_>,
 ) -> Result<Vec<sexp::Sexp>, CascadeErrors> {
     let ret = CascadeErrors::new();
     let mut new_type_map = get_built_in_types_map()?;
@@ -933,11 +887,22 @@ pub fn get_reduced_infos(
 
     // Validate functions, including deriving functions from annotations
     let new_func_map_copy = new_func_map.clone(); // In order to read function info while mutating
-    let new_func_map =
-        validate_functions(new_func_map, &new_type_map, classlist, &new_func_map_copy)?;
+    let new_func_map = validate_functions(
+        new_func_map,
+        &new_type_map,
+        classlist,
+        &new_func_map_copy,
+        global_context,
+    )?;
 
     // Get the policy rules
-    let new_policy_rules = get_policy_rules(policies, &new_type_map, classlist, &new_func_map)?;
+    let new_policy_rules = get_policy_rules(
+        policies,
+        &new_type_map,
+        classlist,
+        &new_func_map,
+        global_context,
+    )?;
 
     validate_rules(&new_policy_rules)?;
 
@@ -1018,6 +983,7 @@ pub fn get_policy_rules<'a>(
     reduced_type_map: &'a TypeMap,
     classlist: &'a ClassList<'a>,
     reduced_func_map: &'a FunctionMap<'a>,
+    global_context: &'a BlockContext<'a>,
 ) -> Result<BTreeSet<ValidatedStatement<'a>>, CascadeErrors> {
     let mut ret = CascadeErrors::new();
     let mut reduced_policy_rules = BTreeSet::new();
@@ -1027,7 +993,13 @@ pub fn get_policy_rules<'a>(
     reduced_policy_rules.append(&mut calls);
 
     for p in policies {
-        let mut r = match compile_rules_one_file(p, classlist, reduced_type_map, reduced_func_map) {
+        let mut r = match compile_rules_one_file(
+            p,
+            classlist,
+            reduced_type_map,
+            reduced_func_map,
+            global_context,
+        ) {
             Ok(r) => r,
             Err(e) => {
                 ret.append(e);
