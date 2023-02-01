@@ -27,11 +27,7 @@ jobs:
         # informationally check the latest as well.  We should
         # regularly update the known good once we know that tests
         # pass on it
-        rust-toolchain: [ stable, nightly ]
-        no-fail-clippy: [true]
-        include:
-          - rust-toolchain: 1.65
-            no-fail-clippy: false
+        rust-toolchain: [ 1.65, stable, nightly ]
     steps:
     - uses: actions/checkout@v3
     - name: Setup
@@ -41,9 +37,9 @@ jobs:
     - name: Check clippy
       id: clippy
       run: .github/workflows/clippy.sh ${{ matrix.rust-toolchain }}
-      continue-on-error: ${{ matrix.no-fail-clippy }}
+      continue-on-error: ${{ matrix.rust-toolchain != '1.65' }}
     - name: Notify clippy failure
-      if: ${{ (steps.clippy.outcome != steps.clippy.conclusion) && matrix.no-fail-clippy }}
+      if: ${{ (steps.clippy.outcome != steps.clippy.conclusion) && (matrix.rust-toolchain != '1.65') }}
       uses: actions/github-script@v6
       with:
         script: |
