@@ -909,12 +909,12 @@ fn check_required_config(
 }
 
 // Get the types, functions, and policy rules for the machine.
-pub fn get_reduced_infos<'a>(
-    policies: &'a [PolicyFile],
-    classlist: &'a ClassList,
-    machine: &'a ValidatedMachine,
-    type_map: &'a TypeMap,
-    module_map: &'a ModuleMap,
+pub fn get_reduced_infos(
+    policies: &[PolicyFile],
+    classlist: &ClassList,
+    machine: &ValidatedMachine,
+    type_map: &TypeMap,
+    module_map: &ModuleMap,
 ) -> Result<Vec<sexp::Sexp>, CascadeErrors> {
     let ret = CascadeErrors::new();
     let mut new_type_map = get_built_in_types_map()?;
