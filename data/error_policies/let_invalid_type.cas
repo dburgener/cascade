@@ -1,0 +1,7 @@
+let bar = baz;
+
+resource foo {}
+
+domain qux {
+	allow(this, foo, file, read);
+}

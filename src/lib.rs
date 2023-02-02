@@ -1299,6 +1299,11 @@ mod tests {
     }
 
     #[test]
+    fn let_invalid_type() {
+        error_policy_test!("let_invalid_type.cas", 1, ErrorItem::Compile(_));
+    }
+
+    #[test]
     fn valid_resourcetrans() {
         valid_policy_test(
             "resource_trans.cas",
