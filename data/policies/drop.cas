@@ -1,0 +1,7 @@
+resource foo {}
+
+domain bar {
+	allow(this, foo, file, [read write append]);
+
+	drop allow(this, foo, file, append);
+}

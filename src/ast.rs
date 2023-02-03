@@ -399,6 +399,27 @@ impl Statement {
             Statement::IfBlock(_) => todo!(),
         }
     }
+
+    pub fn set_drop(&mut self, drop_keyword_range: Range<usize>) -> Result<(), ParseErrorMsg> {
+        match self {
+            Statement::Call(c) => c.drop = true,
+            Statement::LetBinding(_) => {
+                return Err(ParseErrorMsg::new(
+                    "Let Bindings cannot be dropped".to_string(),
+                    Some(drop_keyword_range),
+                    "The drop keyword can only be applied to function calls.".to_string(),
+                ))
+            }
+            Statement::IfBlock(_) => {
+                return Err(ParseErrorMsg::new(
+                    "If blocks cannot be dropped".to_string(),
+                    Some(drop_keyword_range),
+                    "The drop keyword can only be applied to function calls.".to_string(),
+                ))
+            }
+        }
+        Ok(())
+    }
 }
 
 pub enum BuiltIns {
@@ -422,6 +443,7 @@ pub struct FuncCall {
     // The second element is an optional typecast
     pub args: Vec<(Argument, Option<CascadeString>)>,
     pub annotations: Annotations,
+    pub drop: bool,
 }
 
 impl FuncCall {
@@ -437,6 +459,7 @@ impl FuncCall {
                 name: n,
                 args: a,
                 annotations: Annotations::new(),
+                drop: false,
             },
             None => FuncCall {
                 class_name: None,
@@ -444,6 +467,7 @@ impl FuncCall {
                 name: n,
                 args: a,
                 annotations: Annotations::new(),
+                drop: false,
             },
         }
     }
