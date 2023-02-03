@@ -1884,6 +1884,16 @@ impl<'a> ValidatedStatement<'a> {
             None => false,
         };
 
+        // check drop
+        if let Statement::Call(c) = statement {
+            if c.drop {
+                // TODO
+                // todo 1. Return warning
+                // todo 2. actually handle drop
+                return Ok(WithWarnings::from(BTreeSet::new()));
+            }
+        }
+
         match statement {
             Statement::Call(c) => match c.check_builtin() {
                 Some(BuiltIns::AvRule) => Ok(WithWarnings::from(

@@ -924,6 +924,12 @@ mod tests {
         0);
     }
 
+    #[test]
+    fn drop_test() {
+        // TODO: This is just a parse test for now
+        valid_policy_test("drop.cas", &[], &[], 0);
+    }
+
     // This is just a quick compile test.  The true purpose of these files is to actually boot in
     // enforcing mode on a VM.  That is outside the scope of this test, but compile testing is a
     // minimum first step and reasonable to do here.

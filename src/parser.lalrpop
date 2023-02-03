@@ -124,6 +124,10 @@ DefaultArg: Argument = {
 Stmt: Statement = {
 	<StmtBody> ";",
 	<IfBlock> => Statement::IfBlock(Box::new(<>)),
+	<start: @L> "drop" <end: @R> <mut s: StmtBody> ";" =>? {
+		s.set_drop(start..end)?;
+		Ok(s)
+		}
 }
 
 StmtBody: Statement = {
