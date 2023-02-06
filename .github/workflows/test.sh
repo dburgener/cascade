@@ -16,7 +16,7 @@ do
     ./target/$d/casc -h
 
     ./target/$d/casc --version
-    ./target/$d/casc -v
+    ./target/$d/casc -V
 
     ./target/$d/casc data/policies/simple.cas
     if [[ ! -f out.cil ]] ; then
