@@ -127,10 +127,7 @@ Stmt: Statement = {
 }
 
 StmtBody: Statement = {
-	<c:(<TypeName> ".")?> <n:NameDecl> "(" <a:Comma<CastArg>> ")" => Statement::Call(Box::new(FuncCall::new_with_casts(c, None, n, a))),
-	//<c:(<TypeName> "<")> <p:(<TypeName> ">.")> <n:NameDecl> "(" <a:Comma<CastArg>> ")" => Statement::Call(Box::new(FuncCall::new_with_casts(Some(c), Some(p), n, a))),
-	//<c:(<TypeName> ".")> <p:(<TypeName> "::")> <n:NameDecl> "(" <a:Comma<CastArg>> ")" => Statement::Call(Box::new(FuncCall::new_with_casts(Some(c), Some(p), n, a))),
-	<c:(<TypeName> ".")?> <p:NameDecl> "::" <n:NameDecl> "(" <a:Comma<CastArg>> ")" => Statement::Call(Box::new(FuncCall::new_with_casts(c, Some(p), n, a))),
+	<c:(<Casted<TypeName>> ".")?> <n:NameDecl> "(" <a:Comma<CastArg>> ")" => Statement::Call(Box::new(FuncCall::new_with_casts(c, n, a))),
 	<l:LetBind> => Statement::LetBinding(Box::new(<>)),
 }
 
@@ -210,8 +207,13 @@ ElseBlock: Vec<Statement> = {
 	"else" "{" <Stmt+> "}" => <>
 }
 
+#[inline]
+Casted<T>: (T, Option<CascadeString>) = {
+	<t: T> <c:("<" <TypeName> ">")?> => (t, c),
+}
+
 CastArg: (Argument, Option<CascadeString>) = {
-	<a: Arg> <c:(":" <TypeName>)?> => (a, c)
+	Casted<Arg>,
 }
 
 Arg: Argument = {

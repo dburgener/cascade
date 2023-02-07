@@ -6,14 +6,14 @@ extend kernel_sid {
 	all_files.unconfined_access(this);
 	general.domtrans(this);
 
-	allow(this, domain:resource, file, *);
-	allow(this, domain:resource, dir, *);
-	allow(this, domain:resource, lnk_file, *);
+	allow(this, domain<resource>, file, *);
+	allow(this, domain<resource>, dir, *);
+	allow(this, domain<resource>, lnk_file, *);
 
-	allow(this, this: resource, capability, [ dac_read_search mknod net_admin sys_tty_config sys_admin sys_module sys_ptrace syslog ]);
-	allow(this, this: resource, system, [ module_load syslog_console ]);
-	allow(this, this: resource, process, [fork setcurrent]);
-	allow(this, this: resource, key, [ search ]);
+	allow(this, this<resource>, capability, [ dac_read_search mknod net_admin sys_tty_config sys_admin sys_module sys_ptrace syslog ]);
+	allow(this, this<resource>, system, [ module_load syslog_console ]);
+	allow(this, this<resource>, process, [fork setcurrent]);
+	allow(this, this<resource>, key, [ search ]);
 	allow(this, security_sid, security, compute_create);
 
 	allow(this, unlabeled_sid, association, *);
@@ -21,8 +21,8 @@ extend kernel_sid {
 	this.kernel_ipc(this);
 
 	fn kernel_ipc(domain source) {
-		allow(source, this: resource, unix_dgram_socket, *);
-		allow(source, this: resource, unix_stream_socket, *);
-		allow(this, source: resource, unix_stream_socket, connectto);
+		allow(source, this<resource>, unix_dgram_socket, *);
+		allow(source, this<resource>, unix_stream_socket, *);
+		allow(this, source<resource>, unix_stream_socket, connectto);
 	}
 }

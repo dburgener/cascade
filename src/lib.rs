@@ -1362,9 +1362,9 @@ mod tests {
 
     #[test]
     fn invalid_parent_call() {
-        error_policy_test!("parent_call.cas", 1, ErrorItem::Compile(_));
+        error_policy_test!("parent_call.cas", 4, ErrorItem::Compile(_));
     }
-
+    /*
     #[test]
     fn valid_parent_call() {
         valid_policy_test(
@@ -1377,6 +1377,17 @@ mod tests {
             ],
             &["call foo-read (foo dom)", "call foo-read (bar dom)"],
             0,
+        );
+    } */
+    #[test]
+    fn valid_parent_call() {
+        valid_policy_test(
+            "parent_call.cas",
+            &[
+                "call bar-read (foo dom)",
+                "macro xyz-read ((type this) (type source)) (call abc-read (abc source))",
+            ],
+            &["call foo-read (foo dom)", "call foo-read (bar dom)"],
         );
     }
 }
