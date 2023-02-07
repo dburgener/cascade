@@ -2115,7 +2115,6 @@ impl ValidatedCall {
             ]
         };
 
-        //println!("MJS {:?}", function_info);
         for arg in validate_arguments(
             call,
             &function_info.args,
