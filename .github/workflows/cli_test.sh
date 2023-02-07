@@ -31,7 +31,9 @@ do
     check_file new.cil
 
     ./target/$d/casc data/policies/simple.cas --color always
+    check_file out.cil
     ./target/$d/casc data/policies/simple.cas --color auto
+    check_file out.cil
     ./target/$d/casc data/policies/simple.cas --color never
-    rm -f out.cil
+    check_file out.cil
 done
