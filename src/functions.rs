@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 use sexp::{atom_s, list, Atom, Sexp};
 
-use std::borrow::{Borrow, Cow};
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryFrom;
@@ -1772,37 +1772,62 @@ impl fmt::Display for FunctionArgument<'_> {
     }
 }
 
+fn validate_cast<'a>(
+    s: &CascadeString,
+    cast_ti: Option<&TypeInfo>,
+    func_call: Option<&FuncCall>,
+    types: &TypeMap,
+    context: &BlockContext<'a>,
+    file: Option<&SimpleFile<String, String>>,
+) -> Result<(), ErrorItem> {
+    let type_info = types.get(s.as_ref());
+    if type_info.is_none()
+        && !context
+            .symbol_in_context(s.as_ref(), types)
+            .map(|ti| ti.is_setype(types))
+            .unwrap_or(false)
+    {
+        return Err(ErrorItem::make_compile_or_internal_error(
+            "Cannot typecast",
+            file,
+            s.get_range(),
+            "This is not something that can be typecast",
+        ));
+    } else if let Some(cast_type_info) = cast_ti {
+        if let Some(func_call_unwrap) = func_call {
+            validate_inheritance(func_call_unwrap, type_info, &cast_type_info.name, file)?;
+        }
+    }
+    Ok(())
+}
+
 // Validate that the parent provided both exists and is actually a parent of the current resource.
 fn validate_inheritance(
     call: &FuncCall,
     class_info: Option<&TypeInfo>,
     parent_name: &CascadeString,
-    file: &SimpleFile<String, String>,
-) -> Result<(), CascadeErrors> {
+    file: Option<&SimpleFile<String, String>>,
+) -> Result<(), ErrorItem> {
     match class_info {
         Some(class_info) => {
             // In the case where we <parent>func it will look like we are our own parent and thats fine
             // In the more normal case of class<parent>.func check that the parent is actually our parent
             if !class_info.inherits.contains(parent_name) && class_info.name != parent_name.as_ref()
             {
-                return Err(CascadeErrors::from(
-                    ErrorItem::make_compile_or_internal_error(
-                        "Invalid Parent",
-                        Some(file),
-                        parent_name.get_range(),
-                        "Resource does not inherit from given parent",
-                    ),
+                return Err(ErrorItem::make_compile_or_internal_error(
+                    "Invalid Parent",
+                    file,
+                    call.get_name_range(),
+                    "Resource does not inherit from given parent",
                 ));
             }
         }
         None => {
-            return Err(CascadeErrors::from(
-                ErrorItem::make_compile_or_internal_error(
-                    "No such class",
-                    Some(file),
-                    call.get_name_range(),
-                    "",
-                ),
+            return Err(ErrorItem::make_compile_or_internal_error(
+                "No such class",
+                file,
+                call.get_name_range(),
+                "",
             ));
         }
     };
@@ -2096,7 +2121,14 @@ impl ValidatedCall {
 
         if let Some(cast_name) = &call.cast_name {
             if let Some(class_name) = &call.class_name {
-                validate_inheritance(call, types.get(class_name.as_ref()), cast_name, file)?;
+                validate_cast(
+                    class_name,
+                    types.get(cast_name.as_ref()),
+                    Some(call),
+                    types,
+                    context,
+                    Some(file),
+                )?;
             }
         }
 
@@ -2350,9 +2382,8 @@ impl<'a> ArgForValidation<'a> {
     // An arg can be cast to a ti if it is an setype
     // cast_ti is unused for now, but it seems like casting rules may eventually become more
     // complicated, so ensuring we'll have the ability to use it in the future seems worthwhile
-    fn verify_cast(
+    fn validate_argcast(
         &self,
-        _cast_ti: &TypeInfo,
         types: &TypeMap,
         context: &BlockContext<'a>,
         file: Option<&SimpleFile<String, String>>,
@@ -2366,27 +2397,14 @@ impl<'a> ArgForValidation<'a> {
             )
         };
 
-        let check_validity = |s: &CascadeString| {
-            if types.get(s.as_ref()).is_none()
-                && !context
-                    .symbol_in_context(s.as_ref(), types)
-                    .map(|ti| ti.is_setype(types))
-                    .unwrap_or(false)
-            {
-                Err(err_ret(s.get_range()))
-            } else {
-                Ok(())
-            }
-        };
-
         match self {
             ArgForValidation::Var(s) => {
-                return check_validity(s);
+                return validate_cast(s, None, None, types, context, file);
             }
             ArgForValidation::List(v) => {
                 for s in v {
                     // TODO: report more than just the first error
-                    check_validity(s)?;
+                    validate_cast(s, None, None, types, context, file)?;
                 }
             }
             ArgForValidation::Quote(inner) => {
@@ -2437,7 +2455,7 @@ fn validate_argument<'a>(
                 "This must be a domain, resource or trait that exists in this policy",
             ));
         }
-        arg.verify_cast(cast_ti.type_info.borrow(), types, context, file)?;
+        arg.validate_argcast(types, context, file)?;
 
         return Ok(TypeInstance::new_cast_instance(
             &arg,

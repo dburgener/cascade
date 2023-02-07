@@ -1364,6 +1364,8 @@ mod tests {
     fn invalid_parent_call() {
         error_policy_test!("parent_call.cas", 4, ErrorItem::Compile(_));
     }
+
+    // TODO add back in when casting becomes more robust
     /*
     #[test]
     fn valid_parent_call() {
