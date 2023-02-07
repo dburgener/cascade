@@ -1775,14 +1775,14 @@ impl fmt::Display for FunctionArgument<'_> {
 // Validate that the parent provided both exists and is actually a parent of the current resource.
 fn validate_inheritance(
     call: &FuncCall,
-    function_info: &FunctionInfo,
+    class_info: Option<&TypeInfo>,
     parent_name: &CascadeString,
     file: &SimpleFile<String, String>,
 ) -> Result<(), CascadeErrors> {
-    match function_info.class {
+    match class_info {
         Some(class_info) => {
-            // In the case where we parent::func it will look like we are our own parent and thats fine
-            // In the more normal case of class.parent::func check that the parent is actually our parent
+            // In the case where we <parent>func it will look like we are our own parent and thats fine
+            // In the more normal case of class<parent>.func check that the parent is actually our parent
             if !class_info.inherits.contains(parent_name) && class_info.name != parent_name.as_ref()
             {
                 return Err(CascadeErrors::from(
@@ -2052,19 +2052,19 @@ impl ValidatedCall {
                     Some(type_name) => get_cil_name(Some(&type_name.name), &call.name),
                     None => call.get_cil_name(), // Expected to error out below
                 };
-                // If we have a parent name we really want to call that instead.
-                if let Some(parent_name) = &call.parent_name {
-                    tmp_str.replace(&class_name.to_string(), parent_name.to_string().as_ref())
+                // If we have a cast name we really want to call that instead.
+                if let Some(cast_name) = &call.cast_name {
+                    tmp_str.replace(&class_name.to_string(), cast_name.to_string().as_ref())
                 } else {
                     tmp_str
                 }
             }
             None => {
-                // If we have a parent name but no class name that means we are really
-                // looking for the parents function so append the parent's name
+                // If we have a cast name but no class name that means we are really
+                // looking for the cast's function so append the cast's name
                 // to the function to find the correct one.
-                if let Some(parent_name) = &call.parent_name {
-                    parent_name.to_string() + "-" + &call.get_cil_name()
+                if let Some(cast_name) = &call.cast_name {
+                    cast_name.to_string() + "-" + &call.get_cil_name()
                 } else {
                     call.get_cil_name()
                 }
@@ -2094,14 +2094,16 @@ impl ValidatedCall {
             .into());
         }
 
-        if let Some(parent_name) = &call.parent_name {
-            validate_inheritance(call, function_info, parent_name, file)?;
+        if let Some(cast_name) = &call.cast_name {
+            if let Some(class_name) = &call.class_name {
+                validate_inheritance(call, types.get(class_name.as_ref()), cast_name, file)?;
+            }
         }
 
         // All unwraps here are safe due to if checks
-        let mut args = if call.class_name.is_none() && call.parent_name.is_some() {
+        let mut args = if call.class_name.is_none() && call.cast_name.is_some() {
             vec![
-                convert_class_name_if_this(call.parent_name.as_ref().unwrap(), parent_type)?
+                convert_class_name_if_this(call.cast_name.as_ref().unwrap(), parent_type)?
                     .get_cil_name(),
             ]
         } else if call.class_name.is_none() {
@@ -2113,6 +2115,7 @@ impl ValidatedCall {
             ]
         };
 
+        //println!("MJS {:?}", function_info);
         for arg in validate_arguments(
             call,
             &function_info.args,

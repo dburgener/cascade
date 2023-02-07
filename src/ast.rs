@@ -417,7 +417,7 @@ pub struct FuncCall {
     // if we are explicitly calling their version of
     // a function.  If parent_name is None this will
     // be a normal function call.
-    pub parent_name: Option<CascadeString>,
+    pub cast_name: Option<CascadeString>,
     pub name: CascadeString,
     // The second element is an optional typecast
     pub args: Vec<(Argument, Option<CascadeString>)>,
@@ -426,14 +426,22 @@ pub struct FuncCall {
 
 impl FuncCall {
     pub fn new_with_casts(
-        cn: Option<CascadeString>,
-        p: Option<CascadeString>,
+        cn: Option<(CascadeString, Option<CascadeString>)>,
         n: CascadeString,
         a: Vec<(Argument, Option<CascadeString>)>,
     ) -> FuncCall {
+        if let Some(some_cn) = cn {
+            return FuncCall {
+                class_name: Some(some_cn.0),
+                cast_name: some_cn.1,
+                name: n,
+                args: a,
+                annotations: Annotations::new(),
+            };
+        }
         FuncCall {
-            class_name: cn,
-            parent_name: p,
+            class_name: None,
+            cast_name: None,
             name: n,
             args: a,
             annotations: Annotations::new(),
@@ -441,12 +449,11 @@ impl FuncCall {
     }
 
     pub fn new(
-        cn: Option<CascadeString>,
-        p: Option<CascadeString>,
+        cn: Option<(CascadeString, Option<CascadeString>)>,
         n: CascadeString,
         a: Vec<Argument>,
     ) -> FuncCall {
-        Self::new_with_casts(cn, p, n, a.into_iter().zip(iter::repeat(None)).collect())
+        Self::new_with_casts(cn, n, a.into_iter().zip(iter::repeat(None)).collect())
     }
 
     pub fn check_builtin(&self) -> Option<BuiltIns> {

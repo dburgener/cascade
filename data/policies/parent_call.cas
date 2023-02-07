@@ -11,7 +11,7 @@ resource foo inherits bar {
 }
 
 domain dom {
-	foo.bar::read(this);
+	foo<bar>.read(this);
 }
 
 virtual resource abc {
@@ -22,14 +22,15 @@ virtual resource abc {
 
 resource xyz inherits abc {
 	fn read(domain source) {
-		abc::read(source);
+		abc.read(source);
 	}
 }
 
-domain qwe {
-	xyz.read(this);
-}
-
-domain asd {
-	abc::read(this);
-}
+// TODOs
+//domain qwe {
+//	<xyz>.read(this);
+//}
+//
+//domain asd {
+//	asd<abc>.read(this);
+//}

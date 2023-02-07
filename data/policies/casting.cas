@@ -1,9 +1,9 @@
 domain foo {
-	allow(foo, foo: resource, capability, [dac_override]);
-	allow(this, this: resource, capability, [mac_override]);
+	allow(foo, foo<resource>, capability, [dac_override]);
+	allow(this, this<resource>, capability, [mac_override]);
 
 	fn signal(domain source) {
-		allow(source, this: resource, process, signal);
+		allow(source, this<resource>, process, signal);
 	}
 }
 

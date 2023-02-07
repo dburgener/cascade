@@ -2,7 +2,7 @@
 resource all_files inherits file_like_objects {
 	file_context("/.*", [any], this);
 
-	allow(this: domain, this, filesystem, [associate]);
+	allow(this<domain>, this, filesystem, [associate]);
 
 	// Filesystem labels for filesystems on a default Fedora install
 	// If you are using this policy on a different system, you may need
@@ -39,5 +39,5 @@ extend unlabeled_sid inherits file_like_objects {}
 
 resource ssh_keys inherits file_like_objects {
 	file_context("/home/dburgener/.ssh/id_rsa", [file], this);
-	allow(this: domain, all_files, filesystem, [associate]);
+	allow(this<domain>, all_files, filesystem, [associate]);
 }

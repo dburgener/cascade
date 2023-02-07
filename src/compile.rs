@@ -1250,8 +1250,7 @@ fn interpret_associate(
 
 fn make_associated_call(resource_name: CascadeString, func_info: &FunctionInfo) -> FuncCall {
     FuncCall::new(
-        Some(resource_name),
-        None,
+        Some((resource_name, None)),
         func_info.name.clone().into(),
         vec![Argument::Var("this".into())],
     )
