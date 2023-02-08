@@ -1772,12 +1772,12 @@ impl fmt::Display for FunctionArgument<'_> {
     }
 }
 
-fn validate_cast<'a>(
+fn validate_cast(
     s: &CascadeString,
     cast_ti: Option<&TypeInfo>,
     func_call: Option<&FuncCall>,
     types: &TypeMap,
-    context: &BlockContext<'a>,
+    context: &BlockContext,
     file: Option<&SimpleFile<String, String>>,
 ) -> Result<(), ErrorItem> {
     let type_info = types.get(s.as_ref());
