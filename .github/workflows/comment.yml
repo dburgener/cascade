@@ -51,9 +51,10 @@ jobs:
           script: |
             var fs = require('fs');
             var clippy_ret = Number(fs.readFileSync('./flag'));
+            var issue_number = Number(fs.readFileSync('./issue_num'));
             if (clippy_ret != 0) {
               github.rest.issues.createComment({
-                issue_number: context.issue.number,
+                issue_number: issue_number,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 body: 'Stable clippy has failed for this run: ${{ matrix.rust-toolchain }}. A maintainer should check the logs. If known good clippy passed, this is non-fatal to the PR.'

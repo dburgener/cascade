@@ -46,6 +46,7 @@ jobs:
         else \
           echo 1 > ./clippy-${{ matrix.rust-toolchain }}/flag; \
         fi
+        echo ${{ github.event.number }} > ./clippy-${{ matrix.rust-toolchain }}/issue_num
     - uses: actions/upload-artifact@v2
       with:
         name: clippy-${{ matrix.rust-toolchain }}
