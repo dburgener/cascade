@@ -46,11 +46,11 @@ pub fn compile_rules_one_file<'a>(
     )
 }
 
-pub fn generate_sexp<'a>(
+pub fn generate_sexp(
     type_map: &TypeMap,
     classlist: &ClassList,
     policy_rules: BTreeSet<ValidatedStatement>,
-    func_map: &FunctionMap<'a>,
+    func_map: &FunctionMap<'_>,
     machine_configurations: &Option<&BTreeMap<String, &Argument>>,
 ) -> Result<Vec<sexp::Sexp>, CascadeErrors> {
     let type_decl_list = organize_type_map(type_map)?;
