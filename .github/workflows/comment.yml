@@ -1,8 +1,8 @@
-Name: Comment
+name: Comment on clippy
 
 on:
   workflow_run:
-    workflows: ["Receive PR"]
+    workflows: ["Rust"]
     types:
       - completed
 
