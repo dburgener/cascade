@@ -6,7 +6,7 @@ VERSION=${1:-stable}
 
 check_file () {
     if [[ ! -f "$1" ]] ; then
-        echo "Failed to create out.cil"
+        echo "Failed to create $1"
         exit 1
     fi
     rm -f "$1"
