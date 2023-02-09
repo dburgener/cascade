@@ -26,7 +26,8 @@ resource xyz inherits abc {
 	}
 }
 
-// TODOs
+// TODOs once we add the ability to cast to
+// non-inherited things
 //domain qwe {
 //	<xyz>.read(this);
 //}
