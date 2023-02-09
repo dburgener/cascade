@@ -16,7 +16,7 @@ jobs:
         # regularly update the known good once we know that tests
         # pass on it
         # This needs to stay in sync with rust.yml
-        rust-toolchain: [ 1.66, stable, nightly ]
+        rust-toolchain: [ 1.67, stable, nightly ]
     if: >
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion == 'success'
@@ -44,7 +44,7 @@ jobs:
       - run: unzip clippy-${{ matrix.rust-toolchain }}.zip
 
       - name: Notify clippy failure
-        if: (matrix.rust-toolchain != '1.66')
+        if: (matrix.rust-toolchain != '1.67')
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
