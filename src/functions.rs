@@ -1773,32 +1773,41 @@ impl fmt::Display for FunctionArgument<'_> {
 }
 
 fn validate_cast(
-    s: &CascadeString,
+    // Initial type we are casting from
+    start_type: &CascadeString,
+    // Type Info for what we are casting to
     cast_ti: Option<&TypeInfo>,
+    // Function info we are trying to use
+    // the cast version of a function.
     func_call: Option<&FuncCall>,
+    // Full type map
     types: &TypeMap,
+    // Context block for the call
     context: &BlockContext,
+    // File used for error output
     file: Option<&SimpleFile<String, String>>,
 ) -> Result<(), ErrorItem> {
-    let type_info = types.get(s.as_ref());
+    let type_info = types.get(start_type.as_ref());
     if type_info.is_none()
         && !context
-            .symbol_in_context(s.as_ref(), types)
+            .symbol_in_context(start_type.as_ref(), types)
             .map(|ti| ti.is_setype(types))
             .unwrap_or(false)
     {
         return Err(ErrorItem::make_compile_or_internal_error(
             "Cannot typecast",
             file,
-            s.get_range(),
+            start_type.get_range(),
             "This is not something that can be typecast",
         ));
-    } else if let Some(cast_type_info) = cast_ti {
-        if let Some(func_call_unwrap) = func_call {
-            validate_inheritance(func_call_unwrap, type_info, &cast_type_info.name, file)?;
-        }
     }
-    Ok(())
+    match (cast_ti, func_call) {
+        (Some(cast_type_info), Some(func_call_info)) => {
+            // TODO add additional checks.  Also add cases which we will allow casting even if the casting type isn't a parent.
+            validate_inheritance(func_call_info, type_info, &cast_type_info.name, file)
+        }
+        (_, _) => Ok(()),
+    }
 }
 
 // Validate that the parent provided both exists and is actually a parent of the current resource.
@@ -1810,8 +1819,6 @@ fn validate_inheritance(
 ) -> Result<(), ErrorItem> {
     match class_info {
         Some(class_info) => {
-            // In the case where we <parent>func it will look like we are our own parent and thats fine
-            // In the more normal case of class<parent>.func check that the parent is actually our parent
             if !class_info.inherits.contains(parent_name) && class_info.name != parent_name.as_ref()
             {
                 return Err(ErrorItem::make_compile_or_internal_error(
@@ -2132,19 +2139,16 @@ impl ValidatedCall {
             }
         }
 
-        // All unwraps here are safe due to if checks
-        let mut args = if call.class_name.is_none() && call.cast_name.is_some() {
-            vec![
-                convert_class_name_if_this(call.cast_name.as_ref().unwrap(), parent_type)?
-                    .get_cil_name(),
-            ]
-        } else if call.class_name.is_none() {
-            Vec::new()
-        } else {
-            vec![
-                convert_class_name_if_this(call.class_name.as_ref().unwrap(), parent_type)?
-                    .get_cil_name(),
-            ]
+        let mut args = match &call.class_name {
+            Some(class_name) => {
+                vec![convert_class_name_if_this(class_name, parent_type)?.get_cil_name()]
+            }
+            None => match &call.cast_name {
+                Some(cast_name) => {
+                    vec![convert_class_name_if_this(cast_name, parent_type)?.get_cil_name()]
+                }
+                None => Vec::new(),
+            },
         };
 
         for arg in validate_arguments(
