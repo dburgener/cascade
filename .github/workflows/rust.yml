@@ -36,17 +36,22 @@ jobs:
       run: .github/workflows/format.sh ${{ matrix.rust-toolchain }}
     - name: Check clippy
       id: clippy
-      run: |
-        mkdir -p ./clippy
-        .github/workflows/clippy.sh ${{ matrix.rust-toolchain }}
-        RET=$?
-        echo $? > ./clippy/return
-        exit $RET
+      run: .github/workflows/clippy.sh ${{ matrix.rust-toolchain }}
       continue-on-error: ${{ matrix.rust-toolchain != '1.67' }}
+    - name: Store clippy flag failure
+      if: steps.clippy.outcome != 'success'
+      run: |
+        mkdir -p ./clippy-${{ matrix.rust-toolchain }}
+        echo 1 > ./clippy-${{ matrix.rust-toolchain }}/flag
+    - name: Store clippy flag success
+      if: steps.clippy.outcome == 'success'
+      run: |
+        mkdir -p ./clippy-${{ matrix.rust-toolchain }}
+        echo 0 > ./clippy-${{ matrix.rust-toolchain }}/flag
     - uses: actions/upload-artifact@v2
       with:
         name: clippy Upload
-        path: clippy/
+        path: clippy-${{ matrix.rust-toolchain }}/
     - name: Check docs
       run: .github/workflows/doc.sh ${{ matrix.rust-toolchain }}
   test:
