@@ -39,7 +39,7 @@ jobs:
       run: .github/workflows/clippy.sh ${{ matrix.rust-toolchain }}
       continue-on-error: ${{ matrix.rust-toolchain != '1.67' }}
     - name: Store clippy flag
-      if: (matrix.rust-toolchain != '1.66')
+      if: (matrix.rust-toolchain != '1.67')
       run: |
         mkdir -p ./clippy-${{ matrix.rust-toolchain }}
         if [[ ${{ steps.clippy.outcome }} == "success" ]] ; then \
@@ -49,7 +49,7 @@ jobs:
         fi
         echo ${{ github.event.number }} > ./clippy-${{ matrix.rust-toolchain }}/issue_num
     - uses: actions/upload-artifact@v3
-      if: (matrix.rust-toolchain != '1.66')
+      if: (matrix.rust-toolchain != '1.67')
       with:
         name: clippy-${{ matrix.rust-toolchain }}
         path: clippy-${{ matrix.rust-toolchain }}/

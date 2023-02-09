@@ -44,7 +44,6 @@ jobs:
       - run: unzip clippy-${{ matrix.rust-toolchain }}.zip
 
       - name: Notify clippy failure
-        if: (matrix.rust-toolchain != '1.67')
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
