@@ -36,19 +36,17 @@ jobs:
       run: .github/workflows/format.sh ${{ matrix.rust-toolchain }}
     - name: Check clippy
       id: clippy
-      run: .github/workflows/clippy.sh ${{ matrix.rust-toolchain }}
+      run: |
+        mkdir -p ./clippy
+        .github/workflows/clippy.sh ${{ matrix.rust-toolchain }}
+        RET=$?
+        echo $? > ./clippy/return
+        exit $RET
       continue-on-error: ${{ matrix.rust-toolchain != '1.67' }}
-    - name: Notify clippy failure
-      if: ${{ (steps.clippy.outcome != steps.clippy.conclusion) && (matrix.rust-toolchain != '1.67') }}
-      uses: actions/github-script@v6
+    - uses: actions/upload-artifact@v2
       with:
-        script: |
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: 'Stable clippy has failed for this run. A maintainer should check the logs. If known good clippy passed, this is non-fatal to the PR.'
-          })
+        name: clippy Upload
+        path: clippy/
     - name: Check docs
       run: .github/workflows/doc.sh ${{ matrix.rust-toolchain }}
   test:
