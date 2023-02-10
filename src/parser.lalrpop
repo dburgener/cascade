@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
-use crate::ast::{CascadeString, Policy, Declaration, DeclarationModifier, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, LetBinding, Virtualable, FuncCall, DeclaredArgument, Module, Machine, MachineBody, Port, IpAddr as AstIpAddr};
+use crate::ast::{CascadeString, Policy, Declaration, DeclarationModifier, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, LetBinding, Virtualable, FuncCall, DeclaredArgument, Module, Machine, MachineBody, Port, IpAddr as AstIpAddr, IfBlock};
 use lalrpop_util::ErrorRecovery;
 use lalrpop_util::ParseError;
 use crate::error::ParseErrorMsg;
@@ -123,7 +123,7 @@ DefaultArg: Argument = {
 
 Stmt: Statement = {
 	<StmtBody> ";",
-	IfBlock => Statement::IfBlock, // TODO
+	<IfBlock> => Statement::IfBlock(Box::new(<>)),
 }
 
 StmtBody: Statement = {
@@ -190,14 +190,21 @@ BooleanExpr: () = {
 	"(" BooleanExpr ")",
 }
 
-// TODO: Define if block struct
-IfBlock: () = {
-	"if" "(" BooleanExpr ")" "{" <Stmt+> "}" ElseBlock?,
+IfBlock: IfBlock = {
+	<start: @L> "if" <end: @R> "(" BooleanExpr ")" "{" <then: Stmt+> "}" <e: ElseBlock?> => {
+		IfBlock {
+			keyword_range: start..end,
+			if_statements: then,
+			else_statements: match e {
+				Some(e) => e,
+				None => Vec::new()
+			}
+		}}
 }
 
 #[inline]
-ElseBlock: () = {
-	"else" "{" <Stmt+> "}"
+ElseBlock: Vec<Statement> = {
+	"else" "{" <Stmt+> "}" => <>
 }
 
 CastArg: (Argument, Option<CascadeString>) = {

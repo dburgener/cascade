@@ -25,6 +25,7 @@ use crate::internal_rep::{
     ClassList, Context, Sid, TypeInfo, TypeMap,
 };
 use crate::machine::{MachineMap, ModuleMap, ValidatedMachine, ValidatedModule};
+use crate::warning::{Warnings, WithWarnings};
 
 use codespan_reporting::files::SimpleFile;
 
@@ -34,7 +35,7 @@ pub fn compile_rules_one_file<'a>(
     type_map: &'a TypeMap,
     func_map: &'a FunctionMap<'a>,
     global_context: &'a BlockContext<'a>,
-) -> Result<BTreeSet<ValidatedStatement<'a>>, CascadeErrors> {
+) -> Result<WithWarnings<BTreeSet<ValidatedStatement<'a>>>, CascadeErrors> {
     do_rules_pass(
         &p.policy.exprs,
         type_map,
@@ -427,8 +428,9 @@ pub fn validate_functions<'a>(
     class_perms: &'a ClassList,
     functions_copy: &'a FunctionMap<'a>,
     context: &'a BlockContext<'a>,
-) -> Result<FunctionMap<'a>, CascadeErrors> {
+) -> Result<WithWarnings<FunctionMap<'a>>, CascadeErrors> {
     let mut errors = CascadeErrors::new();
+    let mut warnings = Warnings::new();
     let mut classes_to_required_functions: BTreeMap<&CascadeString, BTreeSet<&str>> =
         BTreeMap::new();
     // TODO: We pass the global context in here, but most function declarations are in a type
@@ -441,7 +443,7 @@ pub fn validate_functions<'a>(
             context,
             function.declaration_file,
         ) {
-            Ok(_) => (),
+            Ok(ww) => ww.inner(&mut warnings),
             Err(e) => errors.append(e),
         }
     }
@@ -480,7 +482,7 @@ pub fn validate_functions<'a>(
         }
     }
 
-    errors.into_result(functions)
+    errors.into_result(WithWarnings::new(functions, warnings))
 }
 
 fn derive_functions<'a>(
@@ -869,8 +871,9 @@ pub fn get_reduced_infos(
     type_map: &TypeMap,
     module_map: &ModuleMap,
     global_context: &BlockContext<'_>,
-) -> Result<Vec<sexp::Sexp>, CascadeErrors> {
+) -> Result<WithWarnings<Vec<sexp::Sexp>>, CascadeErrors> {
     let ret = CascadeErrors::new();
+    let mut warnings = Warnings::new();
     let mut new_type_map = get_built_in_types_map()?;
 
     // Get the reduced type infos
@@ -893,7 +896,8 @@ pub fn get_reduced_infos(
         classlist,
         &new_func_map_copy,
         global_context,
-    )?;
+    )?
+    .inner(&mut warnings);
 
     // Get the policy rules
     let new_policy_rules = get_policy_rules(
@@ -902,7 +906,8 @@ pub fn get_reduced_infos(
         classlist,
         &new_func_map,
         global_context,
-    )?;
+    )?
+    .inner(&mut warnings);
 
     validate_rules(&new_policy_rules)?;
 
@@ -918,7 +923,7 @@ pub fn get_reduced_infos(
         &Some(&machine.configurations),
     )?;
 
-    ret.into_result(new_cil_tree)
+    ret.into_result(WithWarnings::new(new_cil_tree, warnings))
 }
 
 // This is a recusive function that gets only the relevant types from the type map.
@@ -984,8 +989,9 @@ pub fn get_policy_rules<'a>(
     classlist: &'a ClassList<'a>,
     reduced_func_map: &'a FunctionMap<'a>,
     global_context: &'a BlockContext<'a>,
-) -> Result<BTreeSet<ValidatedStatement<'a>>, CascadeErrors> {
+) -> Result<WithWarnings<BTreeSet<ValidatedStatement<'a>>>, CascadeErrors> {
     let mut ret = CascadeErrors::new();
+    let mut warnings = Warnings::new();
     let mut reduced_policy_rules = BTreeSet::new();
 
     // Add derived associated calls
@@ -1000,7 +1006,7 @@ pub fn get_policy_rules<'a>(
             reduced_func_map,
             global_context,
         ) {
-            Ok(r) => r,
+            Ok(r) => r.inner(&mut warnings),
             Err(e) => {
                 ret.append(e);
                 continue;
@@ -1009,7 +1015,7 @@ pub fn get_policy_rules<'a>(
         reduced_policy_rules.append(&mut r);
     }
     // Stops if something went wrong for this major step.
-    ret.into_result(reduced_policy_rules)
+    ret.into_result(WithWarnings::new(reduced_policy_rules, warnings))
 }
 
 fn get_all_function_names(
@@ -1586,9 +1592,10 @@ fn do_rules_pass<'a>(
     parent_type: Option<&'a TypeInfo>,
     parent_context: Option<&BlockContext<'_>>,
     file: &'a SimpleFile<String, String>,
-) -> Result<BTreeSet<ValidatedStatement<'a>>, CascadeErrors> {
+) -> Result<WithWarnings<BTreeSet<ValidatedStatement<'a>>>, CascadeErrors> {
     let mut ret = BTreeSet::new();
     let mut errors = CascadeErrors::new();
+    let mut warnings = Warnings::new();
     let func_args = match parent_type {
         Some(t) => vec![FunctionArgument::new_this_argument(t)],
         None => Vec::new(),
@@ -1637,7 +1644,9 @@ fn do_rules_pass<'a>(
                     parent_type,
                     file,
                 ) {
-                    Ok(mut s) => ret.append(&mut s),
+                    Ok(s) => {
+                        ret.append(&mut s.inner(&mut warnings));
+                    }
                     Err(e) => errors.append(e),
                 }
             }
@@ -1656,7 +1665,7 @@ fn do_rules_pass<'a>(
                     Some(&local_context),
                     file,
                 ) {
-                    Ok(mut r) => ret.append(&mut r),
+                    Ok(r) => ret.append(&mut r.inner(&mut warnings)),
                     Err(e) => errors.append(e),
                 }
             }
@@ -1664,7 +1673,7 @@ fn do_rules_pass<'a>(
         }
     }
 
-    errors.into_result(ret)
+    errors.into_result(WithWarnings::new(ret, warnings))
 }
 
 fn type_list_to_sexp(type_list: Vec<&TypeInfo>, type_map: &TypeMap) -> Vec<sexp::Sexp> {
