@@ -208,17 +208,16 @@ For more details and examples, see resource_association.md
 Access vector rules define what happens on an access attempt.  They are defined
 on the quadruple of: source type, target type, target object class, permissions.
 
-There are five kinds of access vector rules provided by Cascade: allow,
-auditallow, dontaudit, neverallow, delete.  Allow rules grant access. Auditallow
+There are four kinds of access vector rules provided by Cascade: allow,
+auditallow, dontaudit, neverallow.  Allow rules grant access. Auditallow
 audit access when it is granted (by a separate allow rule). Dontaudit rules
 disable auditing for denied access.  Neverallow rules are a compile time
-assertion that certain access should not be allowed.  Delete rules remove access
-if it is allowed elsewhere.
+assertion that certain access should not be allowed.
 
 These rules are defined by five built-in functions: allow(), audit(),
-dontaudit(), neverallow(), delete().  Note the rename from the SELinux base
-language auditallow to audit, to emphasize that auditallow does not actually
-allow access.
+dontaudit(), neverallow().  Note the rename from the SELinux base language
+auditallow to audit, to emphasize that auditallow does not actually allow
+access.
 
 These functions have identical signatures except for the function name:
 
@@ -226,13 +225,67 @@ These functions have identical signatures except for the function name:
 fn allow(domain source, type target, class obj_class, [permission] perm);
 ```
 
-And likewise for audit(), dontaudit(), neverallow() and delete().  Lists of
-sources and targets are intentionally omitted to encourage clarity and
-readability. Policy authors are encouraged to create virtual types to specify
-groups and/or declare their own functions grouping related av rules.
+And likewise for audit(), dontaudit(), and neverallow().  Lists of sources and
+targets are intentionally omitted to encourage clarity and readability. Policy
+authors are encouraged to create virtual types to specify groups and/or declare
+their own functions grouping related av rules.
 
 Note the use the makelist annotation to allow automatic coercion from a single
 class or permission to a list (See 'annotations' section).
+
+## `drop` keyword
+
+The `drop` keyword may be put before a function call to remove permissions
+granted by allow() rules in that call that are granted elsewhere.
+
+For example, the below policy will result in allowing foo the `write`
+permission on `bar`, but not the `read`, because that is dropped.
+
+```
+domain foo {}
+resource bar {}
+allow(foo, bar, file, [ read write ]);
+drop allow(foo, bar, file, read);
+```
+
+If some permissions are inherited from the parent, then a drop will apply to
+the child and its children.
+
+```
+virtual domain foo {
+	allow(this, self, capability, [ sys_admin net_admin ]);
+}
+
+virtual domain bar inherits foo {
+	drop allow(this, self, capability, sys_admin);
+}
+
+domain baz inherits bar {}
+```
+
+In the above example, `foo` gets both the `sys_admin` and `net_admin`
+capabilities; `bar` inherits the `net_admin` capability, but drops the
+`sys_admin` capability so it doesn't have that permission.  `baz`, inheriting
+`bar` has the same permissions as `bar` (`net_admin`) but not `sys_admin`.
+`baz` could re-allow `sys_admin` if that permission was needed.
+
+`drop` can also be used to remove some permissions granted on a parent type:
+
+```
+virtual resource bar {}
+resource baz inherits bar {}
+
+domain foo {
+	allow(this, bar, file, [ read write append ]);
+	drop allow(this, baz, file, append);
+}
+```
+
+In the above example, foo can read, write and append files with `bar` and
+children labels, but there is an exception for `baz`, which `foo` cannot
+append.  This could be used, for example to generally allow log files to be
+both writable and appendable, while allowing exceptions for certain append-only
+log scenarios.
 
 ## File labeling
 
