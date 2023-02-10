@@ -68,6 +68,10 @@ impl Warnings {
             e.print_diagnostic(color)
         }
     }
+
+    pub fn count(&self) -> usize {
+        self.inner.len()
+    }
 }
 
 /// Wraps a Cascade object with additional information about warnings

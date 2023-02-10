@@ -257,7 +257,8 @@ fn compile_machine_policies_internal(
                     &type_map,
                     &module_map,
                     &global_context,
-                )?;
+                )?
+                .inner(&mut machine_warnings);
 
                 let machine_cil = generate_cil(machine_cil_tree);
 
@@ -413,7 +414,12 @@ mod tests {
         assert!(count > 9);
     }
 
-    fn valid_policy_test(filename: &str, expected_contents: &[&str], disallowed_contents: &[&str]) {
+    fn valid_policy_test(
+        filename: &str,
+        expected_contents: &[&str],
+        disallowed_contents: &[&str],
+        expected_warn_count: usize,
+    ) {
         let policy_file = [POLICIES_DIR, filename].concat();
         let (policy_contents, warnings) = match compile_combined(vec![&policy_file]) {
             Ok(p) => p,
@@ -434,7 +440,7 @@ mod tests {
             );
         }
 
-        assert!(warnings.is_empty());
+        assert_eq!(warnings.count(), expected_warn_count);
 
         let file_out_path = &[filename, "_test.cil"].concat();
         let cil_out_path = &[filename, "_test_out_policy"].concat();
@@ -528,12 +534,13 @@ mod tests {
                 "typeattributeset domain (user_type)",
             ],
             &[],
+            0,
         );
     }
 
     #[test]
     fn simple_policy_build_test() {
-        valid_policy_test("simple.cas", &[], &[]);
+        valid_policy_test("simple.cas", &[], &[], 0);
     }
 
     #[test]
@@ -542,17 +549,18 @@ mod tests {
             "function.cas",
             &["macro my_file-read", "call my_file-read", "allow source"],
             &[],
+            0,
         );
     }
 
     #[test]
     fn auditallow_test() {
-        valid_policy_test("auditallow.cas", &["auditallow my_domain foo"], &[]);
+        valid_policy_test("auditallow.cas", &["auditallow my_domain foo"], &[], 0);
     }
 
     #[test]
     fn dontaudit_test() {
-        valid_policy_test("dontaudit.cas", &["(dontaudit my_domain foo"], &[]);
+        valid_policy_test("dontaudit.cas", &["(dontaudit my_domain foo"], &[], 0);
     }
 
     #[test]
@@ -561,6 +569,7 @@ mod tests {
             "arguments.cas",
             &["(macro foo-some_func ((type this) (name a) (name b) (type c) (type d))"],
             &[],
+            0,
         );
     }
 
@@ -574,6 +583,7 @@ mod tests {
                 "(filecon \"/etc\" any (",
             ],
             &[],
+            0,
         );
     }
 
@@ -583,6 +593,7 @@ mod tests {
             "domtrans.cas",
             &["typetransition bar foo_exec process foo"],
             &[],
+            0,
         );
     }
 
@@ -592,6 +603,7 @@ mod tests {
             "let.cas",
             &["(allow foo bar (file (read open getattr)))"],
             &[],
+            0,
         );
     }
 
@@ -601,6 +613,7 @@ mod tests {
             "virtual_function.cas",
             &["macro foo-foo"],
             &["macro foo_parent-foo"],
+            0,
         );
     }
 
@@ -619,6 +632,7 @@ mod tests {
                 "macro baz-list",
             ],
             &[],
+            0,
         )
     }
 
@@ -631,6 +645,7 @@ mod tests {
                 "(call some_domain-three_args (some_domain foo bar baz))",
             ],
             &[],
+            0,
         );
     }
 
@@ -642,6 +657,8 @@ mod tests {
     // we'll need to see both since the condition gets passed through to the
     // final policy in the form of booleans and cil conditionals
     // For now, this confirms that conditionals parse correctly
+    // The warn count is currently 3 because of warnings that if blocks are unimplemented.  That
+    // will go to 0 once conditional policy is fully implemented
     #[test]
     fn conditional_test() {
         valid_policy_test(
@@ -650,6 +667,7 @@ mod tests {
             &[
                 "my_tunable", // Tunables don't get passed through to CIL
             ],
+            3,
         );
     }
 
@@ -659,6 +677,7 @@ mod tests {
             "default.cas",
             &["(call foo-read (foo bar))", "(call foo-read (foo baz))"],
             &[],
+            0,
         );
     }
 
@@ -666,22 +685,22 @@ mod tests {
     // after module implementation is complete.
     #[test]
     fn alias_module_test() {
-        valid_policy_test("module_alias.cas", &[], &[])
+        valid_policy_test("module_alias.cas", &[], &[], 0)
     }
 
     #[test]
     fn arguments_module_test() {
-        valid_policy_test("module_arguments.cas", &[], &[])
+        valid_policy_test("module_arguments.cas", &[], &[], 0)
     }
 
     #[test]
     fn simple_module_test() {
-        valid_policy_test("module_simple.cas", &[], &[])
+        valid_policy_test("module_simple.cas", &[], &[], 0)
     }
 
     #[test]
     fn machine_test() {
-        valid_policy_test("machines.cas", &["(handleunknown allow)"], &[]);
+        valid_policy_test("machines.cas", &["(handleunknown allow)"], &[], 0);
     }
 
     #[test]
@@ -694,6 +713,7 @@ mod tests {
                 "(macro foo-my_func ((type this) (type source)) (allow source this (file (read))))",
             ],
             &[],
+            0,
         );
     }
 
@@ -706,6 +726,7 @@ mod tests {
                 "(portcon udp 1235 (system_u object_r my_port ((s0) (s0))))",
             ],
             &[],
+            0,
         );
     }
 
@@ -859,7 +880,8 @@ mod tests {
         valid_policy_test("trait.cas", &["(macro baz-write ((type this) (type source)) (allow source this (file (write))))",
         "(macro foo-write ((type this) (type source)) (allow source this (dir (write))))",
         "(macro my_trait-write ((type this) (type source)) (allow source this (file (write))))",],
-        &["(macro foo-write ((type this) (type source)) (allow source this (file (write))))"])
+        &["(macro foo-write ((type this) (type source)) (allow source this (file (write))))"],
+        0,)
     }
 
     #[test]
@@ -870,6 +892,7 @@ mod tests {
             "(allow foo foo (capability2",
             "(macro foo-signal ((type this) (type source)) (allow source this (process (signal))))"],
             &["(allow foo domain (capability"],
+            0,
         )
     }
 
@@ -884,6 +907,7 @@ mod tests {
                 "(allow foo bar (file (all)))",
             ],
             &["(capabilty (mac_override", "(capability (wake_alarm"],
+            0,
         );
     }
 
@@ -898,7 +922,8 @@ mod tests {
         "(macro defaults-write ((type this) (type source)) (allow source this (dir (write))))",
         "(call associates-to_associate-some_associated_call",
         "(macro some_child-domtrans ((type this) (type source) (type exec)) (typetransition source exec process this))"],
-        &[]);
+        &[],
+        0);
     }
 
     // This is just a quick compile test.  The true purpose of these files is to actually boot in
@@ -1225,7 +1250,8 @@ mod tests {
                 "typeattributeset bar (baz)",
                 "typeattributeset domain (baz)",
             ],
-            &[]
+            &[],
+            0,
         );
     }
 
@@ -1235,6 +1261,7 @@ mod tests {
             "direct_association_reference.cas",
             &["foo-associated"],
             &["this.associated", "foo.associated", "this-associated"],
+            0,
         );
     }
 
@@ -1254,6 +1281,7 @@ mod tests {
                 "typeattributeset foo (baz)",
             ],
             &[],
+            0,
         );
     }
 
@@ -1274,7 +1302,7 @@ mod tests {
 
     #[test]
     fn valid_self() {
-        valid_policy_test("self.cas", &["allow qux self (file (read))"], &[]);
+        valid_policy_test("self.cas", &["allow qux self (file (read))"], &[], 0);
     }
 
     #[test]
@@ -1292,6 +1320,7 @@ mod tests {
                 "genfscon cgroup \"/\" (system_u object_r foo ((s0) (s0)))",
             ],
             &[],
+            0,
         );
     }
 
@@ -1329,6 +1358,7 @@ mod tests {
                 "(typetransition domain bar dir foo)",
             ],
             &[],
+            0,
         );
     }
 }

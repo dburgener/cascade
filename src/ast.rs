@@ -376,10 +376,19 @@ impl Virtualable for FuncDecl {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct IfBlock {
+    pub keyword_range: Range<usize>,
+    // TODO: boolean expression
+    // TODO: populate statments
+    pub if_statements: Vec<Statement>,
+    pub else_statements: Vec<Statement>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Statement {
     Call(Box<FuncCall>),
     LetBinding(Box<LetBinding>),
-    IfBlock, // TODO
+    IfBlock(Box<IfBlock>),
 }
 
 impl Statement {
@@ -387,7 +396,7 @@ impl Statement {
         match self {
             Statement::Call(c) => c.add_annotation(annotation),
             Statement::LetBinding(l) => l.add_annotation(annotation),
-            Statement::IfBlock => todo!(),
+            Statement::IfBlock(_) => todo!(),
         }
     }
 }
