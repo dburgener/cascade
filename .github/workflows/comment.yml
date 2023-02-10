@@ -15,13 +15,14 @@ jobs:
         # informationally check the latest as well.  We should
         # regularly update the known good once we know that tests
         # pass on it
-        # This needs to stay in sync with rust.yml minus 1.67
+        # This needs to stay in sync with rust.yml minus the known
+        # good clippy version
         rust-toolchain: [ stable, nightly ]
     if: >
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion == 'success'
     steps:
-      - name: 'Download artifact'
+      - name: 'Download clippy artifact'
         uses: actions/github-script@v6
         with:
           script: |
@@ -41,8 +42,30 @@ jobs:
             });
             var fs = require('fs');
             fs.writeFileSync('${{github.workspace}}/clippy-${{ matrix.rust-toolchain }}.zip', Buffer.from(download.data));
+      - name: 'Download test-nightly artifact'
+        uses: actions/github-script@v6
+        if: (matrix.rust-toolchain == 'nightly') }}
+        with:
+          script: |
+            var artifacts = await github.actions.listWorkflowRunArtifacts({
+               owner: context.repo.owner,
+               repo: context.repo.repo,
+               run_id: ${{github.event.workflow_run.id }},
+            });
+            var matchArtifact = artifacts.data.artifacts.filter((artifact) => {
+              return artifact.name == "test-${{ matrix.rust-toolchain }}"
+            })[0];
+            var download = await github.actions.downloadArtifact({
+               owner: context.repo.owner,
+               repo: context.repo.repo,
+               artifact_id: matchArtifact.id,
+               archive_format: 'zip',
+            });
+            var fs = require('fs');
+            fs.writeFileSync('${{github.workspace}}/test-${{ matrix.rust-toolchain }}.zip', Buffer.from(download.data));
       - run: unzip clippy-${{ matrix.rust-toolchain }}.zip
-
+      - if: (matrix.rust-toolchain == 'nightly')
+        run: unzip test-${{ matrix.rust-toolchain }}.zip
       - name: Notify clippy failure
         uses: actions/github-script@v6
         with:
@@ -57,5 +80,22 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 body: 'Stable clippy has failed for this run: ${{ matrix.rust-toolchain }}. A maintainer should check the logs. If known good clippy passed, this is non-fatal to the PR.'
+              })
+            }
+      - name: Notify nightly test failure
+        uses: actions/github-script@v6
+        if: (matrix.rust-toolchain == 'nightly')
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            var fs = require('fs');
+            var nightly_ret = Number(fs.readFileSync('./nightly_flag'));
+            var issue_number = Number(fs.readFileSync('./issue_num'));
+            if (nightly_ret != 0) {
+              github.rest.issues.createComment({
+                issue_number: issue_number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: 'Nightly test has failed for this run. A maintainer should check the logs. If known good clippy passed, this is non-fatal to the PR.'
               })
             }
