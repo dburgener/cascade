@@ -17,7 +17,7 @@ mod internal_rep;
 mod machine;
 mod obj_class;
 mod sexp_internal;
-mod warning;
+pub mod warning;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -26,6 +26,7 @@ use crate::context::{BlockType, Context};
 use crate::error::{CascadeErrors, InternalError, InvalidMachineError, ParseErrorMsg};
 use crate::functions::FunctionMap;
 use crate::machine::{MachineMap, ModuleMap, ValidatedMachine, ValidatedModule};
+pub use crate::warning::Warnings;
 
 use codespan_reporting::files::SimpleFile;
 use lalrpop_util::ParseError as LalrpopParseError;
@@ -41,7 +42,9 @@ lalrpop_mod!(#[allow(clippy::all)] pub parser);
 /// Returns a Result containing either a string of CIL policy which is the compiled result or a
 /// list of errors.
 /// In order to convert the compiled CIL policy into a usable policy, you must use secilc.
-pub fn compile_combined(input_files: Vec<&str>) -> Result<String, error::CascadeErrors> {
+pub fn compile_combined(
+    input_files: Vec<&str>,
+) -> Result<(String, Warnings), error::CascadeErrors> {
     let errors = CascadeErrors::new();
     let policies = get_policies(input_files)?;
     let mut res = compile_machine_policies_internal(policies, vec!["out".to_string()], true)?;
@@ -62,7 +65,7 @@ pub fn compile_combined(input_files: Vec<&str>) -> Result<String, error::Cascade
 pub fn compile_machine_policies(
     input_files: Vec<&str>,
     machine_names: Vec<String>,
-) -> Result<HashMap<String, String>, error::CascadeErrors> {
+) -> Result<HashMap<String, (String, Warnings)>, error::CascadeErrors> {
     let policies = get_policies(input_files)?;
     compile_machine_policies_internal(policies, machine_names, false)
 }
@@ -75,7 +78,7 @@ pub fn compile_machine_policies(
 /// In order to convert the compiled CIL policy into a usable policy, you must use secilc.
 pub fn compile_machine_policies_all(
     input_files: Vec<&str>,
-) -> Result<HashMap<String, String>, error::CascadeErrors> {
+) -> Result<HashMap<String, (String, Warnings)>, error::CascadeErrors> {
     let mut machine_names = Vec::new();
     let policies = get_policies(input_files)?;
     for p in &policies {
@@ -104,8 +107,11 @@ fn compile_machine_policies_internal(
     mut policies: Vec<PolicyFile>,
     machine_names: Vec<String>,
     create_default_machine: bool,
-) -> Result<HashMap<String, String>, error::CascadeErrors> {
+) -> Result<HashMap<String, (String, Warnings)>, error::CascadeErrors> {
     let mut errors = CascadeErrors::new();
+    // This will need to be mutable as we add more warnings
+    #[allow(unused_mut)]
+    let mut warnings = Warnings::new();
 
     // Generic initialization
     let classlist = obj_class::make_classlist();
@@ -241,6 +247,7 @@ fn compile_machine_policies_internal(
 
     let mut machine_hashmap = HashMap::new();
     for machine_name in machine_names {
+        let mut machine_warnings = warnings.clone();
         match machine_map.get(&machine_name) {
             Some(machine) => {
                 let machine_cil_tree = compile::get_reduced_infos(
@@ -254,7 +261,7 @@ fn compile_machine_policies_internal(
 
                 let machine_cil = generate_cil(machine_cil_tree);
 
-                machine_hashmap.insert(machine_name, machine_cil);
+                machine_hashmap.insert(machine_name, (machine_cil, machine_warnings));
             }
             None => errors.append(CascadeErrors::from(InvalidMachineError::new(&format!(
                 "Machine {} does not exist.\nThe valid machines are {}",
@@ -374,7 +381,7 @@ mod tests {
             };
 
             // TODO: Make compile_machine_policy() take an iterator of AsRef<Path>.
-            let cil_gen = match compile_combined(vec![&policy_path.to_string_lossy()]) {
+            let (cil_gen, _) = match compile_combined(vec![&policy_path.to_string_lossy()]) {
                 Ok(c) => c,
                 Err(e) => match fs::read_to_string(&cil_path) {
                     Ok(_) => panic!(
@@ -408,7 +415,7 @@ mod tests {
 
     fn valid_policy_test(filename: &str, expected_contents: &[&str], disallowed_contents: &[&str]) {
         let policy_file = [POLICIES_DIR, filename].concat();
-        let policy_contents = match compile_combined(vec![&policy_file]) {
+        let (policy_contents, warnings) = match compile_combined(vec![&policy_file]) {
             Ok(p) => p,
             Err(e) => panic!("Compilation of {} failed with {}", filename, e),
         };
@@ -426,6 +433,9 @@ mod tests {
                 query
             );
         }
+
+        assert!(warnings.is_empty());
+
         let file_out_path = &[filename, "_test.cil"].concat();
         let cil_out_path = &[filename, "_test_out_policy"].concat();
         let mut out_file = fs::File::create(file_out_path).unwrap();
@@ -447,6 +457,7 @@ mod tests {
         }
         assert!(!err, "Error removing generated policy files");
     }
+
     macro_rules! error_policy_test {
         ($filename:literal, $expected_error_count:literal, $error_pattern:pat_param $(if $guard:expr)?) => {
             let policy_file = [ERROR_POLICIES_DIR, $filename].concat();
@@ -729,7 +740,7 @@ mod tests {
 
         for files in [policy_files, policy_files_reversed] {
             match compile_combined(files) {
-                Ok(p) => {
+                Ok((p, _)) => {
                     assert!(p.contains("(call foo-read"));
                     policies.push(p);
                 }
@@ -755,7 +766,7 @@ mod tests {
             Ok(hashmap) => {
                 assert_eq!(hashmap.len(), 2);
 
-                for (machine_name, machine_cil) in hashmap.iter() {
+                for (machine_name, (machine_cil, warnings)) in hashmap.iter() {
                     if machine_name == "foo" {
                         assert!(machine_cil.contains("(handleunknown reject)"));
                         assert!(machine_cil.contains("(allow thud babble (file (read)))"));
@@ -779,6 +790,8 @@ mod tests {
                         assert!(!machine_cil.contains("(type xyzzy)"));
                         assert!(!machine_cil.contains("(type unused)"));
                     }
+
+                    assert!(warnings.is_empty());
                 }
             }
             Err(e) => panic!("Machine building compilation failed with {}", e),
@@ -798,7 +811,7 @@ mod tests {
         match res {
             Ok(hashmap) => {
                 assert_eq!(hashmap.len(), 3);
-                for (machine_name, machine_cil) in hashmap.iter() {
+                for (machine_name, (machine_cil, warnings)) in hashmap.iter() {
                     if machine_name == "foo" {
                         assert!(machine_cil.contains("(handleunknown reject)"));
                         assert!(machine_cil.contains("(allow thud babble (file (read)))"));
@@ -832,6 +845,7 @@ mod tests {
                         assert!(!machine_cil.contains("(type quuz)"));
                         assert!(!machine_cil.contains("(type qux)"));
                     }
+                    assert!(warnings.is_empty());
                 }
             }
             Err(e) => panic!("Machine building compilation failed with {}", e),
