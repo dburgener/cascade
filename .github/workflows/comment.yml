@@ -44,7 +44,7 @@ jobs:
             fs.writeFileSync('${{github.workspace}}/clippy-${{ matrix.rust-toolchain }}.zip', Buffer.from(download.data));
       - name: 'Download test-nightly artifact'
         uses: actions/github-script@v6
-        if: (matrix.rust-toolchain == 'nightly') }}
+        if: (matrix.rust-toolchain == 'nightly')
         with:
           script: |
             var artifacts = await github.actions.listWorkflowRunArtifacts({
