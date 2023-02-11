@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 use sexp::{atom_s, list, Atom, Sexp};
 
-use std::borrow::Cow;
+use std::borrow::{Borrow, Cow};
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryFrom;
@@ -1772,6 +1772,9 @@ impl fmt::Display for FunctionArgument<'_> {
     }
 }
 
+// This seems to be a false positive on clippy's part
+// When I remove the return things don't compile correctly
+#[allow(clippy::needless_return)]
 fn validate_cast(
     // Initial type we are casting from
     start_type: &CascadeString,
@@ -1787,6 +1790,15 @@ fn validate_cast(
     // File used for error output
     file: Option<&SimpleFile<String, String>>,
 ) -> Result<(), ErrorItem> {
+    let err_ret = |r: Option<Range<usize>>| {
+        ErrorItem::make_compile_or_internal_error(
+            "Cannot typecast",
+            file,
+            r,
+            "This is not something that can be typecast",
+        )
+    };
+
     let type_info = types.get(start_type.as_ref());
     if type_info.is_none()
         && !context
@@ -1794,17 +1806,15 @@ fn validate_cast(
             .map(|ti| ti.is_setype(types))
             .unwrap_or(false)
     {
-        return Err(ErrorItem::make_compile_or_internal_error(
-            "Cannot typecast",
-            file,
-            start_type.get_range(),
-            "This is not something that can be typecast",
-        ));
+        return Err(err_ret(start_type.get_range()));
     }
     match (cast_ti, func_call) {
         (Some(cast_type_info), Some(func_call_info)) => {
             // TODO add additional checks.  Also add cases which we will allow casting even if the casting type isn't a parent.
             validate_inheritance(func_call_info, type_info, &cast_type_info.name, file)
+        }
+        (None, _) => {
+            return Err(err_ret(start_type.get_range()));
         }
         (_, _) => Ok(()),
     }
@@ -2091,16 +2101,7 @@ impl ValidatedCall {
                     tmp_str
                 }
             }
-            None => {
-                // If we have a cast name but no class name that means we are really
-                // looking for the cast's function so append the cast's name
-                // to the function to find the correct one.
-                if let Some(cast_name) = &call.cast_name {
-                    cast_name.to_string() + "-" + &call.get_cil_name()
-                } else {
-                    call.get_cil_name()
-                }
-            }
+            None => get_cil_name(call.cast_name.as_ref(), &call.name),
         };
         let function_info = match functions.get(&cil_name) {
             Some(function_info) => function_info,
@@ -2388,6 +2389,7 @@ impl<'a> ArgForValidation<'a> {
     // complicated, so ensuring we'll have the ability to use it in the future seems worthwhile
     fn validate_argcast(
         &self,
+        cast_ti: &TypeInstance,
         types: &TypeMap,
         context: &BlockContext<'a>,
         file: Option<&SimpleFile<String, String>>,
@@ -2401,14 +2403,37 @@ impl<'a> ArgForValidation<'a> {
             )
         };
 
+        if !matches!(cast_ti.instance_value, TypeValue::SEType(_)) {
+            return Err(ErrorItem::make_compile_or_internal_error(
+                "Not something we can cast to",
+                file,
+                self.get_range(),
+                "This must be a domain, resource or trait that exists in this policy",
+            ));
+        }
+
         match self {
             ArgForValidation::Var(s) => {
-                return validate_cast(s, None, None, types, context, file);
+                return validate_cast(
+                    s,
+                    Some(cast_ti.type_info.borrow()),
+                    None,
+                    types,
+                    context,
+                    file,
+                );
             }
             ArgForValidation::List(v) => {
                 for s in v {
                     // TODO: report more than just the first error
-                    validate_cast(s, None, None, types, context, file)?;
+                    validate_cast(
+                        s,
+                        Some(cast_ti.type_info.borrow()),
+                        None,
+                        types,
+                        context,
+                        file,
+                    )?;
                 }
             }
             ArgForValidation::Quote(inner) => {
@@ -2451,15 +2476,7 @@ fn validate_argument<'a>(
             file,
             is_avc,
         )?;
-        if !matches!(cast_ti.instance_value, TypeValue::SEType(_)) {
-            return Err(ErrorItem::make_compile_or_internal_error(
-                "Not something we can cast to",
-                file,
-                cast_name.get_range(),
-                "This must be a domain, resource or trait that exists in this policy",
-            ));
-        }
-        arg.validate_argcast(types, context, file)?;
+        arg.validate_argcast(&cast_ti, types, context, file)?;
 
         return Ok(TypeInstance::new_cast_instance(
             &arg,

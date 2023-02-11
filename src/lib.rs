@@ -1365,31 +1365,16 @@ mod tests {
         error_policy_test!("parent_call.cas", 4, ErrorItem::Compile(_));
     }
 
-    // TODO add back in when casting becomes more robust
-    /*
     #[test]
     fn valid_parent_call() {
         valid_policy_test(
             "parent_call.cas",
             &[
                 "call bar-read (foo dom)",
-                "call xyz-read (xyz qwe)",
-                "call abc-read (abc asd)",
                 "macro xyz-read ((type this) (type source)) (call abc-read (abc source))",
             ],
             &["call foo-read (foo dom)", "call foo-read (bar dom)"],
             0,
-        );
-    } */
-    #[test]
-    fn valid_parent_call() {
-        valid_policy_test(
-            "parent_call.cas",
-            &[
-                "call bar-read (foo dom)",
-                "macro xyz-read ((type this) (type source)) (call abc-read (abc source))",
-            ],
-            &["call foo-read (foo dom)", "call foo-read (bar dom)"],
         );
     }
 }
