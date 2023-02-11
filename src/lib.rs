@@ -480,6 +480,9 @@ mod tests {
     }
 
     #[test]
+    // assert! has a format! macro in it, clippy gets confused about this.
+    // Since this is testing code suppress.
+    #[allow(clippy::uninlined_format_args)]
     fn basic_expression_parse_test() {
         let mut errors = Vec::new();
         let res = parser::ExprParser::new().parse(&mut errors, "domain foo {}");
@@ -500,19 +503,22 @@ mod tests {
         for name in &["a", "a_a", "a_a_a", "a_aa_a", "a0", "a_0", "a0_00"] {
             let _: ast::CascadeString = parser::NameDeclParser::new()
                 .parse(&mut errors, name)
-                .expect(&format!("failed to validate `{}`", name));
+                .expect(&format!("failed to validate `{name}`"));
         }
         for name in &[
             "0", "0a", "_", "_a", "a_", "a_a_", "a__a", "a__a_a", "a_a___a", "-", "a-a",
         ] {
             let _: LalrpopParseError<_, _, _> = parser::NameDeclParser::new()
                 .parse(&mut errors, name)
-                .expect_err(&format!("successfully validated invalid `{}`", name));
+                .expect_err(&format!("successfully validated invalid `{name}`"));
         }
         assert_eq!(errors.len(), 0)
     }
 
     #[test]
+    // assert! has a format! macro in it, clippy gets confused about this.
+    // Since this is testing code suppress.
+    #[allow(clippy::uninlined_format_args)]
     fn basic_policy_parse_test() {
         let mut errors = Vec::new();
         let policy_file = [POLICIES_DIR, "tmp_file.cas"].concat();
@@ -782,7 +788,7 @@ mod tests {
         let policy_files: Vec<&str> = policy_files.iter().map(|s| s as &str).collect();
         let machine_names = vec!["foo".to_string(), "bar".to_string()];
 
-        let res = compile_machine_policies(policy_files, machine_names.clone());
+        let res = compile_machine_policies(policy_files, machine_names);
         match res {
             Ok(hashmap) => {
                 assert_eq!(hashmap.len(), 2);
@@ -1148,7 +1154,7 @@ mod tests {
         let policy_files: Vec<&str> = policy_files.iter().map(|s| s as &str).collect();
         let machine_names = vec!["baz".to_string()];
 
-        let res = compile_machine_policies(policy_files, machine_names.clone());
+        let res = compile_machine_policies(policy_files, machine_names);
         match res {
             Ok(_) => panic!("Compiled successfully"),
             Err(e) => {
