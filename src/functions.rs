@@ -22,7 +22,7 @@ use crate::context::Context as BlockContext;
 use crate::error::{CascadeErrors, CompileError, ErrorItem, InternalError};
 use crate::internal_rep::{
     convert_class_name_if_this, type_name_from_string, typeinfo_from_string, Annotated,
-    AnnotationInfo, BoundTypeInfo, ClassList, Context, TypeInfo, TypeInstance, TypeMap, TypeValue,
+    AnnotationInfo, BoundTypeInfo, ClassList, Context, TypeInfo, TypeInstance, TypeMap,
 };
 use crate::obj_class::perm_list_to_sexp;
 use crate::warning::{Warning, Warnings, WithWarnings};
@@ -1799,6 +1799,17 @@ fn validate_cast(
         )
     };
 
+    if let Some(cast_ti_unwrap) = cast_ti {
+        if !cast_ti_unwrap.is_setype(types) {
+            return Err(ErrorItem::make_compile_or_internal_error(
+                "Not something we can cast to",
+                file,
+                cast_ti_unwrap.name.get_range(),
+                "This must be a domain, resource or trait that exists in this policy",
+            ));
+        }
+    }
+
     let type_info = types.get(start_type.as_ref());
     if type_info.is_none()
         && !context
@@ -2402,15 +2413,6 @@ impl<'a> ArgForValidation<'a> {
                 "This is not something that can be typecast",
             )
         };
-
-        if !matches!(cast_ti.instance_value, TypeValue::SEType(_)) {
-            return Err(ErrorItem::make_compile_or_internal_error(
-                "Not something we can cast to",
-                file,
-                self.get_range(),
-                "This must be a domain, resource or trait that exists in this policy",
-            ));
-        }
 
         match self {
             ArgForValidation::Var(s) => {
