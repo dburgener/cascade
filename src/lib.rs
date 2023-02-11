@@ -480,9 +480,6 @@ mod tests {
     }
 
     #[test]
-    // assert! has a format! macro in it, clippy gets confused about this.
-    // Since this is testing code suppress.
-    #[allow(clippy::uninlined_format_args)]
     fn basic_expression_parse_test() {
         let mut errors = Vec::new();
         let res = parser::ExprParser::new().parse(&mut errors, "domain foo {}");
@@ -516,9 +513,6 @@ mod tests {
     }
 
     #[test]
-    // assert! has a format! macro in it, clippy gets confused about this.
-    // Since this is testing code suppress.
-    #[allow(clippy::uninlined_format_args)]
     fn basic_policy_parse_test() {
         let mut errors = Vec::new();
         let policy_file = [POLICIES_DIR, "tmp_file.cas"].concat();
