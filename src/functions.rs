@@ -1772,9 +1772,6 @@ impl fmt::Display for FunctionArgument<'_> {
     }
 }
 
-// This seems to be a false positive on clippy's part
-// When I remove the return things don't compile correctly
-#[allow(clippy::needless_return)]
 fn validate_cast(
     // Initial type we are casting from
     start_type: &CascadeString,
@@ -1824,9 +1821,7 @@ fn validate_cast(
             // TODO add additional checks.  Also add cases which we will allow casting even if the casting type isn't a parent.
             validate_inheritance(func_call_info, type_info, &cast_type_info.name, file)
         }
-        (None, _) => {
-            return Err(err_ret(start_type.get_range()));
-        }
+        (None, _) => Err(err_ret(start_type.get_range())),
         (_, _) => Ok(()),
     }
 }
@@ -1846,7 +1841,7 @@ fn validate_inheritance(
                     "Invalid Parent",
                     file,
                     call.get_name_range(),
-                    "Resource does not inherit from given parent",
+                    "Type does not inherit from given parent",
                 ));
             }
         }
@@ -2096,6 +2091,12 @@ impl ValidatedCall {
         context: &BlockContext,
         file: &SimpleFile<String, String>,
     ) -> Result<ValidatedCall, CascadeErrors> {
+        // If we have gotten into the state where the class name is none
+        // but the cast_name is some, something has gone wrong.
+        if call.class_name.is_none() && call.cast_name.is_some() {
+            return Err(ErrorItem::Internal(InternalError::new()).into());
+        }
+
         let cil_name = match &call.class_name {
             Some(class_name) => {
                 // Resolve aliases
@@ -2107,7 +2108,7 @@ impl ValidatedCall {
                 };
                 // If we have a cast name we really want to call that instead.
                 if let Some(cast_name) = &call.cast_name {
-                    tmp_str.replace(&class_name.to_string(), cast_name.to_string().as_ref())
+                    tmp_str.replacen(&class_name.to_string(), cast_name.to_string().as_ref(), 1)
                 } else {
                     tmp_str
                 }
@@ -2155,12 +2156,7 @@ impl ValidatedCall {
             Some(class_name) => {
                 vec![convert_class_name_if_this(class_name, parent_type)?.get_cil_name()]
             }
-            None => match &call.cast_name {
-                Some(cast_name) => {
-                    vec![convert_class_name_if_this(cast_name, parent_type)?.get_cil_name()]
-                }
-                None => Vec::new(),
-            },
+            None => Vec::new(),
         };
 
         for arg in validate_arguments(
