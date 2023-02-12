@@ -866,6 +866,7 @@ impl<'a> ClassList<'a> {
         permission: &CascadeString,
         context: &BlockContext<'_>,
         file: &SimpleFile<String, String>,
+        original_class: Option<&CascadeString>,
     ) -> Result<(), ErrorItem> {
         let resolved_class = context.get_name_or_string(class);
         let class = resolved_class.as_ref().unwrap_or(class);
@@ -888,11 +889,11 @@ impl<'a> ClassList<'a> {
         }
 
         // get_list may return a list of one item
-        let perm_vec = context.get_list(permission.as_ref());
+        let perm_vec = context.get_list(permission);
         if perm_vec.first() != Some(permission) {
             // We resolved to something other than what was passed in
             for p in perm_vec {
-                self.verify_permission(class, &p.as_ref().into(), context, file)?;
+                self.verify_permission(class, &p.as_ref().into(), context, file, None)?;
             }
             return Ok(());
         }
@@ -912,14 +913,14 @@ impl<'a> ClassList<'a> {
                     Some(range) => CascadeString::new(s.to_string(), range),
                     None => CascadeString::from(s.to_string()),
                 };
-                return self.verify_permission(&hll_string, permission, context, file);
+                return self.verify_permission(&hll_string, permission, context, file, Some(class));
             }
 
             Err(ErrorItem::make_compile_or_internal_error(
                 &format!(
                     "Permission {} is not defined for object class {}",
                     permission.as_ref(),
-                    class.as_ref()
+                    original_class.unwrap_or(class).as_ref(),
                 ),
                 Some(file),
                 permission.get_range(),
@@ -957,7 +958,7 @@ impl<'a> ClassList<'a> {
     ) -> Vec<CascadeString> {
         let mut ret = Vec::new();
         for p in perms {
-            let pset = context.get_list(p.as_ref());
+            let pset = context.get_list(p);
             if pset.first() != Some(p) {
                 let pset_strings: Vec<CascadeString> = pset
                     .iter()
@@ -1055,7 +1056,7 @@ impl<'a> TypeInstance<'a> {
             TypeValue::Vector(v) => {
                 let mut out_vec = Vec::new();
                 for item in v {
-                    out_vec.extend(context.get_list(item.as_ref()));
+                    out_vec.extend(context.get_list(item));
                 }
                 Ok(out_vec)
             }
@@ -1248,21 +1249,22 @@ mod tests {
         classlist.add_class("process2", vec!["foo"]);
 
         assert!(classlist
-            .verify_permission(&"foo".into(), &"bar".into(), &context, &fake_file)
+            .verify_permission(&"foo".into(), &"bar".into(), &context, &fake_file, None)
             .is_ok());
         assert!(classlist
-            .verify_permission(&"foo".into(), &"baz".into(), &context, &fake_file)
+            .verify_permission(&"foo".into(), &"baz".into(), &context, &fake_file, None)
             .is_ok());
         assert!(classlist
             .verify_permission(
                 &"capability".into(),
                 &"cap_bar".into(),
                 &context,
-                &fake_file
+                &fake_file,
+                None
             )
             .is_ok());
         assert!(classlist
-            .verify_permission(&"process".into(), &"foo".into(), &context, &fake_file)
+            .verify_permission(&"process".into(), &"foo".into(), &context, &fake_file, None)
             .is_ok());
 
         match classlist.verify_permission(
@@ -1270,6 +1272,7 @@ mod tests {
             &CascadeString::new("baz".to_string(), 0..1),
             &context,
             &fake_file,
+            None,
         ) {
             Ok(_) => panic!("Nonexistent class verified"),
             Err(e) => {
@@ -1286,6 +1289,7 @@ mod tests {
             &CascadeString::new("cap_bar".to_string(), 0..1),
             &context,
             &fake_file,
+            None,
         ) {
             Ok(_) => panic!("Nonexistent permission verified"),
             Err(e) => {

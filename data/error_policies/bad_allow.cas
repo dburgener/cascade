@@ -4,4 +4,6 @@ domain foo {
 	allow(this);
 	allow(this, bar, [file dir], [read write]);
 	allow(this, bar, file, bad_perm);
+	allow(this, this<resource>, capability, [ read write ]);
+	allow(this, this<resource>, capability2, [ read ]);
 }

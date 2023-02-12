@@ -139,15 +139,17 @@ impl<'a> Context<'a> {
         }
     }
 
-    pub fn get_list(&self, arg: &str) -> Vec<CascadeString> {
-        match self.get_symbol(arg) {
+    pub fn get_list(&self, arg: &CascadeString) -> Vec<CascadeString> {
+        match self.get_symbol(arg.as_ref()) {
             Some(BindableObject::TypeList(tl)) => tl.iter().map(|t| t.name.clone()).collect(),
             Some(BindableObject::PermList(l)) | Some(BindableObject::ClassList(l)) => {
                 l.iter().map(|i| CascadeString::from(i as &str)).collect()
             }
             // Unwrap() is safe here because all of the get_name_or_string() None cases are handled
             // in get_list()
-            _ => vec![self.get_name_or_string(&CascadeString::from(arg)).unwrap()],
+            _ => {
+                vec![self.get_name_or_string(arg).unwrap()]
+            }
         }
     }
 
@@ -182,13 +184,13 @@ impl<'a> Context<'a> {
             }
             BindableObject::PermList(p) => BindableObject::PermList(
                 p.iter()
-                    .flat_map(|s| self.get_list(s.as_ref()))
+                    .flat_map(|s| self.get_list(&CascadeString::from(s.clone())))
                     .map(|s| s.to_string())
                     .collect(),
             ),
             BindableObject::ClassList(c) => BindableObject::ClassList(
                 c.iter()
-                    .flat_map(|s| self.get_list(s.as_ref()))
+                    .flat_map(|s| self.get_list(&CascadeString::from(s.clone())))
                     .map(|s| s.to_string())
                     .collect(),
             ),
@@ -196,7 +198,10 @@ impl<'a> Context<'a> {
                 match self.get_name_or_string(&CascadeString::from(&c as &str)) {
                     Some(s) => BindableObject::Class(s.to_string()),
                     None => BindableObject::ClassList(
-                        self.get_list(&c).iter().map(|s| s.to_string()).collect(),
+                        self.get_list(&CascadeString::from(&c as &str))
+                            .iter()
+                            .map(|s| s.to_string())
+                            .collect(),
                     ),
                 }
             }
