@@ -6,7 +6,7 @@ virtual resource bar {
 
 virtual resource zap {
 	fn write(domain source) {
-		allow(source, this, file, read);
+		allow(source, this, file, write);
 	}
 }
 
