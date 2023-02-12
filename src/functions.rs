@@ -256,7 +256,7 @@ fn call_to_av_rule<'a>(
     }
 
     for p in &perms {
-        class_perms.verify_permission(&class, p, context, file)?;
+        class_perms.verify_permission(&class, p, context, file, None)?;
     }
 
     let perms = ClassList::expand_perm_list(perms.iter().collect(), context);
