@@ -430,21 +430,21 @@ impl FuncCall {
         n: CascadeString,
         a: Vec<(Argument, Option<CascadeString>)>,
     ) -> FuncCall {
-        if let Some(some_cn) = cn {
-            return FuncCall {
-                class_name: Some(some_cn.0),
-                cast_name: some_cn.1,
+        match cn {
+            Some(cn) => FuncCall {
+                class_name: Some(cn.0),
+                cast_name: cn.1,
                 name: n,
                 args: a,
                 annotations: Annotations::new(),
-            };
-        }
-        FuncCall {
-            class_name: None,
-            cast_name: None,
-            name: n,
-            args: a,
-            annotations: Annotations::new(),
+            },
+            None => FuncCall {
+                class_name: None,
+                cast_name: None,
+                name: n,
+                args: a,
+                annotations: Annotations::new(),
+            },
         }
     }
 

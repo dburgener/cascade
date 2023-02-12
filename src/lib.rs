@@ -1371,6 +1371,7 @@ mod tests {
             "parent_call.cas",
             &[
                 "call bar-read (foo dom)",
+                "call bar-foobar (foo dom)",
                 "macro xyz-read ((type this) (type source)) (call abc-read (abc source))",
             ],
             &["call foo-read (foo dom)", "call foo-read (bar dom)"],
