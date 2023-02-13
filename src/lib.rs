@@ -17,6 +17,7 @@ mod internal_rep;
 mod machine;
 mod obj_class;
 mod sexp_internal;
+pub mod warning;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -25,6 +26,7 @@ use crate::context::{BlockType, Context};
 use crate::error::{CascadeErrors, InternalError, InvalidMachineError, ParseErrorMsg};
 use crate::functions::FunctionMap;
 use crate::machine::{MachineMap, ModuleMap, ValidatedMachine, ValidatedModule};
+pub use crate::warning::Warnings;
 
 use codespan_reporting::files::SimpleFile;
 use lalrpop_util::ParseError as LalrpopParseError;
@@ -40,7 +42,9 @@ lalrpop_mod!(#[allow(clippy::all)] pub parser);
 /// Returns a Result containing either a string of CIL policy which is the compiled result or a
 /// list of errors.
 /// In order to convert the compiled CIL policy into a usable policy, you must use secilc.
-pub fn compile_combined(input_files: Vec<&str>) -> Result<String, error::CascadeErrors> {
+pub fn compile_combined(
+    input_files: Vec<&str>,
+) -> Result<(String, Warnings), error::CascadeErrors> {
     let errors = CascadeErrors::new();
     let policies = get_policies(input_files)?;
     let mut res = compile_machine_policies_internal(policies, vec!["out".to_string()], true)?;
@@ -61,7 +65,7 @@ pub fn compile_combined(input_files: Vec<&str>) -> Result<String, error::Cascade
 pub fn compile_machine_policies(
     input_files: Vec<&str>,
     machine_names: Vec<String>,
-) -> Result<HashMap<String, String>, error::CascadeErrors> {
+) -> Result<HashMap<String, (String, Warnings)>, error::CascadeErrors> {
     let policies = get_policies(input_files)?;
     compile_machine_policies_internal(policies, machine_names, false)
 }
@@ -74,7 +78,7 @@ pub fn compile_machine_policies(
 /// In order to convert the compiled CIL policy into a usable policy, you must use secilc.
 pub fn compile_machine_policies_all(
     input_files: Vec<&str>,
-) -> Result<HashMap<String, String>, error::CascadeErrors> {
+) -> Result<HashMap<String, (String, Warnings)>, error::CascadeErrors> {
     let mut machine_names = Vec::new();
     let policies = get_policies(input_files)?;
     for p in &policies {
@@ -103,8 +107,11 @@ fn compile_machine_policies_internal(
     mut policies: Vec<PolicyFile>,
     machine_names: Vec<String>,
     create_default_machine: bool,
-) -> Result<HashMap<String, String>, error::CascadeErrors> {
+) -> Result<HashMap<String, (String, Warnings)>, error::CascadeErrors> {
     let mut errors = CascadeErrors::new();
+    // This will need to be mutable as we add more warnings
+    #[allow(unused_mut)]
+    let mut warnings = Warnings::new();
 
     // Generic initialization
     let classlist = obj_class::make_classlist();
@@ -240,6 +247,7 @@ fn compile_machine_policies_internal(
 
     let mut machine_hashmap = HashMap::new();
     for machine_name in machine_names {
+        let mut machine_warnings = warnings.clone();
         match machine_map.get(&machine_name) {
             Some(machine) => {
                 let machine_cil_tree = compile::get_reduced_infos(
@@ -249,11 +257,12 @@ fn compile_machine_policies_internal(
                     &type_map,
                     &module_map,
                     &global_context,
-                )?;
+                )?
+                .inner(&mut machine_warnings);
 
                 let machine_cil = generate_cil(machine_cil_tree);
 
-                machine_hashmap.insert(machine_name, machine_cil);
+                machine_hashmap.insert(machine_name, (machine_cil, machine_warnings));
             }
             None => errors.append(CascadeErrors::from(InvalidMachineError::new(&format!(
                 "Machine {} does not exist.\nThe valid machines are {}",
@@ -373,7 +382,7 @@ mod tests {
             };
 
             // TODO: Make compile_machine_policy() take an iterator of AsRef<Path>.
-            let cil_gen = match compile_combined(vec![&policy_path.to_string_lossy()]) {
+            let (cil_gen, _) = match compile_combined(vec![&policy_path.to_string_lossy()]) {
                 Ok(c) => c,
                 Err(e) => match fs::read_to_string(&cil_path) {
                     Ok(_) => panic!(
@@ -405,9 +414,14 @@ mod tests {
         assert!(count > 9);
     }
 
-    fn valid_policy_test(filename: &str, expected_contents: &[&str], disallowed_contents: &[&str]) {
+    fn valid_policy_test(
+        filename: &str,
+        expected_contents: &[&str],
+        disallowed_contents: &[&str],
+        expected_warn_count: usize,
+    ) {
         let policy_file = [POLICIES_DIR, filename].concat();
-        let policy_contents = match compile_combined(vec![&policy_file]) {
+        let (policy_contents, warnings) = match compile_combined(vec![&policy_file]) {
             Ok(p) => p,
             Err(e) => panic!("Compilation of {} failed with {}", filename, e),
         };
@@ -425,6 +439,9 @@ mod tests {
                 query
             );
         }
+
+        assert_eq!(warnings.count(), expected_warn_count);
+
         let file_out_path = &[filename, "_test.cil"].concat();
         let cil_out_path = &[filename, "_test_out_policy"].concat();
         let mut out_file = fs::File::create(file_out_path).unwrap();
@@ -446,6 +463,7 @@ mod tests {
         }
         assert!(!err, "Error removing generated policy files");
     }
+
     macro_rules! error_policy_test {
         ($filename:literal, $expected_error_count:literal, $error_pattern:pat_param $(if $guard:expr)?) => {
             let policy_file = [ERROR_POLICIES_DIR, $filename].concat();
@@ -482,14 +500,14 @@ mod tests {
         for name in &["a", "a_a", "a_a_a", "a_aa_a", "a0", "a_0", "a0_00"] {
             let _: ast::CascadeString = parser::NameDeclParser::new()
                 .parse(&mut errors, name)
-                .expect(&format!("failed to validate `{}`", name));
+                .expect(&format!("failed to validate `{name}`"));
         }
         for name in &[
             "0", "0a", "_", "_a", "a_", "a_a_", "a__a", "a__a_a", "a_a___a", "-", "a-a",
         ] {
             let _: LalrpopParseError<_, _, _> = parser::NameDeclParser::new()
                 .parse(&mut errors, name)
-                .expect_err(&format!("successfully validated invalid `{}`", name));
+                .expect_err(&format!("successfully validated invalid `{name}`"));
         }
         assert_eq!(errors.len(), 0)
     }
@@ -516,12 +534,13 @@ mod tests {
                 "typeattributeset domain (user_type)",
             ],
             &[],
+            0,
         );
     }
 
     #[test]
     fn simple_policy_build_test() {
-        valid_policy_test("simple.cas", &[], &[]);
+        valid_policy_test("simple.cas", &[], &[], 0);
     }
 
     #[test]
@@ -530,17 +549,18 @@ mod tests {
             "function.cas",
             &["macro my_file-read", "call my_file-read", "allow source"],
             &[],
+            0,
         );
     }
 
     #[test]
     fn auditallow_test() {
-        valid_policy_test("auditallow.cas", &["auditallow my_domain foo"], &[]);
+        valid_policy_test("auditallow.cas", &["auditallow my_domain foo"], &[], 0);
     }
 
     #[test]
     fn dontaudit_test() {
-        valid_policy_test("dontaudit.cas", &["(dontaudit my_domain foo"], &[]);
+        valid_policy_test("dontaudit.cas", &["(dontaudit my_domain foo"], &[], 0);
     }
 
     #[test]
@@ -549,6 +569,7 @@ mod tests {
             "arguments.cas",
             &["(macro foo-some_func ((type this) (name a) (name b) (type c) (type d))"],
             &[],
+            0,
         );
     }
 
@@ -562,6 +583,7 @@ mod tests {
                 "(filecon \"/etc\" any (",
             ],
             &[],
+            0,
         );
     }
 
@@ -571,6 +593,7 @@ mod tests {
             "domtrans.cas",
             &["typetransition bar foo_exec process foo"],
             &[],
+            0,
         );
     }
 
@@ -580,6 +603,7 @@ mod tests {
             "let.cas",
             &["(allow foo bar (file (read open getattr)))"],
             &[],
+            0,
         );
     }
 
@@ -589,6 +613,7 @@ mod tests {
             "virtual_function.cas",
             &["macro foo-foo"],
             &["macro foo_parent-foo"],
+            0,
         );
     }
 
@@ -607,6 +632,7 @@ mod tests {
                 "macro baz-list",
             ],
             &[],
+            0,
         )
     }
 
@@ -619,6 +645,7 @@ mod tests {
                 "(call some_domain-three_args (some_domain foo bar baz))",
             ],
             &[],
+            0,
         );
     }
 
@@ -630,6 +657,8 @@ mod tests {
     // we'll need to see both since the condition gets passed through to the
     // final policy in the form of booleans and cil conditionals
     // For now, this confirms that conditionals parse correctly
+    // The warn count is currently 3 because of warnings that if blocks are unimplemented.  That
+    // will go to 0 once conditional policy is fully implemented
     #[test]
     fn conditional_test() {
         valid_policy_test(
@@ -638,6 +667,7 @@ mod tests {
             &[
                 "my_tunable", // Tunables don't get passed through to CIL
             ],
+            3,
         );
     }
 
@@ -647,6 +677,7 @@ mod tests {
             "default.cas",
             &["(call foo-read (foo bar))", "(call foo-read (foo baz))"],
             &[],
+            0,
         );
     }
 
@@ -654,22 +685,22 @@ mod tests {
     // after module implementation is complete.
     #[test]
     fn alias_module_test() {
-        valid_policy_test("module_alias.cas", &[], &[])
+        valid_policy_test("module_alias.cas", &[], &[], 0)
     }
 
     #[test]
     fn arguments_module_test() {
-        valid_policy_test("module_arguments.cas", &[], &[])
+        valid_policy_test("module_arguments.cas", &[], &[], 0)
     }
 
     #[test]
     fn simple_module_test() {
-        valid_policy_test("module_simple.cas", &[], &[])
+        valid_policy_test("module_simple.cas", &[], &[], 0)
     }
 
     #[test]
     fn machine_test() {
-        valid_policy_test("machines.cas", &["(handleunknown allow)"], &[]);
+        valid_policy_test("machines.cas", &["(handleunknown allow)"], &[], 0);
     }
 
     #[test]
@@ -682,6 +713,7 @@ mod tests {
                 "(macro foo-my_func ((type this) (type source)) (allow source this (file (read))))",
             ],
             &[],
+            0,
         );
     }
 
@@ -694,6 +726,7 @@ mod tests {
                 "(portcon udp 1235 (system_u object_r my_port ((s0) (s0))))",
             ],
             &[],
+            0,
         );
     }
 
@@ -728,7 +761,7 @@ mod tests {
 
         for files in [policy_files, policy_files_reversed] {
             match compile_combined(files) {
-                Ok(p) => {
+                Ok((p, _)) => {
                     assert!(p.contains("(call foo-read"));
                     policies.push(p);
                 }
@@ -749,12 +782,12 @@ mod tests {
         let policy_files: Vec<&str> = policy_files.iter().map(|s| s as &str).collect();
         let machine_names = vec!["foo".to_string(), "bar".to_string()];
 
-        let res = compile_machine_policies(policy_files, machine_names.clone());
+        let res = compile_machine_policies(policy_files, machine_names);
         match res {
             Ok(hashmap) => {
                 assert_eq!(hashmap.len(), 2);
 
-                for (machine_name, machine_cil) in hashmap.iter() {
+                for (machine_name, (machine_cil, warnings)) in hashmap.iter() {
                     if machine_name == "foo" {
                         assert!(machine_cil.contains("(handleunknown reject)"));
                         assert!(machine_cil.contains("(allow thud babble (file (read)))"));
@@ -778,6 +811,8 @@ mod tests {
                         assert!(!machine_cil.contains("(type xyzzy)"));
                         assert!(!machine_cil.contains("(type unused)"));
                     }
+
+                    assert!(warnings.is_empty());
                 }
             }
             Err(e) => panic!("Machine building compilation failed with {}", e),
@@ -797,7 +832,7 @@ mod tests {
         match res {
             Ok(hashmap) => {
                 assert_eq!(hashmap.len(), 3);
-                for (machine_name, machine_cil) in hashmap.iter() {
+                for (machine_name, (machine_cil, warnings)) in hashmap.iter() {
                     if machine_name == "foo" {
                         assert!(machine_cil.contains("(handleunknown reject)"));
                         assert!(machine_cil.contains("(allow thud babble (file (read)))"));
@@ -831,6 +866,7 @@ mod tests {
                         assert!(!machine_cil.contains("(type quuz)"));
                         assert!(!machine_cil.contains("(type qux)"));
                     }
+                    assert!(warnings.is_empty());
                 }
             }
             Err(e) => panic!("Machine building compilation failed with {}", e),
@@ -839,12 +875,11 @@ mod tests {
 
     #[test]
     fn trait_test() {
-        // TODO: The "this" keyword is broken without other PRs.  Flesh out expected results once
-        // that and derive have merged
         valid_policy_test("trait.cas", &["(macro baz-write ((type this) (type source)) (allow source this (file (write))))",
         "(macro foo-write ((type this) (type source)) (allow source this (dir (write))))",
         "(macro my_trait-write ((type this) (type source)) (allow source this (file (write))))",],
-        &["(macro foo-write ((type this) (type source)) (allow source this (file (write))))"])
+        &["(macro foo-write ((type this) (type source)) (allow source this (file (write))))"],
+        0,)
     }
 
     #[test]
@@ -855,6 +890,7 @@ mod tests {
             "(allow foo foo (capability2",
             "(macro foo-signal ((type this) (type source)) (allow source this (process (signal))))"],
             &["(allow foo domain (capability"],
+            0,
         )
     }
 
@@ -869,6 +905,7 @@ mod tests {
                 "(allow foo bar (file (all)))",
             ],
             &["(capabilty (mac_override", "(capability (wake_alarm"],
+            0,
         );
     }
 
@@ -883,7 +920,8 @@ mod tests {
         "(macro defaults-write ((type this) (type source)) (allow source this (dir (write))))",
         "(call associates-to_associate-some_associated_call",
         "(macro some_child-domtrans ((type this) (type source) (type exec)) (typetransition source exec process this))"],
-        &[]);
+        &[],
+        0);
     }
 
     // This is just a quick compile test.  The true purpose of these files is to actually boot in
@@ -1110,7 +1148,7 @@ mod tests {
         let policy_files: Vec<&str> = policy_files.iter().map(|s| s as &str).collect();
         let machine_names = vec!["baz".to_string()];
 
-        let res = compile_machine_policies(policy_files, machine_names.clone());
+        let res = compile_machine_policies(policy_files, machine_names);
         match res {
             Ok(_) => panic!("Compiled successfully"),
             Err(e) => {
@@ -1210,7 +1248,8 @@ mod tests {
                 "typeattributeset bar (baz)",
                 "typeattributeset domain (baz)",
             ],
-            &[]
+            &[],
+            0,
         );
     }
 
@@ -1220,6 +1259,7 @@ mod tests {
             "direct_association_reference.cas",
             &["foo-associated"],
             &["this.associated", "foo.associated", "this-associated"],
+            0,
         );
     }
 
@@ -1239,6 +1279,7 @@ mod tests {
                 "typeattributeset foo (baz)",
             ],
             &[],
+            0,
         );
     }
 
@@ -1259,7 +1300,7 @@ mod tests {
 
     #[test]
     fn valid_self() {
-        valid_policy_test("self.cas", &["allow qux self (file (read))"], &[]);
+        valid_policy_test("self.cas", &["allow qux self (file (read))"], &[], 0);
     }
 
     #[test]
@@ -1277,6 +1318,7 @@ mod tests {
                 "genfscon cgroup \"/\" (system_u object_r foo ((s0) (s0)))",
             ],
             &[],
+            0,
         );
     }
 
@@ -1314,6 +1356,7 @@ mod tests {
                 "(typetransition domain bar dir foo)",
             ],
             &[],
+            0,
         );
     }
 }

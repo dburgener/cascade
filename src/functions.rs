@@ -25,6 +25,7 @@ use crate::internal_rep::{
     AnnotationInfo, BoundTypeInfo, ClassList, Context, TypeInfo, TypeInstance, TypeMap, TypeValue,
 };
 use crate::obj_class::perm_list_to_sexp;
+use crate::warning::{Warning, Warnings, WithWarnings};
 
 pub fn argument_to_typeinfo<'a>(
     a: &ArgForValidation<'_>,
@@ -1621,9 +1622,10 @@ impl<'a> FunctionInfo<'a> {
         class_perms: &'a ClassList,
         context: &BlockContext<'_>,
         file: &'a SimpleFile<String, String>,
-    ) -> Result<(), CascadeErrors> {
+    ) -> Result<WithWarnings<()>, CascadeErrors> {
         let mut new_body = BTreeSet::new();
         let mut errors = CascadeErrors::new();
+        let mut warnings = Warnings::new();
         let local_context = BlockContext::new_from_args(&self.args, self.class, context);
 
         for statement in self.original_body {
@@ -1637,12 +1639,12 @@ impl<'a> FunctionInfo<'a> {
                 self.class,
                 file,
             ) {
-                Ok(mut s) => new_body.append(&mut s),
+                Ok(s) => new_body.append(&mut s.inner(&mut warnings)),
                 Err(e) => errors.append(e),
             }
         }
         self.body = Some(new_body);
-        errors.into_result(())
+        errors.into_result(WithWarnings::new((), warnings))
     }
 
     // Generate the sexp for a synthetic alias function calling the real function
@@ -1791,7 +1793,7 @@ impl<'a> ValidatedStatement<'a> {
         context: &BlockContext<'_>,
         parent_type: Option<&'a TypeInfo>,
         file: &'a SimpleFile<String, String>,
-    ) -> Result<BTreeSet<ValidatedStatement<'a>>, CascadeErrors> {
+    ) -> Result<WithWarnings<BTreeSet<ValidatedStatement<'a>>>, CascadeErrors> {
         let in_resource = match parent_type {
             Some(t) => t.is_resource(types),
             None => false,
@@ -1799,18 +1801,20 @@ impl<'a> ValidatedStatement<'a> {
 
         match statement {
             Statement::Call(c) => match c.check_builtin() {
-                Some(BuiltIns::AvRule) => {
-                    Ok(call_to_av_rule(c, types, class_perms, context, file)?
+                Some(BuiltIns::AvRule) => Ok(WithWarnings::from(
+                    call_to_av_rule(c, types, class_perms, context, file)?
                         .into_iter()
                         .map(ValidatedStatement::AvRule)
-                        .collect())
-                }
+                        .collect::<BTreeSet<ValidatedStatement>>(),
+                )),
                 Some(BuiltIns::FileContext) => {
                     if in_resource {
-                        Ok(call_to_fc_rules(c, types, class_perms, context, file)?
-                            .into_iter()
-                            .map(ValidatedStatement::FcRule)
-                            .collect())
+                        Ok(WithWarnings::from(
+                            call_to_fc_rules(c, types, class_perms, context, file)?
+                                .into_iter()
+                                .map(ValidatedStatement::FcRule)
+                                .collect::<BTreeSet<ValidatedStatement>>(),
+                        ))
                     } else {
                         Err(CascadeErrors::from(
                             ErrorItem::make_compile_or_internal_error(
@@ -1824,12 +1828,12 @@ impl<'a> ValidatedStatement<'a> {
                 }
                 Some(BuiltIns::ResourceTransition) => {
                     if in_resource {
-                        Ok(
+                        Ok(WithWarnings::from(
                             call_to_resource_transition(c, types, class_perms, context, file)?
                                 .into_iter()
                                 .map(ValidatedStatement::ResourcetransRule)
-                                .collect(),
-                        )
+                                .collect::<BTreeSet<ValidatedStatement>>(),
+                        ))
                     } else {
                         Err(CascadeErrors::from(
                             ErrorItem::make_compile_or_internal_error(
@@ -1843,10 +1847,12 @@ impl<'a> ValidatedStatement<'a> {
                 }
                 Some(BuiltIns::FileSystemContext) => {
                     if in_resource {
-                        Ok(call_to_fsc_rules(c, types, class_perms, context, file)?
-                            .into_iter()
-                            .map(ValidatedStatement::FscRule)
-                            .collect())
+                        Ok(WithWarnings::from(
+                            call_to_fsc_rules(c, types, class_perms, context, file)?
+                                .into_iter()
+                                .map(ValidatedStatement::FscRule)
+                                .collect::<BTreeSet<ValidatedStatement>>(),
+                        ))
                     } else {
                         Err(CascadeErrors::from(
                             ErrorItem::make_compile_or_internal_error(
@@ -1862,15 +1868,16 @@ impl<'a> ValidatedStatement<'a> {
                     if in_resource {
                         // Unwrap is safe because in_resource can only be true when parent_type
                         // is Some
-                        Ok([ValidatedStatement::PortconRule(call_to_portcon_rule(
-                            c,
-                            types,
-                            class_perms,
-                            context,
-                            file,
-                            parent_type.unwrap(),
-                        )?)]
-                        .into())
+                        Ok(WithWarnings::from(BTreeSet::from([
+                            ValidatedStatement::PortconRule(call_to_portcon_rule(
+                                c,
+                                types,
+                                class_perms,
+                                context,
+                                file,
+                                parent_type.unwrap(),
+                            )?),
+                        ])))
                     } else {
                         Err(CascadeErrors::from(
                             ErrorItem::make_compile_or_internal_error(
@@ -1885,7 +1892,7 @@ impl<'a> ValidatedStatement<'a> {
 
                 Some(BuiltIns::DomainTransition) => {
                     if !in_resource {
-                        Ok(
+                        Ok(WithWarnings::from(
                             Some(ValidatedStatement::DomtransRule(call_to_domain_transition(
                                 c,
                                 types,
@@ -1894,8 +1901,8 @@ impl<'a> ValidatedStatement<'a> {
                                 file,
                             )?))
                             .into_iter()
-                            .collect(),
-                        )
+                            .collect::<BTreeSet<ValidatedStatement>>(),
+                        ))
                     } else {
                         Err(CascadeErrors::from(
                             ErrorItem::make_compile_or_internal_error(
@@ -1907,27 +1914,36 @@ impl<'a> ValidatedStatement<'a> {
                         ))
                     }
                 }
-                None => Ok(Some(ValidatedStatement::Call(Box::new(ValidatedCall::new(
-                    c,
-                    functions,
-                    types,
-                    class_perms,
-                    parent_type,
-                    context,
-                    file,
-                )?)))
-                .into_iter()
-                .collect()),
+                None => Ok(WithWarnings::from(
+                    Some(ValidatedStatement::Call(Box::new(ValidatedCall::new(
+                        c,
+                        functions,
+                        types,
+                        class_perms,
+                        parent_type,
+                        context,
+                        file,
+                    )?)))
+                    .into_iter()
+                    .collect::<BTreeSet<ValidatedStatement>>(),
+                )),
             },
             Statement::LetBinding(_) => {
                 // Handled in parent
-                Ok(BTreeSet::default())
+                Ok(WithWarnings::from(BTreeSet::default()))
             }
-            Statement::IfBlock => {
+            Statement::IfBlock(i) => {
                 // TODO, but silently skip for now
                 // The plan would be to recurse and grab the ifs, store both variants
                 // and then resolve the bools later
-                Ok(BTreeSet::default())
+                let mut ret = WithWarnings::from(BTreeSet::<ValidatedStatement>::default());
+                ret.add_warning(Warning::new(
+                    "If blocks are not yet implemented",
+                    file,
+                    i.keyword_range.clone(),
+                    "All rules in this if block will be omitted",
+                ));
+                Ok(ret)
             }
         }
     }

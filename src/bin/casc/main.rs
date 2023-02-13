@@ -62,11 +62,11 @@ fn main() -> std::io::Result<()> {
         let res = compile_combined(policies.iter().map(|s| s as &str).collect());
         match res {
             Err(e) => Err(e),
-            Ok(s) => {
+            Ok(policy) => {
                 let mut hm = HashMap::new();
                 let mut out_filename = args.out_filename;
                 out_filename.truncate(out_filename.len() - 4);
-                hm.insert(out_filename, s);
+                hm.insert(out_filename, policy);
                 Ok(hm)
             }
         }
@@ -81,13 +81,14 @@ fn main() -> std::io::Result<()> {
     match result {
         Err(error_list) => print_error(error_list, color),
         Ok(machine_hashmap) => {
-            for (machine_name, machine_cil) in machine_hashmap.iter() {
+            for (machine_name, (machine_cil, warnings)) in machine_hashmap.iter() {
                 let out_filename = machine_name.to_owned() + ".cil";
                 let mut out_file = File::create(&out_filename)?;
                 out_file.write_all(machine_cil.as_bytes())?;
                 if args.package {
                     build_package(machine_name, &out_filename, "32")?;
                 }
+                warnings.print_warnings(color);
             }
             Ok(())
         }

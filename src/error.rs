@@ -12,6 +12,7 @@ use codespan_reporting::files::{SimpleFile, SimpleFiles};
 use codespan_reporting::term;
 use lalrpop_util::lexer::Token;
 use lalrpop_util::ParseError as LalrpopParseError;
+use std::collections::VecDeque;
 use std::fmt;
 use std::io;
 use std::ops::Range;
@@ -280,19 +281,21 @@ impl From<std::str::Utf8Error> for ErrorItem {
 
 #[derive(Error, Debug)]
 pub struct CascadeErrors {
-    errors: Vec<ErrorItem>,
+    errors: VecDeque<ErrorItem>,
 }
 
 impl CascadeErrors {
     pub fn new() -> Self {
-        CascadeErrors { errors: Vec::new() }
+        CascadeErrors {
+            errors: VecDeque::new(),
+        }
     }
 
     pub fn add_error<T>(&mut self, error: T)
     where
         T: Into<ErrorItem>,
     {
-        self.errors.push(error.into());
+        self.errors.push_back(error.into());
     }
 
     pub fn is_empty(&self) -> bool {
@@ -344,7 +347,7 @@ impl CascadeErrors {
 impl From<ErrorItem> for CascadeErrors {
     fn from(error: ErrorItem) -> Self {
         CascadeErrors {
-            errors: vec![error],
+            errors: VecDeque::from([error]),
         }
     }
 }
@@ -370,7 +373,7 @@ impl From<InvalidMachineError> for CascadeErrors {
 impl Iterator for CascadeErrors {
     type Item = ErrorItem;
     fn next(&mut self) -> Option<Self::Item> {
-        self.errors.pop() // TODO: This reverses the list of errors
+        self.errors.pop_front()
     }
 }
 
@@ -410,5 +413,17 @@ mod tests {
 
         let labels = error.diagnostic.inner.labels;
         assert_eq!(labels.len(), 2);
+    }
+
+    #[test]
+    fn error_order() {
+        let file = SimpleFile::new("name.cas".to_string(), "contents".to_string());
+        let mut errors = CascadeErrors::new();
+        errors.add_error(InternalError::new());
+        errors.add_error(CompileError::new("Some error", &file, 0..1, "help message"));
+
+        assert!(matches!(errors.next(), Some(ErrorItem::Internal(_))));
+        assert!(matches!(errors.next(), Some(ErrorItem::Compile(_))));
+        assert!(errors.next().is_none());
     }
 }
