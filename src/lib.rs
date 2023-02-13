@@ -927,7 +927,7 @@ mod tests {
     #[test]
     fn drop_test() {
         // TODO: This is just a parse test for now
-        valid_policy_test("drop.cas", &[], &[], 0);
+        valid_policy_test("drop.cas", &[], &[], 1);
     }
 
     // This is just a quick compile test.  The true purpose of these files is to actually boot in

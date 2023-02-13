@@ -1887,10 +1887,19 @@ impl<'a> ValidatedStatement<'a> {
         // check drop
         if let Statement::Call(c) = statement {
             if c.drop {
-                // TODO
-                // todo 1. Return warning
-                // todo 2. actually handle drop
-                return Ok(WithWarnings::from(BTreeSet::new()));
+                // TODO: actually handle drop
+                let range = match c.name.get_range() {
+                    Some(r) => r,
+                    None => return Err(InternalError::new().into()),
+                };
+                let mut ret = WithWarnings::from(BTreeSet::new());
+                ret.add_warning(Warning::new(
+                    "Drop is not yet implemented",
+                    file,
+                    range,
+                    "These permissions will be allowed",
+                ));
+                return Ok(ret);
             }
         }
 
