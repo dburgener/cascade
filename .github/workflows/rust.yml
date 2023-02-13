@@ -38,17 +38,21 @@ jobs:
       id: clippy
       run: .github/workflows/clippy.sh ${{ matrix.rust-toolchain }}
       continue-on-error: ${{ matrix.rust-toolchain != '1.67' }}
-    - name: Notify clippy failure
-      if: ${{ (steps.clippy.outcome != steps.clippy.conclusion) && (matrix.rust-toolchain != '1.67') }}
-      uses: actions/github-script@v6
+    - name: Store clippy flag
+      if: (matrix.rust-toolchain != '1.67')
+      run: |
+        mkdir -p ./clippy-${{ matrix.rust-toolchain }}
+        if [[ ${{ steps.clippy.outcome }} == "success" ]] ; then \
+          echo 0 > ./clippy-${{ matrix.rust-toolchain }}/flag; \
+        else \
+          echo 1 > ./clippy-${{ matrix.rust-toolchain }}/flag; \
+        fi
+        echo ${{ github.event.number }} > ./clippy-${{ matrix.rust-toolchain }}/issue_num
+    - uses: actions/upload-artifact@v3
+      if: (matrix.rust-toolchain != '1.67')
       with:
-        script: |
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: 'Stable clippy has failed for this run. A maintainer should check the logs. If known good clippy passed, this is non-fatal to the PR.'
-          })
+        name: clippy-${{ matrix.rust-toolchain }}
+        path: clippy-${{ matrix.rust-toolchain }}/
     - name: Check docs
       run: .github/workflows/doc.sh ${{ matrix.rust-toolchain }}
   test:
@@ -63,8 +67,9 @@ jobs:
         # we default to policy.32 for now.  Once we support
         # configurable policy versions, we should be able to successfully
         # test against 2.7-2.9
+
         selinux-version: [ secilc-3.0, secilc-3.1, 3.2, 3.3, 3.4, 3.5-rc3 ]
-        rust-toolchain: [ stable]
+        rust-toolchain: [ stable ]
         include:
           - selinux-version: '3.4'
             rust-toolchain: nightly
@@ -82,15 +87,21 @@ jobs:
       id: test
       run: .github/workflows/test.sh ${{ matrix.rust-toolchain }}
       continue-on-error: ${{ matrix.rust-toolchain == 'nightly' }}
-    - name: Notify nightly test failure
-      if: ${{ (steps.test.outcome != steps.test.conclusion) && (matrix.rust-toolchain == 'nightly') }}
-      uses: actions/github-script@v6
+    - name: Store nightly flag
+      if: (matrix.rust-toolchain == 'nightly')
+      run: |
+        mkdir -p ./test-${{ matrix.rust-toolchain }}
+        if [[ ${{ steps.test.outcome }} == "success" ]] ; then \
+          echo 0 > ./test-${{ matrix.rust-toolchain }}/nightly_flag; \
+        else \
+          echo 1 > ./test-${{ matrix.rust-toolchain }}/nightly_flag; \
+        fi
+      # Note, unlike above we are not storing issue_num in this artifact.
+      # That is because it will be stored in the clippy artifact and both
+      # get unzipped if the toolchain is nightly.
+    - uses: actions/upload-artifact@v3
+      if: (matrix.rust-toolchain == 'nightly')
       with:
-        script: |
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: 'Nightly test has failed for this run. A maintainer should check the logs. If known good clippy passed, this is non-fatal to the PR.'
-          })
+        name: test-${{ matrix.rust-toolchain }}
+        path: test-${{ matrix.rust-toolchain }}/
 
