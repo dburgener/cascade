@@ -27,7 +27,6 @@ General bugfixing and clean-up tasks are assumed.  This lists major features nee
 * Port labeling implementation
 * Conditionals - Combining both tunables and booleans into a single feature with configurability for runtime vs compiletime resolution
 * Documentation updates
-* drop keyword 
 
 ## 1.1
 * Add support for debug symbols carried with the policy
