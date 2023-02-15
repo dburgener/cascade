@@ -319,9 +319,6 @@ fn parse_policy(
     match parse_res {
         Ok(p) => {
             if !errors.is_empty() {
-                // Lalrpop returns errors in the reverse order they were found
-                // Reverse so that display is in source line order
-                parse_errors.reverse();
                 Err(parse_errors)
             } else {
                 Ok(p)
@@ -329,7 +326,6 @@ fn parse_policy(
         }
         Err(e) => {
             parse_errors.push(e);
-            parse_errors.reverse();
             Err(parse_errors)
         }
     }
