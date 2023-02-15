@@ -187,6 +187,11 @@ impl TypeInfo {
             return true;
         }
 
+        // Resources can evaluate to contexts, even though they don't technically inherit
+        if self.name == constants::RESOURCE && target.name == "context" {
+            return true;
+        }
+
         for parent in &self.inherits {
             let parent_typeinfo = match types.get(parent.as_ref()) {
                 Some(t) => t,
@@ -589,6 +594,9 @@ pub fn typeinfo_from_string<'a>(
         types.get("string")
     } else if s == "true" || s == "false" {
         types.get(constants::BOOLEAN)
+    } else if s.contains(':') && Context::try_from(s).is_ok() {
+        // a bare string could parse as a context, but should fall through
+        types.get("context")
     } else if class_perms.is_class(s) {
         types.get("obj_class")
     } else if class_perms.is_perm(s, context) {
