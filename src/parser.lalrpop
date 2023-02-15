@@ -232,6 +232,14 @@ Arg: Argument = {
 	Quoted_String => Argument::Quote(<>),
 	Port => Argument::Port(<>),
 	IPAddr => Argument::IpAddr(<>),
+	Context => Argument::Var(<>),
+}
+
+Context: CascadeString = {
+	// TODO: don't discard the mls range
+	<start: @L> <u: Symbol> ":" <r: Symbol> ":" <t: Symbol> <m: (":" <Symbol>)?> <end: @R> => {
+		CascadeString::new([u.as_ref(), r.as_ref(), t.as_ref()].join(":"), start..end)
+	}
 }
 
 Quoted_String: CascadeString = {

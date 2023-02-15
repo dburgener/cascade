@@ -144,6 +144,7 @@
 (fsuse trans tmpfs (system_u object_r foo ((s0) (s0))))
 (genfscon cgroup "/" (system_u object_r foo ((s0) (s0))))
 (genfscon proc "/" (system_u object_r foo ((s0) (s0))))
+(genfscon proc "/foo" (system_u object_r foo ((s0) (s0))))
 (sid kernel)
 (sidcontext kernel (system_u system_r kernel_sid ((s0) (s0))))
 (sid security)

@@ -6,6 +6,7 @@ resource foo {
 	file_context("/etc/somesymlink", [lnk_file], this);
 	file_context("/var/somepipe", [fifo_file], this);
 	file_context("/var/somesocket", [sock_file], this);
+	file_context("/bin/some_bin", [file], system_u:object_r:foo:s0);
 	// Policies must include at least one av rule
 	allow(domain, foo, file, [read]);
 }

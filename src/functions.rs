@@ -425,7 +425,7 @@ fn call_to_fc_rules<'a>(
         )?,
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: CascadeString::from(constants::RESOURCE),
+                param_type: CascadeString::from("context"),
                 is_list_param: false,
                 name: CascadeString::from("file_context"),
                 default: None,
@@ -805,7 +805,7 @@ fn call_to_fsc_rules<'a>(
     let target_args = vec![
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: CascadeString::from(constants::RESOURCE),
+                param_type: CascadeString::from("context"),
                 is_list_param: false,
                 name: CascadeString::from("fs_label"),
                 default: None,

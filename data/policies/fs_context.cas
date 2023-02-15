@@ -7,6 +7,8 @@ resource foo {
     fs_context(this, "proc", genfscon, "/");
     fs_context(this, "proc", genfscon, "/");
     fs_context(this, "cgroup", genfscon);
+    fs_context(system_u:object_r:foo, "proc", genfscon, "/foo");
+
     // TODO re-add when secilc check is in place
     // fs_context(this, "sysfs", genfscon, "/zap", [dir]);
 
