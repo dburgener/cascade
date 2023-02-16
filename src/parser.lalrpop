@@ -188,10 +188,15 @@ List: Vec<CascadeString> = {
 
 // TODO: Define boolean struct
 BooleanExpr: () = {
+	BoolTerm,
+	BooleanExpr "&&" BoolTerm,
+	BooleanExpr "||" BoolTerm,
+}
+
+BoolTerm: () = {
 	Symbol,
-	BooleanExpr "&&" Symbol,
-	BooleanExpr "||" Symbol,
 	"(" BooleanExpr ")",
+	"!" BoolTerm,
 }
 
 IfBlock: IfBlock = {

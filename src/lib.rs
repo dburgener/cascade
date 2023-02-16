@@ -663,7 +663,7 @@ mod tests {
             &[
                 "my_tunable", // Tunables don't get passed through to CIL
             ],
-            3,
+            8,
         );
     }
 
