@@ -146,6 +146,22 @@ impl From<&Port> for CascadeString {
     }
 }
 
+impl<const N: usize> From<&[&CascadeString; N]> for CascadeString {
+    fn from(cs_slice: &[&CascadeString; N]) -> Self {
+        let new_range = Self::slice_to_range(cs_slice);
+
+        let new_string = cs_slice
+            .iter()
+            .map(|c| c.as_ref())
+            .collect::<Vec<&str>>()
+            .join("");
+        CascadeString {
+            string: new_string,
+            range: new_range,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct PolicyFile {
     pub policy: Policy,
