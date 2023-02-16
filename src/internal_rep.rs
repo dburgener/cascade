@@ -856,11 +856,21 @@ impl<'a> ClassList<'a> {
         ret
     }
 
+    pub fn verify_permission(
+        &self,
+        class: &CascadeString,
+        permission: &CascadeString,
+        context: &BlockContext<'_>,
+        file: &SimpleFile<String, String>,
+    ) -> Result<(), ErrorItem> {
+        self.verify_permission_helper(class, permission, context, file, None)
+    }
+
     // In base SELinux, object classes with more than 31 permissions, have a second object class
     // for overflow permissions.  In Cascade, we treat all of those the same.  This function needs to
     // handle that conversion in lookups.  If a permission wasn't found for capability, we check
     // capability2
-    pub fn verify_permission(
+    pub fn verify_permission_helper(
         &self,
         class: &CascadeString,
         permission: &CascadeString,
@@ -893,7 +903,7 @@ impl<'a> ClassList<'a> {
         if perm_vec.first() != Some(permission) {
             // We resolved to something other than what was passed in
             for p in perm_vec {
-                self.verify_permission(class, &p.as_ref().into(), context, file, None)?;
+                self.verify_permission_helper(class, &p.as_ref().into(), context, file, None)?;
             }
             return Ok(());
         }
@@ -913,7 +923,13 @@ impl<'a> ClassList<'a> {
                     Some(range) => CascadeString::new(s.to_string(), range),
                     None => CascadeString::from(s.to_string()),
                 };
-                return self.verify_permission(&hll_string, permission, context, file, Some(class));
+                return self.verify_permission_helper(
+                    &hll_string,
+                    permission,
+                    context,
+                    file,
+                    Some(class),
+                );
             }
 
             Err(ErrorItem::make_compile_or_internal_error(
@@ -1249,10 +1265,10 @@ mod tests {
         classlist.add_class("process2", vec!["foo"]);
 
         assert!(classlist
-            .verify_permission(&"foo".into(), &"bar".into(), &context, &fake_file, None)
+            .verify_permission(&"foo".into(), &"bar".into(), &context, &fake_file)
             .is_ok());
         assert!(classlist
-            .verify_permission(&"foo".into(), &"baz".into(), &context, &fake_file, None)
+            .verify_permission(&"foo".into(), &"baz".into(), &context, &fake_file)
             .is_ok());
         assert!(classlist
             .verify_permission(
@@ -1260,11 +1276,10 @@ mod tests {
                 &"cap_bar".into(),
                 &context,
                 &fake_file,
-                None
             )
             .is_ok());
         assert!(classlist
-            .verify_permission(&"process".into(), &"foo".into(), &context, &fake_file, None)
+            .verify_permission(&"process".into(), &"foo".into(), &context, &fake_file)
             .is_ok());
 
         match classlist.verify_permission(
@@ -1272,7 +1287,6 @@ mod tests {
             &CascadeString::new("baz".to_string(), 0..1),
             &context,
             &fake_file,
-            None,
         ) {
             Ok(_) => panic!("Nonexistent class verified"),
             Err(e) => {
@@ -1289,7 +1303,6 @@ mod tests {
             &CascadeString::new("cap_bar".to_string(), 0..1),
             &context,
             &fake_file,
-            None,
         ) {
             Ok(_) => panic!("Nonexistent permission verified"),
             Err(e) => {
