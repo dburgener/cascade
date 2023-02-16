@@ -237,9 +237,40 @@ Arg: Argument = {
 
 Context: CascadeString = {
 	// TODO: don't discard the mls range
-	<start: @L> <u: Symbol> ":" <r: Symbol> ":" <t: Symbol> <m: (":" <Symbol>)?> <end: @R> => {
+	<start: @L> <u: Symbol> ":" <r: Symbol> ":" <t: Symbol> <m: (":" <MLS_Range>)?> <end: @R> => {
 		CascadeString::new([u.as_ref(), r.as_ref(), t.as_ref()].join(":"), start..end)
 	}
+}
+
+MLS_Range: CascadeString = {
+	<low: MLS_Level> <high: ("-"  <MLS_Level>)?> => {
+		match high {
+			Some(high) => CascadeString::from(&[&low, &CascadeString::from("-"), &high]),
+			None => low
+		}
+	}
+}
+
+MLS_Level: CascadeString = {
+	<s: Sensitivity> <c: (":" <Categories>)?> => {
+		match c {
+			Some(c) => CascadeString::from(&[&s, &CascadeString::from(":"), &c]),
+			None => s
+		}
+	}
+}
+
+Sensitivity: CascadeString = {
+	NameDecl,
+}
+
+Categories: CascadeString = {
+	Category,
+	<cs: Categories> "." <c: Category> => CascadeString::from(&[&cs, &CascadeString::from("."), &c]),
+}
+
+Category: CascadeString = {
+	NameDecl,
 }
 
 Quoted_String: CascadeString = {

@@ -7,6 +7,8 @@ resource foo {
 	file_context("/var/somepipe", [fifo_file], this);
 	file_context("/var/somesocket", [sock_file], this);
 	file_context("/bin/some_bin", [file], system_u:object_r:foo:s0);
+	file_context("/bin/some_bin2", [file], system_u:object_r:foo:s0-s0);
+	file_context("/bin/some_bin3", [file], system_u:object_r:foo:s0-s0:c0.c255);
 	// Policies must include at least one av rule
 	allow(domain, foo, file, [read]);
 }
