@@ -1,6 +1,7 @@
 resource foo {}
 
 let my_tunable = false;
+let my_tunable_2 = true;
 
 domain bar {
 	if (true) {
@@ -15,6 +16,26 @@ domain bar {
 
 	if (my_tunable) {
 		allow(this, foo, file, getattr);
+	}
+
+	if (my_tunable && my_tunable_2) {
+		allow(this, foo, file, setattr);
+	}
+
+	if (my_tunable || my_tunable_2) {
+		allow(this, foo, file, open);
+	}
+
+	if (!my_tunable) {
+		allow(this, foo, file, execute);
+	}
+
+	if (!(my_tunable && my_tunable_2)) {
+		allow(this, foo, file, lock);
+	}
+
+	if (my_tunable && !my_tunable_2) {
+		allow(this, foo, file, ioctl);
 	}
 
 	// Without full conditional support, the above lines are just ignored
