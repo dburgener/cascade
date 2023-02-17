@@ -14,9 +14,10 @@ check_file () {
 
 # CLI tests
 rustup run ${VERSION} cargo build --verbose
+rustup run ${VERSION} cargo build --release --verbose
 
 # TODO add additional targets to tests when ready
-for d in debug
+for d in debug release
 do
     ./target/$d/casc --help
     ./target/$d/casc -h
