@@ -2497,13 +2497,7 @@ fn validate_argument<'a>(
 
         return Ok(TypeInstance::new_cast_instance(
             &arg,
-            Cow::Borrowed(argument_to_typeinfo(
-                &arg,
-                types,
-                class_perms,
-                context,
-                file,
-            )?),
+            argument_to_typeinfo(&arg, types, class_perms, context, file)?,
             file,
         ));
     }

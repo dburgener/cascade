@@ -1023,7 +1023,7 @@ pub enum TypeValue {
 #[derive(Clone, Debug)]
 pub struct TypeInstance<'a> {
     pub instance_value: TypeValue,
-    pub type_info: Cow<'a, TypeInfo>,
+    pub type_info: &'a TypeInfo,
     file: Option<&'a SimpleFile<String, String>>,
 }
 
@@ -1121,14 +1121,14 @@ impl<'a> TypeInstance<'a> {
 
         TypeInstance {
             instance_value,
-            type_info: Cow::Borrowed(ti),
+            type_info: ti,
             file,
         }
     }
 
     pub fn new_cast_instance(
         arg: &ArgForValidation,
-        type_info: Cow<'a, TypeInfo>,
+        type_info: &'a TypeInfo,
         file: Option<&'a SimpleFile<String, String>>,
     ) -> Self {
         let instance_value = match arg {
@@ -1159,7 +1159,7 @@ mod tests {
         let context = BlockContext::new(BlockType::Global, None, None);
         let type_instance = TypeInstance {
             instance_value: TypeValue::SEType(Some(2..4)),
-            type_info: Cow::Borrowed(&type_info),
+            type_info: &type_info,
             file: Some(&file),
         };
 
