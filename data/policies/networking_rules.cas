@@ -1,6 +1,9 @@
+let ssh_port = 22;
+
 resource my_port {
 	portcon("tcp", 1234);
 	portcon("UDP", 1235);
+	portcon("tcp", ssh_port);
 }
 
 domain foo {
