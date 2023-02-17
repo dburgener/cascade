@@ -32,7 +32,7 @@ pub fn argument_to_typeinfo<'a>(
     types: &'a TypeMap,
     class_perms: &ClassList,
     context: &BlockContext<'a>,
-    file: Option<&SimpleFile<String, String>>,
+    file: Option<&'a SimpleFile<String, String>>,
 ) -> Result<&'a TypeInfo, ErrorItem> {
     let t: Option<&TypeInfo> = match a {
         ArgForValidation::Var(s) => match context.symbol_in_context(s.as_ref(), types) {
@@ -64,7 +64,7 @@ pub fn argument_to_typeinfo_vec<'a>(
     types: &'a TypeMap,
     class_perms: &ClassList,
     context: &BlockContext<'a>,
-    file: Option<&SimpleFile<String, String>>,
+    file: Option<&'a SimpleFile<String, String>>,
 ) -> Result<Vec<&'a TypeInfo>, ErrorItem> {
     let mut ret = Vec::new();
     for s in arg {
