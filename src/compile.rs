@@ -247,7 +247,7 @@ pub fn get_global_bindings<'a>(
     p: &PolicyFile,
     types: &'a TypeMap,
     classlist: &ClassList,
-    file: &SimpleFile<String, String>,
+    file: &'a SimpleFile<String, String>,
 ) -> Result<BlockContext<'a>, CascadeErrors> {
     let mut ret = BlockContext::new(BlockType::Global, None, None);
     for e in &p.policy.exprs {

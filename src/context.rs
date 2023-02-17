@@ -1,5 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
+use std::borrow::Borrow;
 use std::collections::BTreeMap;
 use std::iter;
 
@@ -15,8 +16,8 @@ use crate::CascadeErrors;
 
 #[derive(Clone, Debug)]
 pub enum BindableObject<'a> {
-    Type(&'a TypeInfo),
-    TypeList(Vec<&'a TypeInfo>),
+    Type(TypeInstance<'a>),
+    TypeList(TypeInstance<'a>),
     PermList(Vec<String>), // all perms are @makelist
     Class(String),
     ClassList(Vec<String>),
@@ -91,7 +92,7 @@ impl<'a> Context<'a> {
         let arg = self.convert_arg_this(arg);
         match self.symbols.get(&CascadeString::from(&arg as &str)) {
             Some(b) => match b {
-                BindableObject::Type(t) => Some(t),
+                BindableObject::Type(t) => Some(t.type_info.borrow()),
                 // TypeList isn't natural to implement with the current API
                 BindableObject::TypeList(_) => todo!(),
                 BindableObject::PermList(_) => type_map.get("perm"),
@@ -130,7 +131,7 @@ impl<'a> Context<'a> {
     pub fn get_name_or_string(&self, arg: &CascadeString) -> Option<CascadeString> {
         match self.get_symbol(arg.as_ref()) {
             None => Some(arg.clone()),
-            Some(BindableObject::Type(t)) => Some(t.name.clone()),
+            Some(BindableObject::Type(t)) => t.get_name_or_string(self).ok(),
             Some(BindableObject::Argument(_)) => Some(arg.clone()),
             Some(BindableObject::Class(s)) => Some(CascadeString::from(s as &str)),
             Some(BindableObject::TypeList(_))
@@ -141,7 +142,14 @@ impl<'a> Context<'a> {
 
     pub fn get_list(&self, arg: &CascadeString) -> Vec<CascadeString> {
         match self.get_symbol(arg.as_ref()) {
-            Some(BindableObject::TypeList(tl)) => tl.iter().map(|t| t.name.clone()).collect(),
+            Some(BindableObject::TypeList(tl)) => {
+                // TypeInstance::get_list() returns an error if the instance isn't a list.  We know
+                // this instance is a list, because we only inserted lists into TypeList, but we
+                // don't currently have a way to prove that to the type system.  Since we don't
+                // return a Result here, we can't return an internal error, so just treat it as the
+                // empty list instead.
+                tl.get_list(self).unwrap_or(Vec::new()).to_vec()
+            }
             Some(BindableObject::PermList(l)) | Some(BindableObject::ClassList(l)) => {
                 l.iter().map(|i| CascadeString::from(i as &str)).collect()
             }
@@ -214,7 +222,7 @@ impl<'a> Context<'a> {
         arg: &Argument,
         class_perms: &ClassList,
         type_map: &'a TypeMap,
-        file: &SimpleFile<String, String>,
+        file: &'a SimpleFile<String, String>,
     ) -> Result<(), CascadeErrors> {
         let arg = ArgForValidation::from(arg);
         let obj = match &arg {
@@ -223,10 +231,11 @@ impl<'a> Context<'a> {
                     argument_to_typeinfo_vec(v, type_map, class_perms, &*self, Some(file))?;
                 // TODO: classes
                 let variant = type_slice_to_variant(&arg_typeinfo_vec, type_map)?;
+                let arg_typeinstance = TypeInstance::new(&arg, variant, Some(file), &*self);
                 if variant.is_perm(type_map) {
                     BindableObject::PermList(v.iter().map(|s| s.to_string()).collect())
                 } else {
-                    BindableObject::TypeList(arg_typeinfo_vec)
+                    BindableObject::TypeList(arg_typeinstance)
                 }
             }
             _ => {
@@ -241,7 +250,7 @@ impl<'a> Context<'a> {
                 } else if arg_typeinfo.is_class(type_map) {
                     BindableObject::Class(arg_typeinstance.get_name_or_string(&*self)?.to_string())
                 } else {
-                    BindableObject::Type(arg_typeinfo)
+                    BindableObject::Type(arg_typeinstance)
                 }
             }
         };
@@ -274,7 +283,7 @@ mod tests {
         );
         context.insert_binding(
             CascadeString::from("baz"),
-            BindableObject::Type(tm.get("domain").unwrap()),
+            BindableObject::Type(TypeInstance::from(tm.get("domain").unwrap())),
         );
 
         assert_eq!(None, context.symbol_in_context("bar", &tm));
@@ -329,7 +338,7 @@ mod tests {
 
         context2.insert_binding(
             CascadeString::new("foo".to_string(), 10..12),
-            BindableObject::Type(tm.get("domain").unwrap()),
+            BindableObject::Type(TypeInstance::from(tm.get("domain").unwrap())),
         );
 
         context1.drain_symbols(&mut context2);
@@ -357,7 +366,7 @@ mod tests {
         let mut context = Context::new(BlockType::Domain, tm.get("domain"), None);
         context.insert_binding(
             CascadeString::new("foo".to_string(), 10..12),
-            BindableObject::Type(tm.get("domain").unwrap()),
+            BindableObject::Type(TypeInstance::from(tm.get("domain").unwrap())),
         );
 
         let foo_string = context
@@ -379,7 +388,7 @@ mod tests {
         let mut parent_context = Context::new(BlockType::Global, None, None);
         parent_context.insert_binding(
             CascadeString::new("foo".to_string(), 10..12),
-            BindableObject::Type(tm.get("domain").unwrap()),
+            BindableObject::Type(TypeInstance::from(tm.get("domain").unwrap())),
         );
         let child_context = Context::new(BlockType::Domain, None, Some(&parent_context));
         assert_eq!(

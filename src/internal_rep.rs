@@ -1148,6 +1148,19 @@ impl<'a> TypeInstance<'a> {
     }
 }
 
+// This is useful for tests in context.rs.  The implication of file being None should be given some
+// thought if it were used in a non-test context
+#[cfg(test)]
+impl<'a> From<&'a TypeInfo> for TypeInstance<'a> {
+    fn from(info: &'a TypeInfo) -> Self {
+        TypeInstance {
+            instance_value: TypeValue::Str(info.name.clone()),
+            type_info: info,
+            file: None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
