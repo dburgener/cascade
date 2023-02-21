@@ -18,7 +18,7 @@ use crate::ast::{
     FuncDecl, IpAddr, Port, Statement,
 };
 use crate::constants;
-use crate::context::Context as BlockContext;
+use crate::context::{BlockType, Context as BlockContext};
 use crate::error::{CascadeErrors, CompileError, ErrorItem, InternalError};
 use crate::internal_rep::{
     convert_class_name_if_this, type_name_from_string, typeinfo_from_string, Annotated,
@@ -2048,6 +2048,26 @@ impl<'a> ValidatedStatement<'a> {
                     "All rules in this if block will be omitted",
                 ));
                 Ok(ret)
+            }
+            Statement::OptionalBlock(o) => {
+                // For now, just include all statements (ie ignore the presence of optional)
+                // Optional policy isn't fully designed yet, so the exact details of what needs to
+                // happen here in the "real" case is TBD
+                let mut out = BTreeSet::new();
+                let mut warnings = Warnings::new();
+                for s in &o.contents {
+                    let vs = ValidatedStatement::new(
+                        s,
+                        functions,
+                        types,
+                        class_perms,
+                        &BlockContext::new(BlockType::Optional, parent_type, Some(context)),
+                        parent_type,
+                        file,
+                    )?;
+                    out.append(&mut vs.inner(&mut warnings));
+                }
+                Ok(WithWarnings::new(out, warnings))
             }
         }
     }

@@ -1,0 +1,19 @@
+resource foo {}
+resource bar {}
+
+domain baz {
+	allow(this, foo, file, read);
+
+	// In the current implementation, this does nothing
+	// Eventually, the below rule(s) will be optional
+	optional {
+		allow(this, bar, file, write);
+	}
+
+	optional {}
+
+	optional {
+		allow(this, bar, file, getattr);
+		allow(this, bar, dir, getattr);
+	}
+}
