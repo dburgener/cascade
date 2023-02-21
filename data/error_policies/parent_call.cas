@@ -18,7 +18,29 @@ resource foo inherits bar {
 
 domain dom {
 	foo<qqq>.read(this); // Function does not exist
-	foo<zap>.write(this); // foo does not inherit zap
 	foo<zap>.read(this); // Function does not exist
 	foo<bar>.write(this); // Function does not exist
+}
+
+domain asd {
+	asd<boo>.read_boo_tmp(this); // Function is not castable
+}
+
+virtual resource tmp {
+	@associated_call
+	fn associated_call_from_tmp(domain source) {
+		allow(source, tmp, file, [read]);
+	}
+}
+
+@associate([tmp])
+domain boo {
+	// Creates new resources boo.tmp and implicitly calls
+	// boo.tmp.associated_call_from_tmp(boo)
+	//
+	// boo.tmp inherits tmp
+
+	fn read_boo_tmp(domain source) {
+		allow(source, boo.tmp, file, [read]);
+	}
 }

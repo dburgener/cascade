@@ -1344,11 +1344,12 @@ pub struct FunctionInfo<'a> {
     pub is_virtual: bool,
     pub args: Vec<FunctionArgument<'a>>,
     pub annotations: BTreeSet<AnnotationInfo>,
-    original_body: &'a [Statement],
+    pub original_body: &'a [Statement],
     pub body: Option<BTreeSet<ValidatedStatement<'a>>>,
     pub declaration_file: &'a SimpleFile<String, String>,
     pub is_associated_call: bool,
     pub is_derived: bool,
+    pub is_castable: bool,
     decl: Option<&'a FuncDecl>,
 }
 
@@ -1497,6 +1498,7 @@ impl<'a> FunctionInfo<'a> {
             declaration_file,
             is_associated_call,
             is_derived: false,
+            is_castable: true,
             decl: Some(funcdecl),
         })
     }
@@ -1652,6 +1654,7 @@ impl<'a> FunctionInfo<'a> {
             declaration_file: file,
             is_associated_call: derived_is_associated_call,
             is_derived: true,
+            is_castable: true,
             decl: None,
         })
     }
@@ -1832,9 +1835,12 @@ fn validate_cast(
     start_type: &CascadeString,
     // Type Info for what we are casting to
     cast_ti: Option<&TypeInfo>,
-    // Function info we are trying to use
+    // Function call we are trying to use
     // the cast version of a function.
     func_call: Option<&FuncCall>,
+    // Function info we are trying to use
+    // the cast version of a function.
+    func_info: Option<&FunctionInfo>,
     // Full type map
     types: &TypeMap,
     // Context block for the call
@@ -1871,13 +1877,37 @@ fn validate_cast(
     {
         return Err(err_ret(start_type.get_range()));
     }
-    match (cast_ti, func_call) {
-        (Some(cast_type_info), Some(func_call_info)) => {
-            // TODO add additional checks.  Also add cases which we will allow casting even if the casting type isn't a parent.
-            validate_inheritance(func_call_info, type_info, &cast_type_info.name, file)
+    match (cast_ti, func_call, func_info) {
+        (Some(cast_ti), Some(func_call), Some(func_info)) => {
+            if !validate_inheritance(func_call, type_info, &cast_ti.name, file)? {
+                if func_info.is_castable {
+                    Ok(())
+                } else {
+                    Err(ErrorItem::make_compile_or_internal_error(
+                        "Not something we can cast to",
+                        file,
+                        func_call.get_name_range(),
+                        "The function is not castable or inherited by caller",
+                    ))
+                }
+            } else {
+                Ok(())
+            }
         }
-        (None, _) => Err(err_ret(start_type.get_range())),
-        (_, _) => Ok(()),
+        (Some(_), Some(_), None) => Err(ErrorItem::make_compile_or_internal_error(
+            "Func Call was given with no Func Info",
+            file,
+            None,
+            "If you are casting a function you must provide both the call and it's info",
+        )),
+        (Some(_), None, Some(_)) => Err(ErrorItem::make_compile_or_internal_error(
+            "Func Info was given with no Func Call",
+            file,
+            None,
+            "If you are casting a function you must provide both the call and it's info",
+        )),
+        (None, _, _) => Err(err_ret(start_type.get_range())),
+        (_, _, _) => Ok(()),
     }
 }
 
@@ -1887,17 +1917,12 @@ fn validate_inheritance(
     class_info: Option<&TypeInfo>,
     parent_name: &CascadeString,
     file: Option<&SimpleFile<String, String>>,
-) -> Result<(), ErrorItem> {
+) -> Result<bool, ErrorItem> {
     match class_info {
         Some(class_info) => {
             if !class_info.inherits.contains(parent_name) && class_info.name != parent_name.as_ref()
             {
-                return Err(ErrorItem::make_compile_or_internal_error(
-                    "Invalid Parent",
-                    file,
-                    call.get_name_range(),
-                    "Type does not inherit from given parent",
-                ));
+                return Ok(false);
             }
         }
         None => {
@@ -1909,7 +1934,7 @@ fn validate_inheritance(
             ));
         }
     };
-    Ok(())
+    Ok(true)
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -2243,6 +2268,7 @@ impl ValidatedCall {
                     class_name,
                     types.get(cast_name.as_ref()),
                     Some(call),
+                    Some(function_info),
                     types,
                     context,
                     Some(file),
@@ -2533,6 +2559,7 @@ impl<'a> ArgForValidation<'a> {
                     s,
                     Some(cast_ti.type_info.borrow()),
                     None,
+                    None,
                     types,
                     context,
                     file,
@@ -2544,6 +2571,7 @@ impl<'a> ArgForValidation<'a> {
                     validate_cast(
                         s,
                         Some(cast_ti.type_info.borrow()),
+                        None,
                         None,
                         types,
                         context,
@@ -2763,6 +2791,7 @@ mod tests {
             declaration_file: &some_file,
             is_associated_call: false,
             is_derived: false,
+            is_castable: true,
             decl: None,
         };
 

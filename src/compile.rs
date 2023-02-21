@@ -488,6 +488,75 @@ pub fn validate_rules(statements: &BTreeSet<ValidatedStatement>) -> Result<(), C
     errors.into_result(())
 }
 
+// Go through all functions and check if they are castable
+// based only on their args
+pub fn initialize_castable(functions: &mut FunctionMap, types: &TypeMap) {
+    for func in functions.values_mut() {
+        for arg in &func.args {
+            if arg.param_type.is_associated_resource(types) {
+                func.is_castable = false;
+
+                // If we have found one associated resource
+                // we can continue
+                continue;
+            }
+        }
+    }
+}
+
+// Go through all of the functions and check if they are castable
+// base on functions they call.
+pub fn determine_castable(functions: &mut FunctionMap, types: &TypeMap) -> u64 {
+    let mut num_changed: u64 = 0;
+    // We need tmp_functions to avoid a immutable borrow after a mutable one.
+    let tmp_functions = functions.clone();
+    'outer: for func in functions.values_mut() {
+        // If we are already false there is no reason to check our called functions.
+        if !func.is_castable {
+            continue;
+        }
+        for call in func.original_body {
+            if let Statement::Call(call) = call {
+                if let Some(inner_func) = tmp_functions.get(&call.get_cil_name()) {
+                    if !inner_func.is_castable {
+                        num_changed += 1;
+                        func.is_castable = false;
+                        continue 'outer;
+                    }
+                // The call may be a built-in so check the args
+                } else {
+                    for arg in &call.args {
+                        if let Argument::Var(arg) = &arg.0 {
+                            if let Some(ti) = types.get(arg.as_ref()) {
+                                if ti.is_associated_resource(types) {
+                                    num_changed += 1;
+                                    func.is_castable = false;
+                                    continue 'outer;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    num_changed
+}
+
+pub fn prevalidate_functions(
+    functions: &mut FunctionMap,
+    types: &TypeMap,
+) -> Result<(), CascadeErrors> {
+    initialize_castable(functions, types);
+    // We initialize to 1 just to let the loop start once
+    let mut num_changed: u64 = 1;
+    while num_changed > 0 {
+        num_changed = determine_castable(functions, types);
+    }
+
+    Ok(())
+}
+
 // Mutate hash map to set the validated body
 pub fn validate_functions<'a>(
     mut functions: FunctionMap<'a>,
@@ -953,7 +1022,9 @@ pub fn get_reduced_infos(
     new_type_map.set_aliases(new_t_aliases);
 
     // Get the function infos
-    let new_func_map = get_funcs(policies, &new_type_map)?;
+    let mut new_func_map = get_funcs(policies, &new_type_map)?;
+
+    prevalidate_functions(&mut new_func_map, &new_type_map)?;
 
     // Validate functions, including deriving functions from annotations
     let new_func_map_copy = new_func_map.clone(); // In order to read function info while mutating

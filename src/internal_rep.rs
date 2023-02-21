@@ -276,6 +276,10 @@ impl TypeInfo {
         self.is_trait
     }
 
+    pub fn is_associated_resource(&self, types: &TypeMap) -> bool {
+        self.is_resource(types) && self.name.as_ref().contains('.')
+    }
+
     // All types must inherit from some built in.  Get one for this type.
     // It's possible to inherit from multiple built-ins, so order matters here.  We return the
     // first type in order of preference.

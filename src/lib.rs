@@ -1434,6 +1434,9 @@ mod tests {
             &[
                 "call bar-read (foo dom)",
                 "call bar-foobar (foo dom)",
+                "call abc-read (asd asd)",
+                "call abc-read (foo asd)",
+                "call boo-read_boo_tmp (jkl jkl)",
                 "macro xyz-read ((type this) (type source)) (call abc-read (abc source))",
             ],
             &["call foo-read (foo dom)", "call foo-read (bar dom)"],
