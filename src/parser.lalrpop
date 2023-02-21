@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
-use crate::ast::{CascadeString, Policy, Declaration, DeclarationModifier, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, LetBinding, Virtualable, FuncCall, DeclaredArgument, Module, Machine, MachineBody, Port, IpAddr as AstIpAddr, IfBlock};
+use crate::ast::{CascadeString, Policy, Declaration, DeclarationModifier, Expression, Statement, TypeDecl, FuncDecl, Argument, Annotation, LetBinding, Virtualable, FuncCall, DeclaredArgument, Module, Machine, MachineBody, Port, IpAddr as AstIpAddr, IfBlock, OptionalBlock};
 use lalrpop_util::ErrorRecovery;
 use lalrpop_util::ParseError;
 use crate::error::ParseErrorMsg;
@@ -134,7 +134,8 @@ Stmt: Statement = {
 	<start: @L> "drop" <end: @R> <mut s: StmtBody> ";" =>? {
 		s.set_drop(start..end)?;
 		Ok(s)
-		}
+		},
+	<OptionalBlock> => Statement::OptionalBlock(Box::new(<>)),
 }
 
 StmtBody: Statement = {
@@ -221,6 +222,10 @@ IfBlock: IfBlock = {
 #[inline]
 ElseBlock: Vec<Statement> = {
 	"else" "{" <Stmt+> "}" => <>
+}
+
+OptionalBlock: OptionalBlock = {
+	"optional" "{" <Stmt*> "}" => OptionalBlock::new(<>)
 }
 
 #[inline]

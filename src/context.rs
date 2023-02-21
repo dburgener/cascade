@@ -33,6 +33,7 @@ pub enum BlockType {
     Function,
     Annotation,
     Global,
+    Optional,
 }
 
 // Encapsulate all local context in a block's scope

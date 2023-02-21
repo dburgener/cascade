@@ -401,10 +401,22 @@ pub struct IfBlock {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct OptionalBlock {
+    pub contents: Vec<Statement>,
+}
+
+impl OptionalBlock {
+    pub fn new(contents: Vec<Statement>) -> Self {
+        OptionalBlock { contents }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Statement {
     Call(Box<FuncCall>),
     LetBinding(Box<LetBinding>),
     IfBlock(Box<IfBlock>),
+    OptionalBlock(Box<OptionalBlock>),
 }
 
 impl Statement {
@@ -413,6 +425,7 @@ impl Statement {
             Statement::Call(c) => c.add_annotation(annotation),
             Statement::LetBinding(l) => l.add_annotation(annotation),
             Statement::IfBlock(_) => todo!(),
+            Statement::OptionalBlock(_) => todo!(),
         }
     }
 
@@ -429,6 +442,13 @@ impl Statement {
             Statement::IfBlock(_) => {
                 return Err(ParseErrorMsg::new(
                     "If blocks cannot be dropped".to_string(),
+                    Some(drop_keyword_range),
+                    "The drop keyword can only be applied to function calls.".to_string(),
+                ))
+            }
+            Statement::OptionalBlock(_) => {
+                return Err(ParseErrorMsg::new(
+                    "Optional blocks cannot be dropped".to_string(),
                     Some(drop_keyword_range),
                     "The drop keyword can only be applied to function calls.".to_string(),
                 ))
