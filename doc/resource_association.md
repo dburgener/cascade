@@ -128,6 +128,23 @@ name (where it will always refer to the original type) and the keyword "this"
 (which will refer to a specific instantiation such as an inherited or
 automatically created type).
 
+## Nested syntax
+As a syntactic sugar, the below two syntaxes are equivalent:
+
+```
+resource foo {}
+
+@associate([foo])
+domain bar {}
+```
+
+and:
+
+```
+domain bar {
+    resource foo {}
+}
+```
 
 [1] https://github.com/SELinuxProject/refpolicy/blob/master/policy/modules/system/iptables.te
 https://github.com/SELinuxProject/refpolicy/blob/master/policy/modules/system/iptables.if
