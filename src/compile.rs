@@ -126,47 +126,44 @@ pub fn extend_type_map(p: &PolicyFile, type_map: &mut TypeMap) -> Result<(), Cas
             Expression::Decl(d) => d,
             _ => continue,
         };
-        match d {
-            Declaration::Type(t) => {
-                // If there are nested declarations, they associate
-                let mut associate_names = BTreeSet::new();
-                for e in &t.expressions {
-                    if let Expression::Decl(Declaration::Type(associated_type)) = e {
-                        // Make the synthetic type to associate
-                        if type_map.get(associated_type.name.as_ref()).is_none() {
-                            match TypeInfo::new(*associated_type.clone(), &p.file) {
-                                Ok(new_type) => {
-                                    type_map.insert(associated_type.name.to_string(), new_type)?
-                                }
-                                Err(e) => errors.append(e),
+        if let Declaration::Type(t) = d {
+            // If there are nested declarations, they associate
+            let mut associate_names = BTreeSet::new();
+            for e in &t.expressions {
+                if let Expression::Decl(Declaration::Type(associated_type)) = e {
+                    // Make the synthetic type to associate
+                    if type_map.get(associated_type.name.as_ref()).is_none() {
+                        match TypeInfo::new(*associated_type.clone(), &p.file) {
+                            Ok(new_type) => {
+                                type_map.insert(associated_type.name.to_string(), new_type)?
                             }
+                            Err(e) => errors.append(e),
                         }
-                        associate_names.insert(associated_type.name.clone());
                     }
-                }
-
-                if !t.is_extension {
-                    match TypeInfo::new(*t.clone(), &p.file) {
-                        Ok(mut new_type) => {
-                            if !associate_names.is_empty() {
-                                // TODO: this returns false if it already e;xisted.  That should
-                                // probably be an error
-                                new_type.annotations.insert(AnnotationInfo::Associate(
-                                    Associated {
-                                        resources: associate_names,
-                                    },
-                                ));
-                            }
-                            type_map.insert(t.name.to_string(), new_type)?;
-                        }
-                        Err(e) => errors.append(e),
-                    }
-                } else if !associate_names.is_empty() {
-                    todo!()
+                    associate_names.insert(associated_type.name.clone());
                 }
             }
-            _ => continue,
-        };
+
+            if !t.is_extension {
+                match TypeInfo::new(*t.clone(), &p.file) {
+                    Ok(mut new_type) => {
+                        if !associate_names.is_empty() {
+                            // TODO: this returns false if it already e;xisted.  That should
+                            // probably be an error
+                            new_type
+                                .annotations
+                                .insert(AnnotationInfo::Associate(Associated {
+                                    resources: associate_names,
+                                }));
+                        }
+                        type_map.insert(t.name.to_string(), new_type)?;
+                    }
+                    Err(e) => errors.append(e),
+                }
+            } else if !associate_names.is_empty() {
+                todo!()
+            }
+        }
     }
     errors.into_result(())
 }
