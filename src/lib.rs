@@ -1419,7 +1419,7 @@ mod tests {
 
     #[test]
     fn invalid_parent_call() {
-        error_policy_test!("parent_call.cas", 4, ErrorItem::Compile(_));
+        error_policy_test!("parent_call.cas", 6, ErrorItem::Compile(_));
     }
 
     #[test]

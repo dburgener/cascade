@@ -527,6 +527,12 @@ pub fn determine_castable(functions: &mut FunctionMap, types: &TypeMap) -> u64 {
                 } else {
                     for arg in &call.args {
                         if let Argument::Var(arg) = &arg.0 {
+                            // Need to special case this.*
+                            if arg.to_string().contains("this.") {
+                                num_changed += 1;
+                                func.is_castable = false;
+                                continue 'outer;
+                            }
                             if let Some(ti) = types.get(arg.as_ref()) {
                                 if ti.is_associated_resource(types) {
                                     num_changed += 1;
