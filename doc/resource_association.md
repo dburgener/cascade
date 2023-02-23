@@ -135,7 +135,9 @@ As a syntactic sugar, the below two syntaxes are equivalent:
 resource foo {}
 
 @associate([foo])
-domain bar {}
+domain bar {
+	let foo = bar.foo;
+}
 ```
 
 and:
@@ -145,6 +147,9 @@ domain bar {
     resource foo {}
 }
 ```
+
+In other words, nesting provides a shorthand for association, plus a local
+binding of the short name.
 
 [1] https://github.com/SELinuxProject/refpolicy/blob/master/policy/modules/system/iptables.te
 https://github.com/SELinuxProject/refpolicy/blob/master/policy/modules/system/iptables.if

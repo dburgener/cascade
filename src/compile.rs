@@ -12,17 +12,17 @@ use crate::ast::{
     PolicyFile, Statement,
 };
 use crate::constants;
-use crate::context::{BlockType, Context as BlockContext};
+use crate::context::{BindableObject, BlockType, Context as BlockContext};
 use crate::error::{
     add_or_create_compile_error, CascadeErrors, CompileError, ErrorItem, InternalError,
 };
 use crate::functions::{
-    FSContextType, FileSystemContextRule, FunctionArgument, FunctionInfo, FunctionMap,
-    ValidatedCall, ValidatedStatement,
+    ArgForValidation, FSContextType, FileSystemContextRule, FunctionArgument, FunctionInfo,
+    FunctionMap, ValidatedCall, ValidatedStatement,
 };
 use crate::internal_rep::{
     generate_sid_rules, validate_derive_args, Annotated, AnnotationInfo, Associated, BoundTypeInfo,
-    ClassList, Context, Sid, TypeInfo, TypeMap,
+    ClassList, Context, Sid, TypeInfo, TypeInstance, TypeMap,
 };
 use crate::machine::{MachineMap, ModuleMap, ValidatedMachine, ValidatedModule};
 use crate::warning::{Warnings, WithWarnings};
@@ -148,7 +148,7 @@ pub fn extend_type_map(p: &PolicyFile, type_map: &mut TypeMap) -> Result<(), Cas
                 match TypeInfo::new(*t.clone(), &p.file) {
                     Ok(mut new_type) => {
                         if !associate_names.is_empty() {
-                            // TODO: this returns false if it already e;xisted.  That should
+                            // TODO: this returns false if it already existed.  That should
                             // probably be an error
                             new_type
                                 .annotations
@@ -1679,7 +1679,12 @@ fn do_rules_pass<'a>(
                 }
             }
             Expression::Decl(Declaration::Type(t)) => {
-                let type_being_parsed = match types.get(t.name.as_ref()) {
+                let type_name = if let Some(p) = parent_type {
+                    get_synthetic_resource_name(p, &t.name)
+                } else {
+                    t.name.clone()
+                };
+                let type_being_parsed = match types.get(type_name.as_ref()) {
                     Some(t) => t,
                     // If a type exists but is not in the machine, skip it for now
                     None => continue,
@@ -1695,6 +1700,18 @@ fn do_rules_pass<'a>(
                 ) {
                     Ok(r) => ret.append(&mut r.inner(&mut warnings)),
                     Err(e) => errors.append(e),
+                }
+                if parent_type.is_some() {
+                    // This is a nested declaration, create a local binding for it
+                    local_context.insert_binding(
+                        t.name.clone(),
+                        BindableObject::Type(TypeInstance::new(
+                            &ArgForValidation::Var(&type_name),
+                            type_being_parsed,
+                            Some(file),
+                            &local_context,
+                        )),
+                    );
                 }
             }
             _ => {}

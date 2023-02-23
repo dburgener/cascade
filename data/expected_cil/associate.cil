@@ -226,6 +226,7 @@
 (call nest_parent-nest_resource-call (nest_parent-nest_resource nest_parent))
 (call tmp-associated_call_from_tmp (tmp foo))
 (call tmp-not_an_associated_call (tmp foo))
+(allow nest_parent nest_parent-nest_resource (file (write)))
 (allow qux bar-bin (file (write)))
 (sid kernel)
 (sidcontext kernel (system_u system_r kernel_sid ((s0) (s0))))
