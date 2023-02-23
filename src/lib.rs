@@ -1254,8 +1254,9 @@ mod tests {
                 "(type nest_child-nest_resource)",
                 "(call nest_child-nest_resource-call (nest_child-nest_resource nest_child))",
                 "(call nest_parent-nest_resource-call (nest_parent-nest_resource nest_parent))",
+                "(allow nest_parent nest_parent-nest_resource (file (write)))",
             ],
-            &[],
+            &["(allow nest_parent nest_resource (file (write)))"],
             0,
         );
     }
