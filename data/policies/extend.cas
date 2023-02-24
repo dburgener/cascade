@@ -13,3 +13,9 @@ extend foo {
 domain bar {
 	foo.my_func(this);
 }
+
+extend resource {
+	fn read(domain source) {
+		allow(source, this, file, read);
+	}
+}

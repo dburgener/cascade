@@ -707,6 +707,7 @@ mod tests {
                 "(allow bar foo (file (getattr)))",
                 "(allow bar foo (file (write)))",
                 "(macro foo-my_func ((type this) (type source)) (allow source this (file (read))))",
+                "(macro resource-read ((type this) (type source)) (allow source this (file (read))))",
             ],
             &[],
             0,

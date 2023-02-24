@@ -91,6 +91,13 @@ TypeDecl: Box<TypeDecl> = {
 		}
 		Box::new(td)
 	},
+	"extend" <b:BuiltInType> "{" <mut v:Expr*> "}" => {
+		// extending built-ins does not support inheritance
+		v.iter_mut().for_each(|e| e.set_class_name_if_decl(b.clone()));
+		let mut td = TypeDecl::new(b, Vec::new(), v);
+		td.set_extend();
+		Box::new(td)
+	}
 }
 
 BuiltInOrExtend: Option<CascadeString> = {
