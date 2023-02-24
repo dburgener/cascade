@@ -142,6 +142,7 @@
 (roletype object_r unlabeled_sid)
 (typeattributeset resource (unlabeled_sid))
 (macro foo-my_func ((type this) (type source)) (allow source this (file (read))))
+(macro resource-read ((type this) (type source)) (allow source this (file (read))))
 (call foo-my_func (foo bar))
 (allow bar foo (file (getattr)))
 (allow bar foo (file (write)))
