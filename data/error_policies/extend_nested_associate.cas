@@ -1,0 +1,8 @@
+// We want to support this eventually, but for now it's not supported.
+// Once we support this syntax, this error test will compile correctly and should be removed
+
+domain foo {}
+
+extend foo {
+	resource bar {}
+}

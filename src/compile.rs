@@ -161,7 +161,17 @@ pub fn extend_type_map(p: &PolicyFile, type_map: &mut TypeMap) -> Result<(), Cas
                     Err(e) => errors.append(e),
                 }
             } else if !associate_names.is_empty() {
-                todo!()
+                // This is an extension, which adds a new association
+                // We can't handle this case here, because the original type might not have been
+                // created yet.  We might need to add another pass.  For now, lets just return a
+                // compile error and say we'll support it later
+                for n in associate_names {
+                    errors.append(ErrorItem::make_compile_or_internal_error(
+                            "Adding an association via the nested syntax in an extend block is not yet supported",
+                            Some(&p.file),
+                            n.get_range(),
+                            &format!("If you want to associate this type, you should declare it at the global scope and use @associate([{n}]) above this extend block")).into());
+                }
             }
         }
     }

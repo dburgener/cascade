@@ -1375,6 +1375,11 @@ mod tests {
     }
 
     #[test]
+    fn extend_nested_associate() {
+        error_policy_test!("extend_nested_associate.cas", 1, ErrorItem::Compile(_));
+    }
+
+    #[test]
     fn valid_parent_call() {
         valid_policy_test(
             "parent_call.cas",
