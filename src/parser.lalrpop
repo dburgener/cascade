@@ -131,15 +131,17 @@ DefaultArg: Argument = {
 Stmt: Statement = {
 	<StmtBody> ";",
 	<IfBlock> => Statement::IfBlock(Box::new(<>)),
-	<start: @L> "drop" <end: @R> <mut s: StmtBody> ";" =>? {
-		s.set_drop(start..end)?;
-		Ok(s)
-		},
 	<OptionalBlock> => Statement::OptionalBlock(Box::new(<>)),
 }
 
 StmtBody: Statement = {
-	<c:(<Casted<TypeName>> ".")?> <n:NameDecl> "(" <a:Comma<CastArg>> ")" => Statement::Call(Box::new(FuncCall::new_with_casts(c, n, a))),
+	<d: "drop"?> <c:(<Casted<TypeName>> ".")?> <n:NameDecl> "(" <a:Comma<CastArg>> ")" => {
+		let mut call = FuncCall::new_with_casts(c, n, a);
+		if d.is_some() {
+			call.set_drop();
+		}
+		Statement::Call(Box::new(call))
+	},
 	<l:LetBind> => Statement::LetBinding(Box::new(<>)),
 }
 

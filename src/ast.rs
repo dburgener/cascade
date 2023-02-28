@@ -428,34 +428,6 @@ impl Statement {
             Statement::OptionalBlock(_) => todo!(),
         }
     }
-
-    pub fn set_drop(&mut self, drop_keyword_range: Range<usize>) -> Result<(), ParseErrorMsg> {
-        match self {
-            Statement::Call(c) => c.drop = true,
-            Statement::LetBinding(_) => {
-                return Err(ParseErrorMsg::new(
-                    "Let Bindings cannot be dropped".to_string(),
-                    Some(drop_keyword_range),
-                    "The drop keyword can only be applied to function calls.".to_string(),
-                ))
-            }
-            Statement::IfBlock(_) => {
-                return Err(ParseErrorMsg::new(
-                    "If blocks cannot be dropped".to_string(),
-                    Some(drop_keyword_range),
-                    "The drop keyword can only be applied to function calls.".to_string(),
-                ))
-            }
-            Statement::OptionalBlock(_) => {
-                return Err(ParseErrorMsg::new(
-                    "Optional blocks cannot be dropped".to_string(),
-                    Some(drop_keyword_range),
-                    "The drop keyword can only be applied to function calls.".to_string(),
-                ))
-            }
-        }
-        Ok(())
-    }
 }
 
 pub enum BuiltIns {
@@ -563,6 +535,10 @@ impl FuncCall {
             },
             None => self.name.get_range(),
         }
+    }
+
+    pub fn set_drop(&mut self) {
+        self.drop = true;
     }
 }
 
