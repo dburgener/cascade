@@ -77,4 +77,8 @@ virtual domain nest_parent {
 	allow(this, nest_resource, file, write);
 }
 
-domain nest_child inherits nest_parent {}
+domain nest_child inherits nest_parent {
+	extend nest_resource {
+		file_context("/some/path/to/file", [file], system_u:object_r:nest_child.nest_resource:s0);
+	}
+}

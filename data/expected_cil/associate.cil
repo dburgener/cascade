@@ -228,6 +228,7 @@
 (call tmp-not_an_associated_call (tmp foo))
 (allow nest_parent nest_parent-nest_resource (file (write)))
 (allow qux bar-bin (file (write)))
+(filecon "/some/path/to/file" file (system_u object_r nest_child-nest_resource ((s0) (s0))))
 (sid kernel)
 (sidcontext kernel (system_u system_r kernel_sid ((s0) (s0))))
 (sid security)
