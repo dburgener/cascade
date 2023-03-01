@@ -131,16 +131,18 @@ pub fn extend_type_map(p: &PolicyFile, type_map: &mut TypeMap) -> Result<(), Cas
             let mut associate_names = BTreeSet::new();
             for e in &t.expressions {
                 if let Expression::Decl(Declaration::Type(associated_type)) = e {
-                    // Make the synthetic type to associate
-                    if type_map.get(associated_type.name.as_ref()).is_none() {
-                        match TypeInfo::new(*associated_type.clone(), &p.file) {
-                            Ok(new_type) => {
-                                type_map.insert(associated_type.name.to_string(), new_type)?
+                    if !associated_type.is_extension {
+                        // Make the synthetic type to associate
+                        if type_map.get(associated_type.name.as_ref()).is_none() {
+                            match TypeInfo::new(*associated_type.clone(), &p.file) {
+                                Ok(new_type) => {
+                                    type_map.insert(associated_type.name.to_string(), new_type)?
+                                }
+                                Err(e) => errors.append(e),
                             }
-                            Err(e) => errors.append(e),
                         }
+                        associate_names.insert(associated_type.name.clone());
                     }
-                    associate_names.insert(associated_type.name.clone());
                 }
             }
 
