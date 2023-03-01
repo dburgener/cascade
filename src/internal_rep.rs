@@ -664,9 +664,13 @@ impl From<&Context<'_>> for sexp::Sexp {
             Sexp::List(vec![atom_s(&c.mls_high)]),
         ]);
         Sexp::List(vec![
-            atom_s(&c.user),
-            atom_s(&c.role),
-            atom_s(&c.setype),
+            atom_s(CascadeString::from(c.user.as_ref()).get_cil_name().as_ref()),
+            atom_s(CascadeString::from(c.role.as_ref()).get_cil_name().as_ref()),
+            atom_s(
+                CascadeString::from(c.setype.as_ref())
+                    .get_cil_name()
+                    .as_ref(),
+            ),
             mls_range,
         ])
     }
