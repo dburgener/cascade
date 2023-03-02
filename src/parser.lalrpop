@@ -252,7 +252,7 @@ Arg: Argument = {
 	<s:TypeName> "=" <a: Arg> => Argument::Named(s, Box::new(a)),
 	List => Argument::List(<>),
 	Quoted_String => Argument::Quote(<>),
-	Port => Argument::Port(<>),
+	PortRange => Argument::Port(<>),
 	IPAddr => Argument::IpAddr(<>),
 	Context => Argument::Var(<>),
 }
@@ -297,6 +297,17 @@ Category: CascadeString = {
 
 Quoted_String: CascadeString = {
 	<start: @L> <s: r#""[^"]*""#> <end: @R> => CascadeString::new(s.to_string(), start..end),
+}
+
+PortRange: Port = {
+	<Port> => <>,
+	<mut low: Port> "-" <high: Port> => {
+		low.high_port_num = Some(high.low_port_num);
+		if let (Some(low_range), Some(high_range)) = (low.get_range(), high.get_range()) {
+			low.range = Some(low_range.start..high_range.end)
+		} // else should never occur, because these are explicitly Some() in the definition of Port
+		low
+	}
 }
 
 Port: Port = {
