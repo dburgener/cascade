@@ -140,7 +140,7 @@ impl Ord for CascadeString {
 impl From<&Port> for CascadeString {
     fn from(p: &Port) -> Self {
         CascadeString {
-            string: p.port_num.to_string(),
+            string: p.to_string(),
             range: p.get_range(),
         }
     }
@@ -636,13 +636,18 @@ impl Annotations {
 
 #[derive(Clone, Debug, Eq)]
 pub struct Port {
-    pub port_num: u16,
-    range: Option<Range<usize>>,
+    pub low_port_num: u16,
+    pub high_port_num: Option<u16>,
+    pub range: Option<Range<usize>>,
 }
 
 impl Port {
-    pub fn new(port_num: u16, range: Option<Range<usize>>) -> Self {
-        Port { port_num, range }
+    pub fn new(low_port_num: u16, range: Option<Range<usize>>) -> Self {
+        Port {
+            low_port_num,
+            high_port_num: None,
+            range,
+        }
     }
 
     pub fn get_range(&self) -> Option<Range<usize>> {
@@ -652,31 +657,50 @@ impl Port {
 
 impl PartialEq for Port {
     fn eq(&self, other: &Self) -> bool {
-        self.port_num == other.port_num
+        self.low_port_num == other.low_port_num && self.high_port_num == other.high_port_num
     }
 }
 
 impl Hash for Port {
     fn hash<H: Hasher>(&self, h: &mut H) {
-        self.port_num.hash(h);
+        self.low_port_num.hash(h);
+        self.high_port_num.hash(h);
     }
 }
 
+// This is just for internal sorting, so it's fine if it's ordered on the low end of the range
+// while ignoring the high
 impl PartialOrd for Port {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.port_num.partial_cmp(&other.port_num)
+        self.low_port_num.partial_cmp(&other.low_port_num)
     }
 }
 
 impl Ord for Port {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.port_num.cmp(&other.port_num)
+        self.low_port_num.cmp(&other.low_port_num)
     }
 }
 
 impl fmt::Display for Port {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.port_num)
+        let port_string = match self.high_port_num {
+            Some(high) => format!("{}-{}", self.low_port_num, high),
+            None => self.low_port_num.to_string(),
+        };
+        write!(f, "{}", port_string)
+    }
+}
+
+impl From<&Port> for sexp::Sexp {
+    fn from(p: &Port) -> sexp::Sexp {
+        match p.high_port_num {
+            Some(h) => sexp::list(&[
+                sexp::atom_s(&p.low_port_num.to_string()),
+                sexp::atom_s(&h.to_string()),
+            ]),
+            None => sexp::atom_s(&p.low_port_num.to_string()),
+        }
     }
 }
 
@@ -1002,5 +1026,80 @@ mod tests {
             s.configurations[2].value,
             Argument::Var(CascadeString::from("true"))
         );
+    }
+
+    // According to the rust docs:
+    // https://doc.rust-lang.org/std/hash/trait.Hash.html
+    // "When implementing both Hash and Eq, it is important that the following property holds:"
+    // k1 == k2 -> hash(k1) == hash(k2)
+    //
+    // If we derive PartialEq, Eq and Hash, we get this for free.  In the cases where we don't, we
+    // must provide that property ourselves.  This test is to validate that that is true.
+    // The following types in this module manually implement PartialEq and Hash:
+    // CascadeString
+    // TypeDecl
+    // Port
+    // IpAddr
+    use std::collections::hash_map::DefaultHasher;
+    #[test]
+    fn hash_ord_equality() {
+        fn hash<T>(item: T) -> u64
+        where
+            T: Hash,
+        {
+            let mut hasher = DefaultHasher::new();
+            item.hash(&mut hasher);
+            hasher.finish()
+        }
+
+        let a = CascadeString::from("foo".to_string());
+        let b = CascadeString::new("foo".to_string(), 10..20);
+        assert_eq!(a, b);
+        assert_eq!(hash(a), hash(b));
+
+        let c = TypeDecl {
+            name: CascadeString::from("foo".to_string()),
+            inherits: Vec::new(),
+            is_virtual: true,
+            is_trait: true,
+            is_extension: true,
+            expressions: Vec::new(),
+            annotations: Annotations::new(),
+        };
+
+        let d = TypeDecl {
+            name: CascadeString::from("foo".to_string()),
+            inherits: vec![CascadeString::from("bar".to_string())],
+            is_virtual: false,
+            is_trait: false,
+            is_extension: false,
+            expressions: vec![Expression::Error],
+            annotations: Annotations {
+                annotations: vec![Annotation::new("some_annotation".into())],
+            },
+        };
+        assert_eq!(c, d);
+        assert_eq!(hash(c), hash(d));
+
+        let e = Port {
+            low_port_num: 2,
+            high_port_num: Some(3),
+            range: None,
+        };
+
+        let f = Port {
+            low_port_num: 2,
+            high_port_num: Some(3),
+            range: Some(8..9),
+        };
+
+        assert_eq!(e, f);
+        assert_eq!(hash(e), hash(f));
+
+        let g = IpAddr::new("127.0.0.1".parse().unwrap(), None);
+        let h = IpAddr::new("127.0.0.1".parse().unwrap(), Some(8..10));
+
+        assert_eq!(g, h);
+        assert_eq!(hash(g), hash(h));
     }
 }

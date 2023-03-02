@@ -510,7 +510,7 @@ impl From<Protocol> for &str {
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub struct PortconRule<'a> {
     proto: Protocol,
-    port: CascadeString, // TODO: lists and ranges
+    port_num: Port,
     context: Context<'a>,
 }
 
@@ -519,20 +519,20 @@ impl From<&PortconRule<'_>> for sexp::Sexp {
         list(&[
             atom_s("portcon"),
             atom_s(p.proto.into()),
-            Sexp::Atom(Atom::S(p.port.to_string())),
+            Sexp::from(&p.port_num),
             Sexp::from(&p.context),
         ])
     }
 }
 
-pub fn call_to_portcon_rule<'a>(
+pub fn call_to_portcon_rules<'a>(
     c: &FuncCall,
     types: &TypeMap,
     class_perms: &ClassList,
     context: &BlockContext,
     file: &SimpleFile<String, String>,
     parent_type: &'a TypeInfo,
-) -> Result<PortconRule<'a>, CascadeErrors> {
+) -> Result<BTreeSet<PortconRule<'a>>, CascadeErrors> {
     let target_args = vec![
         FunctionArgument::new(
             &DeclaredArgument {
@@ -583,7 +583,7 @@ pub fn call_to_portcon_rule<'a>(
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
         .get_name_or_string(context)?;
 
-    validate_port(&port, Some(file))?;
+    let ports = validate_port(&port, Some(file))?;
 
     let context = match Context::try_from(parent_type.name.as_ref()) {
         Ok(c) => c,
@@ -592,18 +592,22 @@ pub fn call_to_portcon_rule<'a>(
         }
     };
 
-    Ok(PortconRule {
-        proto,
-        port,
-        context,
-    })
+    let mut ret = BTreeSet::new();
+    for p in ports {
+        ret.insert(PortconRule {
+            proto,
+            port_num: p,
+            context: context.clone(),
+        });
+    }
+    Ok(ret)
 }
 
 impl PortconRule<'_> {
     fn get_renamed_statement(&self, renames: &BTreeMap<String, String>) -> Self {
         PortconRule {
             proto: self.proto,
-            port: self.port.clone(),
+            port_num: self.port_num.clone(),
             context: self.context.get_renamed_context(renames),
         }
     }
@@ -618,21 +622,25 @@ impl PortconRule<'_> {
 fn validate_port(
     port: &CascadeString,
     current_file: Option<&SimpleFile<String, String>>,
-) -> Result<(), ErrorItem> {
+) -> Result<Vec<Port>, ErrorItem> {
+    let mut ret = Vec::new();
     for substr in port.as_ref().split(',') {
-        if validate_port_helper(substr).is_err() {
-            return Err(ErrorItem::make_compile_or_internal_error(
-                "Not a valid port",
-                current_file,
-                port.get_range(),
-                "This should be a comma separated list of ports or port ranges",
-            ));
+        match validate_port_helper(substr) {
+            Ok(p) => ret.push(p),
+            Err(_) => {
+                return Err(ErrorItem::make_compile_or_internal_error(
+                    "Not a valid port",
+                    current_file,
+                    port.get_range(),
+                    "This should be a comma separated list of ports or port ranges",
+                ));
+            }
         }
     }
-    Ok(())
+    Ok(ret)
 }
 
-fn validate_port_helper(port: &str) -> Result<u16, ()> {
+fn validate_port_helper(port: &str) -> Result<Port, ()> {
     if port.contains('-') {
         let mut split = port.split('-');
         let first = split.next().ok_or(())?.parse::<u16>().map_err(|_| ())?;
@@ -640,10 +648,18 @@ fn validate_port_helper(port: &str) -> Result<u16, ()> {
         if split.next().is_some() || second <= first {
             Err(())
         } else {
-            Ok(0)
+            Ok(Port {
+                low_port_num: first,
+                high_port_num: Some(second),
+                range: None,
+            })
         }
     } else {
-        port.parse::<u16>().map_err(|_| ())
+        Ok(Port {
+            low_port_num: port.parse::<u16>().map_err(|_| ())?,
+            high_port_num: None,
+            range: None,
+        })
     }
 }
 
@@ -2006,16 +2022,19 @@ impl<'a> ValidatedStatement<'a> {
                     if in_resource {
                         // Unwrap is safe because in_resource can only be true when parent_type
                         // is Some
-                        Ok(WithWarnings::from(BTreeSet::from([
-                            ValidatedStatement::PortconRule(call_to_portcon_rule(
+                        Ok(WithWarnings::from(
+                            call_to_portcon_rules(
                                 c,
                                 types,
                                 class_perms,
                                 context,
                                 file,
                                 Option::from(parent_type).unwrap(),
-                            )?),
-                        ])))
+                            )?
+                            .into_iter()
+                            .map(ValidatedStatement::PortconRule)
+                            .collect::<BTreeSet<ValidatedStatement>>(),
+                        ))
                     } else {
                         Err(CascadeErrors::from(
                             ErrorItem::make_compile_or_internal_error(
@@ -2804,7 +2823,7 @@ mod tests {
 
         let statement5 = ValidatedStatement::PortconRule(PortconRule {
             proto: Protocol::Tcp,
-            port: CascadeString::from("1234"),
+            port_num: Port::new(1234, None),
             context: Context::new(false, None, None, Cow::Borrowed("old_name"), None, None),
         });
 
