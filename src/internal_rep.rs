@@ -22,6 +22,7 @@ use crate::error::{CascadeErrors, ErrorItem, InternalError};
 use crate::functions::{
     validate_arguments, ArgForValidation, FunctionArgument, FunctionClass, FunctionMap,
 };
+use crate::warning::{Warning, Warnings, WithWarnings};
 
 const DEFAULT_USER: &str = "system_u";
 const DEFAULT_OBJECT_ROLE: &str = "object_r";
@@ -120,10 +121,14 @@ impl Declared for TypeInfo {
 }
 
 impl TypeInfo {
-    pub fn new(td: TypeDecl, file: &SimpleFile<String, String>) -> Result<TypeInfo, CascadeErrors> {
+    pub fn new(
+        td: TypeDecl,
+        file: &SimpleFile<String, String>,
+    ) -> Result<WithWarnings<TypeInfo>, CascadeErrors> {
         let mut temp_vec = td.inherits.clone();
         temp_vec.sort();
         let mut iter = temp_vec.iter().peekable();
+        let mut warnings = Warnings::new();
         while let Some(cur_val) = iter.next() {
             if let Some(next_val) = iter.peek() {
                 if cur_val == *next_val {
@@ -136,18 +141,21 @@ impl TypeInfo {
                 }
             }
         }
-        Ok(TypeInfo {
-            name: td.name.clone(),
-            inherits: td.inherits.clone(),
-            is_virtual: td.is_virtual,
-            is_trait: td.is_trait,
-            // TODO: Use AnnotationInfo::MakeList instead
-            list_coercion: td.annotations.has_annotation("makelist"),
-            declaration_file: Some(file.clone()), // TODO: Turn into reference
-            annotations: get_type_annotations(file, &td.annotations)?,
-            decl: Some(td),
-            bound_type: BoundTypeInfo::Unbound,
-        })
+        Ok(WithWarnings::new(
+            TypeInfo {
+                name: td.name.clone(),
+                inherits: td.inherits.clone(),
+                is_virtual: td.is_virtual,
+                is_trait: td.is_trait,
+                // TODO: Use AnnotationInfo::MakeList instead
+                list_coercion: td.annotations.has_annotation("makelist"),
+                declaration_file: Some(file.clone()), // TODO: Turn into reference
+                annotations: get_type_annotations(file, &td.annotations)?.inner(&mut warnings),
+                decl: Some(td),
+                bound_type: BoundTypeInfo::Unbound,
+            },
+            warnings,
+        ))
     }
 
     pub fn new_bound_type(
@@ -156,18 +164,22 @@ impl TypeInfo {
         file: &SimpleFile<String, String>,
         bound_type: BoundTypeInfo,
         annotations: &Annotations,
-    ) -> Result<TypeInfo, CascadeErrors> {
-        Ok(TypeInfo {
-            name,
-            inherits: vec![variant.into()], // Does this need to somehow grab the bound parents? Does this work for the single case?
-            is_virtual: true,               // Maybe?
-            is_trait: false,                // TODO: Allow bound traits?
-            list_coercion: annotations.has_annotation("makelist"),
-            declaration_file: Some(file.clone()),
-            annotations: get_type_annotations(file, annotations)?,
-            decl: None, // TODO: Where is this used?
-            bound_type,
-        })
+    ) -> Result<WithWarnings<TypeInfo>, CascadeErrors> {
+        let mut warnings = Warnings::new();
+        Ok(WithWarnings::new(
+            TypeInfo {
+                name,
+                inherits: vec![variant.into()], // Does this need to somehow grab the bound parents? Does this work for the single case?
+                is_virtual: true,               // Maybe?
+                is_trait: false,                // TODO: Allow bound traits?
+                list_coercion: annotations.has_annotation("makelist"),
+                declaration_file: Some(file.clone()),
+                annotations: get_type_annotations(file, annotations)?.inner(&mut warnings),
+                decl: None, // TODO: Where is this used?
+                bound_type,
+            },
+            warnings,
+        ))
     }
 
     pub fn make_built_in(name: String, makelist: bool) -> TypeInfo {
@@ -401,8 +413,9 @@ fn get_associate(
 fn get_type_annotations(
     file: &SimpleFile<String, String>,
     annotations: &Annotations,
-) -> Result<BTreeSet<AnnotationInfo>, ErrorItem> {
+) -> Result<WithWarnings<BTreeSet<AnnotationInfo>>, ErrorItem> {
     let mut infos = BTreeSet::new();
+    let mut warnings = Warnings::new();
 
     // Only allow a set of specific annotation names and strictly check their arguments.
     // TODO: Add tests to verify these checks.
@@ -456,6 +469,20 @@ fn get_type_annotations(
                 // Arguments are validated at function creation time
                 infos.insert(AnnotationInfo::Derive(annotation.arguments.clone()));
             }
+            "hint" => {
+                // If get_range() is none, we generated a synthetic hint.  This could be because of
+                // inheritance, in which case there was a warning on the parent.  Otherwise, if we
+                // generated a synthetic hint for some reason, we can always generate it
+                // differently if the signature changes, and the point of the warning is to not
+                // rely on any existing signature.  So a warning is only necessary if the hint is
+                // actually in source.
+                if let Some(range) = annotation.name.get_range() {
+                    warnings.push(Warning::new("The hint annotation is not yet supported",
+                                  file,
+                                  range,
+                                  "The signature expected by this annotation may change without warning, and it is currently not functional."));
+                }
+            }
             _ => {
                 return Err(ErrorItem::make_compile_or_internal_error(
                     "Unknown annotation",
@@ -466,7 +493,7 @@ fn get_type_annotations(
             }
         }
     }
-    Ok(infos)
+    Ok(WithWarnings::new(infos, warnings))
 }
 
 // On success, returns a tuple of parents to derive from and the names of the functions to derive
