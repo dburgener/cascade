@@ -122,7 +122,7 @@ fn compile_machine_policies_internal(
     // Collect all type declarations
     for p in &policies {
         match compile::extend_type_map(p, &mut type_map) {
-            Ok(()) => {}
+            Ok(ww) => ww.inner(&mut warnings),
             Err(e) => {
                 errors.append(e);
                 continue;
@@ -175,7 +175,10 @@ fn compile_machine_policies_internal(
                     SimpleFile::new(String::new(), String::new()),
                 );
                 match compile::extend_type_map(&pf, &mut type_map) {
-                    Ok(()) => policies.push(pf),
+                    Ok(ww) => {
+                        ww.inner(&mut warnings);
+                        policies.push(pf);
+                    }
                     Err(e) => errors.append(e),
                 }
             }
@@ -948,8 +951,14 @@ mod tests {
 
     #[test]
     fn optional_test() {
-        // TODO: THis is just a parse test for now
+        // TODO: This is just a parse test for now
         valid_policy_test("optional.cas", &[], &[], 0);
+    }
+
+    #[test]
+    fn hint_test() {
+        // TODO: This is non functional and should return a warning
+        valid_policy_test("hint.cas", &[], &[], 1);
     }
 
     // This is just a quick compile test.  The true purpose of these files is to actually boot in

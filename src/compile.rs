@@ -115,12 +115,16 @@ fn generate_cil_headers(
 }
 
 // TODO: Refactor below nearly identical functions to eliminate redundant code
-pub fn extend_type_map(p: &PolicyFile, type_map: &mut TypeMap) -> Result<(), CascadeErrors> {
+pub fn extend_type_map(
+    p: &PolicyFile,
+    type_map: &mut TypeMap,
+) -> Result<WithWarnings<()>, CascadeErrors> {
     // TODO: This only allows declarations at the top level.
     // Nested declarations are legal, but auto-associate with the parent, so they'll need special
     // handling when association is implemented
 
     let mut errors = CascadeErrors::new();
+    let mut warnings = Warnings::new();
     for e in &p.policy.exprs {
         let d = match e {
             Expression::Decl(d) => d,
@@ -135,9 +139,10 @@ pub fn extend_type_map(p: &PolicyFile, type_map: &mut TypeMap) -> Result<(), Cas
                         // Make the synthetic type to associate
                         if type_map.get(associated_type.name.as_ref()).is_none() {
                             match TypeInfo::new(*associated_type.clone(), &p.file) {
-                                Ok(new_type) => {
-                                    type_map.insert(associated_type.name.to_string(), new_type)?
-                                }
+                                Ok(new_type) => type_map.insert(
+                                    associated_type.name.to_string(),
+                                    new_type.inner(&mut warnings),
+                                )?,
                                 Err(e) => errors.append(e),
                             }
                         }
@@ -148,7 +153,8 @@ pub fn extend_type_map(p: &PolicyFile, type_map: &mut TypeMap) -> Result<(), Cas
 
             if !t.is_extension {
                 match TypeInfo::new(*t.clone(), &p.file) {
-                    Ok(mut new_type) => {
+                    Ok(new_type) => {
+                        let mut new_type = new_type.inner(&mut warnings);
                         if !associate_names.is_empty() {
                             // TODO: this returns false if it already existed.  That should
                             // probably be an error
@@ -177,7 +183,7 @@ pub fn extend_type_map(p: &PolicyFile, type_map: &mut TypeMap) -> Result<(), Cas
             }
         }
     }
-    errors.into_result(())
+    errors.into_result(WithWarnings::new((), warnings))
 }
 
 // Verify that all uses of the extend keyword correspond to types declared elsewhere
@@ -1884,6 +1890,7 @@ mod tests {
     #[test]
     fn organize_type_map_test() {
         let mut types = get_built_in_types_map().unwrap();
+        let mut warnings = Warnings::new();
         let mut foo_type = TypeInfo::new(
             TypeDecl::new(
                 CascadeString::from("foo"),
@@ -1892,7 +1899,8 @@ mod tests {
             ),
             &SimpleFile::new(String::new(), String::new()),
         )
-        .unwrap();
+        .unwrap()
+        .inner(&mut warnings);
         foo_type.is_virtual = true;
 
         let mut bar_type = TypeInfo::new(
@@ -1906,7 +1914,8 @@ mod tests {
             ),
             &SimpleFile::new(String::new(), String::new()),
         )
-        .unwrap();
+        .unwrap()
+        .inner(&mut warnings);
         bar_type.is_virtual = true;
 
         let baz_type = TypeInfo::new(
@@ -1921,7 +1930,8 @@ mod tests {
             ),
             &SimpleFile::new(String::new(), String::new()),
         )
-        .unwrap();
+        .unwrap()
+        .inner(&mut warnings);
 
         types.insert("foo".to_string(), foo_type).unwrap();
         types.insert("bar".to_string(), bar_type).unwrap();
@@ -1935,5 +1945,7 @@ mod tests {
         //assert_eq!(type_vec[type_vec.len() - 3].name, "foo");
         //assert_eq!(type_vec[type_vec.len() - 2].name, "bar");
         //assert_eq!(type_vec[type_vec.len() - 1].name, "baz");
+
+        assert!(warnings.is_empty());
     }
 }

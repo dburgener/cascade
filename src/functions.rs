@@ -2706,6 +2706,7 @@ mod tests {
 
     #[test]
     fn function_info_get_cil_name_test() {
+        let mut warnings = Warnings::new();
         let some_file = SimpleFile::new("bar".to_string(), "bar".to_string());
         let mut fi = FunctionInfo {
             name: "foo".to_string(),
@@ -2735,11 +2736,13 @@ mod tests {
             },
             &some_file,
         )
-        .unwrap();
+        .unwrap()
+        .inner(&mut warnings);
 
         fi.class = FunctionClass::Type(&ti);
 
         assert_eq!(&fi.get_cil_name(), "bar-foo");
+        assert!(warnings.is_empty());
     }
 
     #[test]

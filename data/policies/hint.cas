@@ -1,0 +1,8 @@
+// The @hint annotation hasn't been defined yet.  This should compile cleanly
+// and return a warning saying that.
+@hint()
+resource foo {}
+
+domain bar {
+	allow(this, foo, file, read);
+}
