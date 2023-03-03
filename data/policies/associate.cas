@@ -83,3 +83,9 @@ domain nest_child inherits nest_parent {
 		file_context("/some/path/to/file", [file], system_u:object_r:nest_child.nest_resource:s0);
 	}
 }
+
+extend nest_child {
+	extend nest_resource {
+		allow(nest_child, this, dir, remove_name);
+	}
+}
