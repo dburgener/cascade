@@ -1787,6 +1787,10 @@ impl<'a> FunctionArgument<'a> {
             default_value: None,
         }
     }
+
+    pub fn has_default_value(&self) -> bool {
+        self.default_value.is_some()
+    }
 }
 
 impl From<&FunctionArgument<'_>> for sexp::Sexp {
@@ -2279,20 +2283,41 @@ pub fn validate_arguments<'a>(
     context: &BlockContext<'a>,
     file: Option<&'a SimpleFile<String, String>>,
 ) -> Result<Vec<TypeInstance<'a>>, CascadeErrors> {
-    // Some functions start with an implicit "this" argument.  If it does, skip it
+    // Member functions start with an invisible"this" argument.  If it does, skip it
     let function_args_iter = function_args.iter().skip_while(|a| a.name == "this");
+
+    let function_args_len = if function_args.iter().take(1).any(|f| f.name == "this") {
+        function_args.len() - 1
+    } else {
+        function_args.len()
+    };
+
+    // Implicit this: If the function has exactly one argument which is not optional, and the function is called with
+    // 0 arguments, pass this as the single argument
+    let implicit_this_args = if let Some(parent_type) = context.get_parent_type_name() {
+        vec![(Argument::Var(parent_type), None)]
+    } else {
+        Vec::new()
+    };
+
+    // Allow len() == 0 instead of is_empty().  It's clearer when compared to another len check
+    // here
+    #[allow(clippy::len_zero)]
+    let call_args = if function_args_len == 1
+        && call.args.len() == 0
+        && !function_args.iter().any(|a| a.has_default_value())
+    {
+        &implicit_this_args
+    } else {
+        &call.args
+    };
 
     if function_args_iter
         .clone()
         .take_while(|a| matches!(a.default_value, None))
         .count()
-        > call.args.len()
+        > call_args.len()
     {
-        let function_args_len = if function_args.iter().take(1).any(|f| f.name == "this") {
-            function_args.len() - 1
-        } else {
-            function_args.len()
-        };
         return Err(CascadeErrors::from(
             ErrorItem::make_compile_or_internal_error(
                 &format!(
@@ -2312,8 +2337,7 @@ pub fn validate_arguments<'a>(
     for fa in function_args_iter {
         args.push(ExpectedArgInfo::from(fa));
     }
-    for (index, a) in call
-        .args
+    for (index, a) in call_args
         .iter()
         .take_while(|a| !matches!(a.0, Argument::Named(_, _)))
         .enumerate()
@@ -2331,8 +2355,7 @@ pub fn validate_arguments<'a>(
         args[index].provided_arg = Some(validated_arg);
     }
 
-    for a in call
-        .args
+    for a in call_args
         .iter()
         .skip_while(|a| !matches!(a.0, Argument::Named(_, _)))
     {

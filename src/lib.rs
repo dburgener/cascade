@@ -961,6 +961,11 @@ mod tests {
         valid_policy_test("hint.cas", &[], &[], 1);
     }
 
+    #[test]
+    fn implicit_this_test() {
+        valid_policy_test("implicit_this.cas", &["(call foo-read (foo bar))"], &[], 0);
+    }
+
     // This is just a quick compile test.  The true purpose of these files is to actually boot in
     // enforcing mode on a VM.  That is outside the scope of this test, but compile testing is a
     // minimum first step and reasonable to do here.

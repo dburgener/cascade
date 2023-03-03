@@ -267,6 +267,10 @@ impl<'a> Context<'a> {
     pub fn in_annotation(&self) -> bool {
         self.block_type == BlockType::Annotation
     }
+
+    pub fn get_parent_type_name(&self) -> Option<CascadeString> {
+        self.parent_type.map(|t| t.name.clone())
+    }
 }
 
 #[cfg(test)]
