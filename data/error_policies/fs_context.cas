@@ -1,13 +1,13 @@
 resource foo {
-    fs_context(bob, "ext3", xattr);
-    fs_context(this, "sockfs", fs_type);
-    fs_context(this, "sockfs", foo);
-    fs_context(this, "proc", zap);
+    fs_context("ext3", xattr, bob);
+    fs_context("sockfs", fs_type, this);
+    fs_context("sockfs", foo, this);
+    fs_context("proc", zap, this);
 
-    fs_context(this, "sysfs", genfscon, "/zap", [bar]);
-    fs_context(this, "sysfs", genfscon, "/zap", [file bar]);
-    fs_context(this, "fs1", xattr, "/zap", [file dir]);
-    fs_context(this, "fs2", task, "/zap");
+    fs_context("sysfs", genfscon, this, "/zap", [bar]);
+    fs_context("sysfs", genfscon, this, "/zap", [file bar]);
+    fs_context("fs1", xattr, this, "/zap", [file dir]);
+    fs_context("fs2", task, this, "/zap");
 
     // Policies must include at least one av rule
     allow(domain, foo, file, [read]);

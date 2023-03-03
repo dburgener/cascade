@@ -1,23 +1,23 @@
 resource foo {
-    fs_context(foo, "ext3", xattr);
-    fs_context(foo, "ext3", task);
-    fs_context(foo, "ext3", trans);
+    fs_context("ext3", xattr, foo);
+    fs_context("ext3", task, foo);
+    fs_context("ext3", trans, foo);
 
-    fs_context(this, "sysfs", genfscon, "/zap", [dir]);
-    fs_context(this, "sysfs", genfscon, "/zap", [file]);
-    fs_context(this, "sysfs", genfscon, "/zap", [any]);
-    fs_context(this, "sysfs", genfscon, "/zap");
+    fs_context("sysfs", genfscon, this, "/zap", [dir]);
+    fs_context("sysfs", genfscon, this, "/zap", [file]);
+    fs_context("sysfs", genfscon, this, "/zap", [any]);
+    fs_context("sysfs", genfscon, this, "/zap");
 
-    fs_context(this, "test", genfscon, "/zap/baa", [file]);
+    fs_context("test", genfscon, this, "/zap/baa", [file]);
 
     // Policies must include at least one av rule
     allow(domain, foo, file, [read]);
 }
 
 resource bar {
-    fs_context(this, "test", genfscon, "/zap/baa", [file]);
+    fs_context("test", genfscon, this, "/zap/baa", [file]);
 }
 
 resource xyz {
-    fs_context(this, "test", genfscon, "/zap/baa", [file]);
+    fs_context("test", genfscon, this, "/zap/baa", [file]);
 }
