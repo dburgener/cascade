@@ -1282,6 +1282,7 @@ mod tests {
                 "(allow nest_parent nest_parent-nest_resource (file (write)))",
                 "(filecon \"/some/path/to/file\" file (system_u object_r nest_child-nest_resource ((s0) (s0))))",
                 "(allow nest_child nest_child-nest_resource (file (ioctl)))",
+                "(allow nest_child nest_child-nest_resource (dir (remove_name)))",
             ],
             &["(allow nest_parent nest_resource (file (write)))"],
             0,
