@@ -7,32 +7,32 @@ resource all_files inherits file_like_objects {
 	// Filesystem labels for filesystems on a default Fedora install
 	// If you are using this policy on a different system, you may need
 	// to add labels for any other used filesystems here
-	fs_context(this, "proc", genfscon, "/");
-	fs_context(this, "selinuxfs", genfscon, "/");
-	fs_context(this, "securityfs", genfscon, "/");
-	fs_context(this, "sysfs", genfscon, "/");
-	fs_context(this, "bpf", genfscon, "/");
-	fs_context(this, "cgroup2", genfscon, "/");
-	fs_context(this, "pstore", genfscon, "/");
-	fs_context(this, "debugfs", genfscon, "/");
-	fs_context(this, "tracefs", genfscon, "/");
-	fs_context(this, "autofs", genfscon, "/");
-	fs_context(this, "configfs", genfscon, "/");
-	fs_context(this, "rpc_pipefs", genfscon, "/");
-	fs_context(this, "fuse", genfscon, "/");
-	fs_context(this, "fusectl", genfscon, "/");
-	fs_context(this, "vboxsf", genfscon, "/");
-	fs_context(this, "nsfs", genfscon, "/");
-	fs_context(this, "btrfs", xattr);
-	fs_context(this, "ext4", xattr);
-	fs_context(this, "xfs", xattr);
-	fs_context(this, "devtmpfs", trans);
-	fs_context(this, "tmpfs", trans);
-	fs_context(this, "hugetlbfs", trans);
-	fs_context(this, "devpts", trans);
-	fs_context(this, "mqueue", trans);
-	fs_context(this, "pipefs", task);
-	fs_context(this, "sockfs", task);
+	fs_context("proc", genfscon, this, "/");
+	fs_context("selinuxfs", genfscon, this, "/");
+	fs_context("securityfs", genfscon, this, "/");
+	fs_context("sysfs", genfscon, this, "/");
+	fs_context("bpf", genfscon, this, "/");
+	fs_context("cgroup2", genfscon, this, "/");
+	fs_context("pstore", genfscon, this, "/");
+	fs_context("debugfs", genfscon, this, "/");
+	fs_context("tracefs", genfscon, this, "/");
+	fs_context("autofs", genfscon, this, "/");
+	fs_context("configfs", genfscon, this, "/");
+	fs_context("rpc_pipefs", genfscon, this, "/");
+	fs_context("fuse", genfscon, this, "/");
+	fs_context("fusectl", genfscon, this, "/");
+	fs_context("vboxsf", genfscon, this, "/");
+	fs_context("nsfs", genfscon, this, "/");
+	fs_context("btrfs", xattr, this);
+	fs_context("ext4", xattr, this);
+	fs_context("xfs", xattr, this);
+	fs_context("devtmpfs", trans, this);
+	fs_context("tmpfs", trans, this);
+	fs_context("hugetlbfs", trans, this);
+	fs_context("devpts", trans, this);
+	fs_context("mqueue", trans, this);
+	fs_context("pipefs", task, this);
+	fs_context("sockfs", task, this);
 }
 
 extend unlabeled_sid inherits file_like_objects {}

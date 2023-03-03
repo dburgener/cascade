@@ -477,10 +477,9 @@ file_context handling features?)
 
 All filesystems are labeled using the following prototype:
 
-`fs_context(resource fs_label, string fs_name, fs_type type, path path,
+`fs_context(string fs_name, fs_type type, context, fs_label, path path,
 file_type [obj_class])`
 
-* `fs_label` is the label you wish to apply to the filesystem.
 * `fs_name` is the OS recognized name for the filesystem. (e.g. "ext4", "proc",
   "tmpfs")
 * `fs_type` must be one of the following options:
@@ -492,6 +491,7 @@ file_type [obj_class])`
     objects.
   * `genfscon`: Used to allocate a security context to filesystems that cannot
     support any of the previous file labeling options
+* `fs_label` is the label you wish to apply to the filesystem.
 * `path` is an optional path relative to root of the mounted filesystem.
   Currently this is only valid for the proc filesystem, all other types must be
   "/".  If not given, the field will default to "/".
@@ -525,13 +525,15 @@ security context.
 This call must be part of a resource block.
 
 #### Examples
-fs_context(foo, "ext3", xattr);  
-fs_context(this, "sockfs", task);  
-fs_context(this, "tmpfs", trans);  
+```
+fs_context("ext3", xattr, foo);
+fs_context("sockfs", task, this);
+fs_context("tmpfs", trans, this);
 
-fs_context(this, "cgroup", genfscon);  
-fs_context(this, "sysfs", genfscon, "/");  
-fs_context(this, "proc", genfscon, "/zap", [file]);  
+fs_context("cgroup", genfscon, this);
+fs_context("sysfs", genfscon, this, "/");
+fs_context("proc", genfscon, this, "/zap", [file]);
+```
 
 ## Constants
 

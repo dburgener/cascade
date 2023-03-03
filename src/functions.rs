@@ -755,16 +755,6 @@ fn call_to_fsc_rules<'a>(
     let target_args = vec![
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: CascadeString::from("context"),
-                is_list_param: false,
-                name: CascadeString::from("fs_label"),
-                default: None,
-            },
-            types,
-            None,
-        )?,
-        FunctionArgument::new(
-            &DeclaredArgument {
                 param_type: CascadeString::from("string"),
                 is_list_param: false,
                 name: CascadeString::from("fs_name"),
@@ -778,6 +768,16 @@ fn call_to_fsc_rules<'a>(
                 param_type: CascadeString::from("fs_type"),
                 is_list_param: false,
                 name: CascadeString::from("fscontext_type"),
+                default: None,
+            },
+            types,
+            None,
+        )?,
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: CascadeString::from("context"),
+                is_list_param: false,
+                name: CascadeString::from("fs_label"),
                 default: None,
             },
             types,
@@ -809,24 +809,6 @@ fn call_to_fsc_rules<'a>(
     let mut args_iter = validated_args.iter();
     let mut ret = Vec::new();
 
-    let context_str_arg = args_iter
-        .next()
-        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?;
-    let context_str = context_str_arg.get_name_or_string(context)?;
-    let fs_context = match Context::try_from(context_str.to_string()) {
-        Ok(c) => c,
-        Err(_) => {
-            return Err(CascadeErrors::from(
-                ErrorItem::make_compile_or_internal_error(
-                    "Invalid context",
-                    Some(file),
-                    context_str.get_range(),
-                    "Cannot parse this into a context",
-                ),
-            ))
-        }
-    };
-
     let fs_name = args_iter
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
@@ -848,6 +830,24 @@ fn call_to_fsc_rules<'a>(
             ));
         }
     };
+    let context_str_arg = args_iter
+        .next()
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?;
+    let context_str = context_str_arg.get_name_or_string(context)?;
+    let fs_context = match Context::try_from(context_str.to_string()) {
+        Ok(c) => c,
+        Err(_) => {
+            return Err(CascadeErrors::from(
+                ErrorItem::make_compile_or_internal_error(
+                    "Invalid context",
+                    Some(file),
+                    context_str.get_range(),
+                    "Cannot parse this into a context",
+                ),
+            ))
+        }
+    };
+
     let regex_string_arg = args_iter
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?;
