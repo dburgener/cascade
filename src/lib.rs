@@ -1418,8 +1418,8 @@ mod tests {
     }
 
     #[test]
-    fn invalid_parent_call() {
-        error_policy_test!("parent_call.cas", 6, ErrorItem::Compile(_));
+    fn invalid_call_casting() {
+        error_policy_test!("call_casting.cas", 6, ErrorItem::Compile(_));
     }
 
     #[test]
@@ -1428,9 +1428,9 @@ mod tests {
     }
 
     #[test]
-    fn valid_parent_call() {
+    fn valid_call_casting() {
         valid_policy_test(
-            "parent_call.cas",
+            "call_casting.cas",
             &[
                 "call bar-read (foo dom)",
                 "call bar-foobar (foo dom)",
