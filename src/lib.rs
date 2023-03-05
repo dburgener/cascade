@@ -1443,4 +1443,14 @@ mod tests {
             0,
         );
     }
+
+    #[test]
+    fn invalid_function_recursion_test() {
+        error_policy_test!("functions_recursion.cas", 1, ErrorItem::Compile(_));
+    }
+
+    #[test]
+    fn invalid_function_noterm_test() {
+        error_policy_test!("functions_no_term.cas", 1, ErrorItem::Compile(_));
+    }
 }

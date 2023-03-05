@@ -549,6 +549,102 @@ pub fn determine_castable(functions: &mut FunctionMap, types: &TypeMap) -> u64 {
     num_changed
 }
 
+pub fn initialize_terminated<'a>(
+    functions: &'a FunctionMap<'a>,
+) -> (Vec<String>, Vec<FunctionInfo<'a>>) {
+    let mut term_ret_vec: Vec<String> = Vec::new();
+    let mut nonterm_ret_vec: Vec<FunctionInfo> = Vec::new();
+
+    for func in functions.values() {
+        let mut is_term = true;
+
+        for call in func.original_body {
+            if let Statement::Call(call) = call {
+                match call.check_builtin() {
+                    Some(_) => {
+                        continue;
+                    }
+                    None => {
+                        is_term = false;
+                        break;
+                    }
+                }
+            }
+        }
+        if is_term {
+            term_ret_vec.push(func.get_cil_name().clone());
+        } else {
+            nonterm_ret_vec.push(func.clone());
+        }
+    }
+
+    (term_ret_vec, nonterm_ret_vec)
+}
+
+pub fn search_for_recursion(
+    terminated_list: &mut Vec<String>,
+    functions: &mut Vec<FunctionInfo>,
+) -> Result<(), CascadeErrors> {
+    let mut removed: u64 = 1;
+    while removed > 0 {
+        removed = 0;
+        for func in functions.clone().iter_mut() {
+            let mut is_term = true;
+            for call in func.original_body {
+                if let Statement::Call(call) = call {
+                    let mut call_cil_name = call.get_cil_name();
+                    // If we are calling something with this it must be in the same class
+                    // so hand place the class name
+                    if call_cil_name.contains("this-") {
+                        if let Some(class) = func.class {
+                            call_cil_name =
+                                call_cil_name.replace("this-", &(class.name.to_string() + "-"))
+                        } else {
+                            return Err(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
+                                "Could not determine class for 'this.' function call",
+                                Some(func.declaration_file),
+                                call.get_name_range(),
+                                "Perhaps you meant to place the function in a resource or domain?")));
+                        }
+                    }
+
+                    if terminated_list.contains(&call_cil_name) {
+                        continue;
+                    }
+                    is_term = false;
+                }
+            }
+            if is_term {
+                terminated_list.push(func.get_cil_name());
+                removed += 1;
+                let index = functions
+                    .iter()
+                    .position(|x| *x.get_cil_name() == func.get_cil_name())
+                    .unwrap();
+                functions.remove(index);
+            }
+        }
+    }
+
+    if !functions.is_empty() {
+        let mut error: Option<CompileError> = None;
+
+        for func in functions {
+            error = Some(add_or_create_compile_error(
+                error,
+                "Recursive Function call found",
+                func.declaration_file,
+                func.get_declaration_range().unwrap_or_default(),
+                "Calls cannot recursively call each other",
+            ));
+        }
+        // Unwrap is safe since we need to go through the loop above at least once
+        return Err(CascadeErrors::from(error.unwrap()));
+    }
+
+    Ok(())
+}
+
 pub fn prevalidate_functions(
     functions: &mut FunctionMap,
     types: &TypeMap,
@@ -559,6 +655,26 @@ pub fn prevalidate_functions(
     while num_changed > 0 {
         num_changed = determine_castable(functions, types);
     }
+
+    let (mut terminated_functions, mut nonterm_functions) = initialize_terminated(functions);
+
+    if terminated_functions.is_empty() && !nonterm_functions.is_empty() {
+        let mut error: Option<CompileError> = None;
+
+        for func in functions.values() {
+            error = Some(add_or_create_compile_error(
+                error,
+                "No terminating call found",
+                func.declaration_file,
+                func.get_declaration_range().unwrap_or_default(),
+                "All function calls found in possible recursive loop",
+            ));
+        }
+        // Unwrap is safe since we need to go through the loop above at least once
+        return Err(CascadeErrors::from(error.unwrap()));
+    }
+
+    search_for_recursion(&mut terminated_functions, &mut nonterm_functions)?;
 
     Ok(())
 }
