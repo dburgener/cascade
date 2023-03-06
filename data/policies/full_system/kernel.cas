@@ -3,8 +3,8 @@
 // longer term, we will make initial sids configurable rather than built in
 // (although a built-in option may be retained for simplicity)
 extend kernel_sid {
-	all_files.unconfined_access(this);
-	general.domtrans(this);
+	all_files.unconfined_access();
+	general.domtrans();
 
 	allow(this, domain<resource>, file, *);
 	allow(this, domain<resource>, dir, *);
@@ -18,7 +18,7 @@ extend kernel_sid {
 
 	allow(this, unlabeled_sid, association, *);
 
-	this.kernel_ipc(this);
+	this.kernel_ipc();
 
 	fn kernel_ipc(domain source) {
 		allow(source, this<resource>, unix_dgram_socket, *);
