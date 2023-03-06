@@ -1,6 +1,6 @@
 virtual domain unconfined {
-	all_files.unconfined_access(this);
-	init_exec.unconfined_access(this);
+	all_files.unconfined_access();
+	init_exec.unconfined_access();
 
 	allow(this, unlabeled_sid, dir, [ read getattr search mounton ]);
 	allow(this, ssh_keys, file, [ getattr ]);
