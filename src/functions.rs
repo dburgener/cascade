@@ -648,18 +648,10 @@ fn validate_port_helper(port: &str) -> Result<Port, ()> {
         if split.next().is_some() || second <= first {
             Err(())
         } else {
-            Ok(Port {
-                low_port_num: first,
-                high_port_num: Some(second),
-                range: None,
-            })
+            Ok(Port::new_port_range(first, second, None))
         }
     } else {
-        Ok(Port {
-            low_port_num: port.parse::<u16>().map_err(|_| ())?,
-            high_port_num: None,
-            range: None,
-        })
+        Ok(Port::new(port.parse::<u16>().map_err(|_| ())?, None))
     }
 }
 
