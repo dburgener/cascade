@@ -135,6 +135,43 @@ collection foo {
 foo.my_func(some_args)
 ```
 
+### Implicit this
+An extremely common case in SELinux policy writing is defining a member
+function on a resource, with exactly one argument, a domain, where that
+domain is to be given some access for the resource.  For example, you might see
+
+```
+resource my_resource {
+	// ...
+	fn read(domain source) {
+		allow(source, this, file, [ read open getattr]);
+	}
+}
+```
+
+Then domains call such functions to accumulate the access they need.  This can
+cause great repetition of the `this` keyword in the domain, as it passes itself
+to a large number of functions.  In order to make this situation easier,
+Cascade supports an implicit passing of `this` if the following conditions are
+met:
+
+1. The function takes *exactly* one argument.
+2. The caller provides *exactly* zero arguments.
+
+In this situation, `this` is passed as the argument to the function.  In other
+words, given the definition of the `read()` function above, the following two
+ways of calling the function are equivalent:
+
+```
+domain my_domain {
+	my_resource.read(this);
+	my_resource.read();
+}
+```
+
+The second syntax is less repetitious and more readable and therefore is the
+preferred style when writing Cascade policy.
+
 ### Type inheritance
 Child types inherit the following from their parents:
 1. Any rules refering to the parent
