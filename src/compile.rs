@@ -8,8 +8,8 @@ use std::convert::TryFrom;
 use std::ops::Range;
 
 use crate::ast::{
-    Argument, CascadeString, Declaration, Expression, FuncCall, LetBinding, Machine, Module,
-    PolicyFile, Statement,
+    get_cil_name, Argument, CascadeString, Declaration, Expression, FuncCall, LetBinding, Machine,
+    Module, PolicyFile, Statement,
 };
 use crate::constants;
 use crate::context::{BindableObject, BlockType, Context as BlockContext};
@@ -523,22 +523,20 @@ pub fn determine_castable(functions: &mut FunctionMap, types: &TypeMap) -> u64 {
                         func.is_castable = false;
                         continue 'outer;
                     }
-                // The call may be a built-in so check the args
-                } else {
-                    for arg in &call.args {
-                        if let Argument::Var(arg) = &arg.0 {
-                            // Need to special case this.*
-                            if arg.to_string().contains("this.") {
+                }
+                for arg in &call.args {
+                    if let Argument::Var(arg) = &arg.0 {
+                        // Need to special case this.*
+                        if arg.to_string().contains("this.") {
+                            num_changed += 1;
+                            func.is_castable = false;
+                            continue 'outer;
+                        }
+                        if let Some(ti) = types.get(arg.as_ref()) {
+                            if ti.is_associated_resource(types) {
                                 num_changed += 1;
                                 func.is_castable = false;
                                 continue 'outer;
-                            }
-                            if let Some(ti) = types.get(arg.as_ref()) {
-                                if ti.is_associated_resource(types) {
-                                    num_changed += 1;
-                                    func.is_castable = false;
-                                    continue 'outer;
-                                }
                             }
                         }
                     }
@@ -559,8 +557,8 @@ pub fn initialize_terminated<'a>(
         let mut is_term = true;
 
         for call in func.original_body {
-            if let Statement::Call(call) = call {
-                match call.check_builtin() {
+            match call {
+                Statement::Call(call) => match call.check_builtin() {
                     Some(_) => {
                         continue;
                     }
@@ -568,6 +566,15 @@ pub fn initialize_terminated<'a>(
                         is_term = false;
                         break;
                     }
+                },
+                Statement::LetBinding(_) => {
+                    continue;
+                }
+                Statement::IfBlock(_) => {
+                    continue;
+                }
+                Statement::OptionalBlock(_) => {
+                    continue;
                 }
             }
         }
@@ -589,29 +596,39 @@ pub fn search_for_recursion(
     while removed > 0 {
         removed = 0;
         for func in functions.clone().iter_mut() {
-            let mut is_term = true;
+            let mut is_term = false;
             for call in func.original_body {
-                if let Statement::Call(call) = call {
-                    let mut call_cil_name = call.get_cil_name();
-                    // If we are calling something with this it must be in the same class
-                    // so hand place the class name
-                    if call_cil_name.contains("this-") {
-                        if let Some(class) = func.class {
-                            call_cil_name =
-                                call_cil_name.replace("this-", &(class.name.to_string() + "-"))
-                        } else {
-                            return Err(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
-                                "Could not determine class for 'this.' function call",
-                                Some(func.declaration_file),
-                                call.get_name_range(),
-                                "Perhaps you meant to place the function in a resource or domain?")));
+                match call {
+                    Statement::Call(call) => {
+                        let mut call_cil_name = call.get_cil_name();
+                        // If we are calling something with this it must be in the same class
+                        // so hand place the class name
+                        if call_cil_name.contains("this-") {
+                            if let FunctionClass::Type(class) = func.class {
+                                call_cil_name = get_cil_name(Some(&class.name), &call.name)
+                            } else {
+                                return Err(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
+                                    "Could not determine class for 'this.' function call",
+                                    Some(func.declaration_file),
+                                    call.get_name_range(),
+                                    "Perhaps you meant to place the function in a resource or domain?")));
+                            }
+                        }
+
+                        if terminated_list.contains(&call_cil_name) {
+                            is_term = true;
+                            break;
                         }
                     }
-
-                    if terminated_list.contains(&call_cil_name) {
+                    Statement::LetBinding(_) => {
                         continue;
                     }
-                    is_term = false;
+                    Statement::IfBlock(_) => {
+                        continue;
+                    }
+                    Statement::OptionalBlock(_) => {
+                        continue;
+                    }
                 }
             }
             if is_term {

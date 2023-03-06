@@ -1349,6 +1349,8 @@ pub struct FunctionInfo<'a> {
     pub declaration_file: &'a SimpleFile<String, String>,
     pub is_associated_call: bool,
     pub is_derived: bool,
+    // This will be initialized to true and prevalidate_functions will set this
+    // to false if needed.
     pub is_castable: bool,
     decl: Option<&'a FuncDecl>,
 }

@@ -26,7 +26,7 @@ domain asd {
 	asd<boo>.read_boo_tmp(this); // Function is not castable
 	asd<boo>.read_boo_tmp_again(this); // Function is not castable
 	asd<boo>.read_boo_tmp_more(this); // Function is not castable
-	asd<boo>.some_function(foo); // TODO this should break?
+	asd<boo>.some_function(foo);
 }
 
 virtual resource tmp {
