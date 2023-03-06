@@ -650,6 +650,18 @@ impl Port {
         }
     }
 
+    pub fn new_port_range(
+        low_port_num: u16,
+        high_port_num: u16,
+        range: Option<Range<usize>>,
+    ) -> Self {
+        Port {
+            low_port_num,
+            high_port_num: Some(high_port_num),
+            range,
+        }
+    }
+
     pub fn get_range(&self) -> Option<Range<usize>> {
         self.range.clone()
     }
