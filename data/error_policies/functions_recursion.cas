@@ -15,7 +15,12 @@ resource my_file {
 	}
 
 	fn term_read(domain source) {
-		allow(source, this, file, [ read open getattr ]);
+		if (true) {
+			allow(source, this, file, [ read open getattr ]);
+		}
+		optional {
+			allow(source, this, dir, [ search ]);
+		}
 	}
 }
 

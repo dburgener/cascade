@@ -8,8 +8,8 @@ use std::convert::TryFrom;
 use std::ops::Range;
 
 use crate::ast::{
-    get_cil_name, Argument, CascadeString, Declaration, Expression, FuncCall, LetBinding, Machine,
-    Module, PolicyFile, Statement,
+    get_all_func_calls, get_cil_name, Argument, CascadeString, Declaration, Expression, FuncCall,
+    LetBinding, Machine, Module, PolicyFile, Statement,
 };
 use crate::constants;
 use crate::context::{BindableObject, BlockType, Context as BlockContext};
@@ -556,25 +556,16 @@ pub fn initialize_terminated<'a>(
     for func in functions.values() {
         let mut is_term = true;
 
-        for call in func.original_body {
-            match call {
-                Statement::Call(call) => match call.check_builtin() {
-                    Some(_) => {
-                        continue;
-                    }
-                    None => {
-                        is_term = false;
-                        break;
-                    }
-                },
-                Statement::LetBinding(_) => {
+        let func_calls = get_all_func_calls(func.original_body.to_vec());
+
+        for call in func_calls {
+            match call.check_builtin() {
+                Some(_) => {
                     continue;
                 }
-                Statement::IfBlock(_) => {
-                    continue;
-                }
-                Statement::OptionalBlock(_) => {
-                    continue;
+                None => {
+                    is_term = false;
+                    break;
                 }
             }
         }
@@ -597,38 +588,29 @@ pub fn search_for_recursion(
         removed = 0;
         for func in functions.clone().iter_mut() {
             let mut is_term = false;
-            for call in func.original_body {
-                match call {
-                    Statement::Call(call) => {
-                        let mut call_cil_name = call.get_cil_name();
-                        // If we are calling something with this it must be in the same class
-                        // so hand place the class name
-                        if call_cil_name.contains("this-") {
-                            if let FunctionClass::Type(class) = func.class {
-                                call_cil_name = get_cil_name(Some(&class.name), &call.name)
-                            } else {
-                                return Err(CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
-                                    "Could not determine class for 'this.' function call",
-                                    Some(func.declaration_file),
-                                    call.get_name_range(),
-                                    "Perhaps you meant to place the function in a resource or domain?")));
-                            }
-                        }
+            let func_calls = get_all_func_calls(func.original_body.to_vec());
+            for call in func_calls {
+                let mut call_cil_name = call.get_cil_name();
+                // If we are calling something with this it must be in the same class
+                // so hand place the class name
+                if call_cil_name.contains("this-") {
+                    if let FunctionClass::Type(class) = func.class {
+                        call_cil_name = get_cil_name(Some(&class.name), &call.name)
+                    } else {
+                        return Err(CascadeErrors::from(
+                            ErrorItem::make_compile_or_internal_error(
+                                "Could not determine class for 'this.' function call",
+                                Some(func.declaration_file),
+                                call.get_name_range(),
+                                "Perhaps you meant to place the function in a resource or domain?",
+                            ),
+                        ));
+                    }
+                }
 
-                        if terminated_list.contains(&call_cil_name) {
-                            is_term = true;
-                            break;
-                        }
-                    }
-                    Statement::LetBinding(_) => {
-                        continue;
-                    }
-                    Statement::IfBlock(_) => {
-                        continue;
-                    }
-                    Statement::OptionalBlock(_) => {
-                        continue;
-                    }
+                if terminated_list.contains(&call_cil_name) {
+                    is_term = true;
+                    break;
                 }
             }
             if is_term {
