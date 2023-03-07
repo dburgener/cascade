@@ -547,11 +547,9 @@ pub fn determine_castable(functions: &mut FunctionMap, types: &TypeMap) -> u64 {
     num_changed
 }
 
-pub fn initialize_terminated<'a>(
-    functions: &'a FunctionMap<'a>,
-) -> (Vec<String>, Vec<FunctionInfo<'a>>) {
+pub fn initialize_terminated<'a>(functions: &'a FunctionMap<'a>) -> (Vec<String>, Vec<String>) {
     let mut term_ret_vec: Vec<String> = Vec::new();
-    let mut nonterm_ret_vec: Vec<FunctionInfo> = Vec::new();
+    let mut nonterm_ret_vec: Vec<String> = Vec::new();
 
     for func in functions.values() {
         let mut is_term = true;
@@ -572,7 +570,7 @@ pub fn initialize_terminated<'a>(
         if is_term {
             term_ret_vec.push(func.get_cil_name().clone());
         } else {
-            nonterm_ret_vec.push(func.clone());
+            nonterm_ret_vec.push(func.get_cil_name().clone());
         }
     }
 
@@ -581,46 +579,49 @@ pub fn initialize_terminated<'a>(
 
 pub fn search_for_recursion(
     terminated_list: &mut Vec<String>,
-    functions: &mut Vec<FunctionInfo>,
+    functions: &mut Vec<String>,
+    function_map: &FunctionMap,
 ) -> Result<(), CascadeErrors> {
     let mut removed: u64 = 1;
     while removed > 0 {
         removed = 0;
-        for func in functions.clone().iter_mut() {
+        for func in functions.clone().iter() {
             let mut is_term = false;
-            let func_calls = get_all_func_calls(func.original_body.to_vec());
-            for call in func_calls {
-                let mut call_cil_name = call.get_cil_name();
-                // If we are calling something with this it must be in the same class
-                // so hand place the class name
-                if call_cil_name.contains("this-") {
-                    if let FunctionClass::Type(class) = func.class {
-                        call_cil_name = get_cil_name(Some(&class.name), &call.name)
-                    } else {
-                        return Err(CascadeErrors::from(
-                            ErrorItem::make_compile_or_internal_error(
-                                "Could not determine class for 'this.' function call",
-                                Some(func.declaration_file),
-                                call.get_name_range(),
-                                "Perhaps you meant to place the function in a resource or domain?",
-                            ),
-                        ));
+            if let Some(function_info) = function_map.get(func) {
+                let func_calls = get_all_func_calls(function_info.original_body.to_vec());
+                for call in func_calls {
+                    let mut call_cil_name = call.get_cil_name();
+                    // If we are calling something with this it must be in the same class
+                    // so hand place the class name
+                    if call_cil_name.contains("this-") {
+                        if let FunctionClass::Type(class) = function_info.class {
+                            call_cil_name = get_cil_name(Some(&class.name), &call.name)
+                        } else {
+                            return Err(CascadeErrors::from(
+                                ErrorItem::make_compile_or_internal_error(
+                                    "Could not determine class for 'this.' function call",
+                                    Some(function_info.declaration_file),
+                                    call.get_name_range(),
+                                    "Perhaps you meant to place the function in a resource or domain?",
+                                ),
+                            ));
+                        }
+                    }
+
+                    if terminated_list.contains(&call_cil_name) {
+                        is_term = true;
+                        break;
                     }
                 }
-
-                if terminated_list.contains(&call_cil_name) {
-                    is_term = true;
-                    break;
+                if is_term {
+                    terminated_list.push(function_info.get_cil_name());
+                    removed += 1;
+                    let index = functions
+                        .iter()
+                        .position(|x| *x == function_info.get_cil_name())
+                        .unwrap();
+                    functions.remove(index);
                 }
-            }
-            if is_term {
-                terminated_list.push(func.get_cil_name());
-                removed += 1;
-                let index = functions
-                    .iter()
-                    .position(|x| *x.get_cil_name() == func.get_cil_name())
-                    .unwrap();
-                functions.remove(index);
             }
         }
     }
@@ -629,13 +630,15 @@ pub fn search_for_recursion(
         let mut error: Option<CompileError> = None;
 
         for func in functions {
-            error = Some(add_or_create_compile_error(
-                error,
-                "Recursive Function call found",
-                func.declaration_file,
-                func.get_declaration_range().unwrap_or_default(),
-                "Calls cannot recursively call each other",
-            ));
+            if let Some(function_info) = function_map.get(func) {
+                error = Some(add_or_create_compile_error(
+                    error,
+                    "Recursive Function call found",
+                    function_info.declaration_file,
+                    function_info.get_declaration_range().unwrap_or_default(),
+                    "Calls cannot recursively call each other",
+                ));
+            }
         }
         // Unwrap is safe since we need to go through the loop above at least once
         return Err(CascadeErrors::from(error.unwrap()));
@@ -673,7 +676,7 @@ pub fn prevalidate_functions(
         return Err(CascadeErrors::from(error.unwrap()));
     }
 
-    search_for_recursion(&mut terminated_functions, &mut nonterm_functions)?;
+    search_for_recursion(&mut terminated_functions, &mut nonterm_functions, functions)?;
 
     Ok(())
 }
