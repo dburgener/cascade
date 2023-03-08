@@ -627,7 +627,7 @@ pub fn typeinfo_from_string<'a>(
         // a bare string could parse as a context, but should fall through
         types.get("context")
     } else if class_perms.is_class(s) {
-        types.get("obj_class")
+        types.get(constants::CLASS)
     } else if class_perms.is_perm(s, context) {
         types.get("perm")
     } else {

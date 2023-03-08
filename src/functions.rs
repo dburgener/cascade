@@ -210,7 +210,7 @@ fn call_to_av_rule<'a>(
         )?,
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: CascadeString::from("obj_class"),
+                param_type: CascadeString::from(constants::CLASS),
                 is_list_param: false,
                 name: CascadeString::from("class"),
                 default: None,
@@ -415,7 +415,7 @@ fn call_to_fc_rules<'a>(
         )?,
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: CascadeString::from("obj_class"), //TODO: not really
+                param_type: CascadeString::from(constants::CLASS), //TODO: not really
                 is_list_param: true,
                 name: CascadeString::from("file_type"),
                 default: None,
@@ -853,7 +853,7 @@ fn call_to_fsc_rules<'a>(
         )?,
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: CascadeString::from("obj_class"), //TODO: not really
+                param_type: CascadeString::from(constants::CLASS), //TODO: not really
                 is_list_param: true,
                 name: CascadeString::from("file_type"),
                 default: Some(Argument::List(vec![])),
@@ -1185,7 +1185,7 @@ fn call_to_resource_transition<'a>(
         )?,
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: CascadeString::from("obj_class"), //TODO: not really
+                param_type: CascadeString::from(constants::CLASS), //TODO: not really
                 is_list_param: true,
                 name: CascadeString::from("file_type"),
                 default: Some(Argument::List(vec![])),
