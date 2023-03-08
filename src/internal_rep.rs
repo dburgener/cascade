@@ -410,7 +410,7 @@ fn get_associate(
     }))
 }
 
-fn get_type_annotations(
+pub fn get_type_annotations(
     file: &SimpleFile<String, String>,
     annotations: &Annotations,
 ) -> Result<WithWarnings<BTreeSet<AnnotationInfo>>, ErrorItem> {

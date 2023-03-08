@@ -21,8 +21,8 @@ use crate::functions::{
     FunctionInfo, FunctionMap, ValidatedCall, ValidatedStatement,
 };
 use crate::internal_rep::{
-    generate_sid_rules, validate_derive_args, Annotated, AnnotationInfo, Associated, BoundTypeInfo,
-    ClassList, Context, Sid, TypeInfo, TypeInstance, TypeMap,
+    generate_sid_rules, get_type_annotations, validate_derive_args, Annotated, AnnotationInfo,
+    Associated, BoundTypeInfo, ClassList, Context, Sid, TypeInfo, TypeInstance, TypeMap,
 };
 use crate::machine::{MachineMap, ModuleMap, ValidatedMachine, ValidatedModule};
 use crate::warning::{Warnings, WithWarnings};
@@ -114,15 +114,14 @@ fn generate_cil_headers(
     ret
 }
 
-// TODO: Refactor below nearly identical functions to eliminate redundant code
+// Extend the type map by inserting new types found in a given policy file
+// Returns a map of annotations on extend {} blocks, so that the real types can be augmented with
+// them after all types have been inserted
 pub fn extend_type_map(
     p: &PolicyFile,
     type_map: &mut TypeMap,
-) -> Result<WithWarnings<()>, CascadeErrors> {
-    // TODO: This only allows declarations at the top level.
-    // Nested declarations are legal, but auto-associate with the parent, so they'll need special
-    // handling when association is implemented
-
+) -> Result<WithWarnings<BTreeMap<CascadeString, BTreeSet<AnnotationInfo>>>, CascadeErrors> {
+    let mut ret = BTreeMap::new();
     let mut errors = CascadeErrors::new();
     let mut warnings = Warnings::new();
     for e in &p.policy.exprs {
@@ -132,58 +131,56 @@ pub fn extend_type_map(
         };
         if let Declaration::Type(t) = d {
             // If there are nested declarations, they associate
-            let mut associate_names = BTreeSet::new();
             for e in &t.expressions {
                 if let Expression::Decl(Declaration::Type(associated_type)) = e {
                     if !associated_type.is_extension {
                         // Make the synthetic type to associate
                         if type_map.get(associated_type.name.as_ref()).is_none() {
                             match TypeInfo::new(*associated_type.clone(), &p.file) {
-                                Ok(new_type) => type_map.insert(
-                                    associated_type.name.to_string(),
-                                    new_type.inner(&mut warnings),
-                                )?,
+                                Ok(ww) => {
+                                    // The associated type may or may not be virtual, but this is
+                                    // its parent, which should be
+                                    let mut new_type = ww.inner(&mut warnings);
+                                    new_type.is_virtual = true;
+                                    type_map.insert(associated_type.name.to_string(), new_type)?
+                                }
                                 Err(e) => errors.append(e),
                             }
                         }
-                        associate_names.insert(associated_type.name.clone());
-                    }
+                        let ann_to_insert = AnnotationInfo::Associate(Associated {
+                            resources: BTreeSet::from([associated_type.name.clone()]),
+                        });
+                        let annotations = ret.entry(t.name.clone()).or_insert_with(BTreeSet::new);
+                        annotations.insert(ann_to_insert);
+                    };
                 }
             }
 
             if !t.is_extension {
                 match TypeInfo::new(*t.clone(), &p.file) {
                     Ok(new_type) => {
-                        let mut new_type = new_type.inner(&mut warnings);
-                        if !associate_names.is_empty() {
-                            // TODO: this returns false if it already existed.  That should
-                            // probably be an error
-                            new_type
-                                .annotations
-                                .insert(AnnotationInfo::Associate(Associated {
-                                    resources: associate_names,
-                                }));
-                        }
+                        let new_type = new_type.inner(&mut warnings);
                         type_map.insert(t.name.to_string(), new_type)?;
                     }
                     Err(e) => errors.append(e),
                 }
-            } else if !associate_names.is_empty() {
-                // This is an extension, which adds a new association
-                // We can't handle this case here, because the original type might not have been
-                // created yet.  We might need to add another pass.  For now, lets just return a
-                // compile error and say we'll support it later
-                for n in associate_names {
-                    errors.append(ErrorItem::make_compile_or_internal_error(
-                            "Adding an association via the nested syntax in an extend block is not yet supported",
-                            Some(&p.file),
-                            n.get_range(),
-                            &format!("If you want to associate this type, you should declare it at the global scope and use @associate([{n}]) above this extend block")).into());
+            } else {
+                // Insert its annotations
+                let mut annotation_infos = match get_type_annotations(&p.file, &t.annotations) {
+                    Ok(ai) => ai.inner(&mut warnings),
+                    Err(e) => {
+                        errors.append(e.into());
+                        continue;
+                    }
+                };
+                if !annotation_infos.is_empty() {
+                    let annotations = ret.entry(t.name.clone()).or_insert_with(BTreeSet::new);
+                    annotations.append(&mut annotation_infos);
                 }
             }
         }
     }
-    errors.into_result(WithWarnings::new((), warnings))
+    errors.into_result(WithWarnings::new(ret, warnings))
 }
 
 // Verify that all uses of the extend keyword correspond to types declared elsewhere
@@ -201,6 +198,22 @@ pub fn verify_extends(p: &PolicyFile, type_map: &TypeMap) -> Result<(), CascadeE
         }
     }
     errors.into_result(())
+}
+
+pub fn insert_extend_annotations(
+    type_map: &mut TypeMap,
+    extend_annotations: BTreeMap<CascadeString, BTreeSet<AnnotationInfo>>,
+) {
+    for (annotated_type, annotations) in extend_annotations {
+        // If get_mut() returns None, that means we added an annotation on an extend for a type
+        // that doesn't exist.  That case will return an error in verify_extends() regardless of
+        // whether we added an annotation, so we can just skip silently for now
+        if let Some(t) = type_map.get_mut(annotated_type.as_ref()) {
+            for a in annotations {
+                t.annotations.insert(a);
+            }
+        }
+    }
 }
 
 pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
