@@ -19,3 +19,12 @@ extend resource {
 		allow(source, this, file, read);
 	}
 }
+
+// Add an alias
+@alias(some_alias)
+extend foo {}
+
+// Add an associated resource in an extend block
+extend bar {
+	resource baz {}
+}

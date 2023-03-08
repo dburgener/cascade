@@ -119,19 +119,24 @@ fn compile_machine_policies_internal(
     let mut module_map = ModuleMap::new();
     let mut machine_map = MachineMap::new();
 
-    // Collect all type declarations
-    for p in &policies {
-        match compile::extend_type_map(p, &mut type_map) {
-            Ok(ww) => ww.inner(&mut warnings),
-            Err(e) => {
-                errors.append(e);
-                continue;
+    {
+        let mut extend_annotations = BTreeMap::new();
+        // Collect all type declarations
+        for p in &policies {
+            match compile::extend_type_map(p, &mut type_map) {
+                Ok(anns) => extend_annotations.append(&mut anns.inner(&mut warnings)),
+                Err(e) => {
+                    errors.append(e);
+                    continue;
+                }
             }
         }
-    }
 
-    // Stops if something went wrong for this major step.
-    errors = errors.into_result_self()?;
+        compile::insert_extend_annotations(&mut type_map, extend_annotations);
+
+        // Stops if something went wrong for this major step.
+        errors = errors.into_result_self()?;
+    }
 
     // Generate type aliases
     let t_aliases = compile::collect_aliases(type_map.iter());
@@ -716,6 +721,8 @@ mod tests {
                 "(allow bar foo (file (write)))",
                 "(macro foo-my_func ((type this) (type source)) (allow source this (file (read))))",
                 "(macro resource-read ((type this) (type source)) (allow source this (file (read))))",
+                "(typealias some_alias)",
+                "(type bar-baz)",
             ],
             &[],
             0,
@@ -1413,11 +1420,6 @@ mod tests {
     #[test]
     fn invalid_parent_call() {
         error_policy_test!("parent_call.cas", 4, ErrorItem::Compile(_));
-    }
-
-    #[test]
-    fn extend_nested_associate() {
-        error_policy_test!("extend_nested_associate.cas", 1, ErrorItem::Compile(_));
     }
 
     #[test]
