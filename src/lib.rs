@@ -1421,6 +1421,11 @@ mod tests {
     }
 
     #[test]
+    fn no_arg_function() {
+        error_policy_test!("no_arg_function.cas", 1, ErrorItem::Compile(_));
+    }
+
+    #[test]
     fn valid_parent_call() {
         valid_policy_test(
             "parent_call.cas",

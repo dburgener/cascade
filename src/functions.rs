@@ -1401,6 +1401,16 @@ impl<'a> FunctionInfo<'a> {
 
         let mut func_aliases = vec![&funcdecl.name];
 
+        if funcdecl.args.is_empty() {
+            return Err(ErrorItem::make_compile_or_internal_error(
+                "Function has no arguments",
+                Some(declaration_file),
+                funcdecl.name.get_range(),
+                "This function has no arguments, which is illegal in Cascade",
+            )
+            .into());
+        }
+
         for a in &funcdecl.args {
             match FunctionArgument::new(a, types, Some(declaration_file)) {
                 Ok(a) => args.push(a),

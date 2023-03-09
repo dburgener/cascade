@@ -1,0 +1,9 @@
+resource foo {
+	fn no_args() {
+		allow(domain, this, file, read);
+	}
+}
+
+domain bar {
+	foo.no_args();
+}
