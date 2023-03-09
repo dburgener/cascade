@@ -107,6 +107,19 @@ impl<'a> Context<'a> {
         }
     }
 
+    // Returns whether a symbol refers to a list.  If the symbol does not exist, returns false.
+    // Use symbol_in_context to determine existance
+    pub fn symbol_is_list(&self, arg: &str) -> bool {
+        let arg = self.convert_arg_this(arg);
+        match self.symbols.get(&CascadeString::from(&arg as &str)) {
+            Some(BindableObject::Type(_)) | Some(BindableObject::Class(_)) | None => false,
+            Some(BindableObject::TypeList(_))
+            | Some(BindableObject::PermList(_))
+            | Some(BindableObject::ClassList(_)) => true,
+            Some(BindableObject::Argument(a)) => a.is_list_param,
+        }
+    }
+
     pub fn convert_arg_this(&self, arg: &str) -> String {
         match self.parent_type {
             Some(parent) => {
