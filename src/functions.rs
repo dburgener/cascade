@@ -2478,6 +2478,7 @@ pub fn validate_arguments<'a>(
 
 // The ast Argument owns the data, this struct is similar, but has references to the owned data in
 // the ast, so we can make copies and manipulate
+#[derive(Debug)]
 pub enum ArgForValidation<'a> {
     Var(&'a CascadeString),
     List(Vec<&'a CascadeString>),
@@ -2594,6 +2595,15 @@ impl<'a> ArgForValidation<'a> {
 
         Ok(())
     }
+
+    // Return true if this is a symbol which binds to a list, else false
+    pub fn is_list_symbol(&self, context: &BlockContext) -> bool {
+        if let ArgForValidation::Var(s) = self {
+            context.symbol_is_list(s.as_ref())
+        } else {
+            false
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2662,6 +2672,7 @@ fn validate_argument<'a>(
             if target_argument.is_list_param {
                 if arg_typeinfo.list_coercion
                     || matches!(arg_typeinfo.bound_type, BoundTypeInfo::List(_))
+                    || arg.is_list_symbol(context)
                 {
                     return validate_argument(
                         ArgForValidation::coerce_list(arg),
@@ -2673,7 +2684,6 @@ fn validate_argument<'a>(
                         file,
                         is_avc,
                     );
-                    // TODO: Do we handle bound lists here?
                 }
                 return Err(ErrorItem::make_compile_or_internal_error(
                     "Expected list",
