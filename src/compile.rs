@@ -1638,7 +1638,7 @@ pub fn call_derived_associated_calls<'a>(
                                 BlockContext::new(BlockType::Domain, Some(t), None);
                             local_context.insert_function_args(&args);
 
-                            let validated_call = match ValidatedCall::new(
+                            let validated_calls = match ValidatedCall::new(
                                 &call,
                                 funcs,
                                 types,
@@ -1654,7 +1654,9 @@ pub fn call_derived_associated_calls<'a>(
                                 }
                             };
 
-                            ret.insert(ValidatedStatement::Call(Box::new(validated_call)));
+                            for c in validated_calls {
+                                ret.insert(ValidatedStatement::Call(Box::new(c)));
+                            }
                         }
                     }
                 }

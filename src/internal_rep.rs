@@ -225,6 +225,9 @@ impl TypeInfo {
                 return "name";
             }
         }
+        if self.name == "class" {
+            return "class";
+        }
         "type" // Includes attributes in macro args
     }
 

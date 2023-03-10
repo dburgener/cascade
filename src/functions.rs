@@ -1720,7 +1720,11 @@ impl<'a> FunctionInfo<'a> {
     pub fn generate_synthetic_alias_call(&self, alias_cil_name: &str) -> sexp::Sexp {
         let call = ValidatedCall {
             cil_name: self.get_cil_name(),
-            args: self.args.iter().map(|a| a.name.clone()).collect(),
+            args: self
+                .args
+                .iter()
+                .map(|a| CilArg::Name(a.name.clone()))
+                .collect(),
         };
 
         Sexp::List(vec![
@@ -2096,7 +2100,7 @@ impl<'a> ValidatedStatement<'a> {
                     }
                 }
                 None => Ok(WithWarnings::from(
-                    Some(ValidatedStatement::Call(Box::new(ValidatedCall::new(
+                    ValidatedCall::new(
                         c,
                         functions,
                         types,
@@ -2104,8 +2108,9 @@ impl<'a> ValidatedStatement<'a> {
                         parent_type.into(),
                         context,
                         file,
-                    )?)))
+                    )?
                     .into_iter()
+                    .map(|c| ValidatedStatement::Call(Box::new(c)))
                     .collect::<BTreeSet<ValidatedStatement>>(),
                 )),
             },
@@ -2191,10 +2196,45 @@ impl TryFrom<&ValidatedStatement<'_>> for sexp::Sexp {
     }
 }
 
+// There are two cases we pass through to CIL:
+// 1. A single identifier (type, class or name)
+// 3. A classpermissionset
+// Note that at the CIL level, classes and permissions go together, whereas in Cascade, they can be
+// handled separately.  The implication here is that to pass a list of permissions, we need to pass
+// a class along with them.  There are three cases:
+// 1. In the function, the permissions are used with exactly one class
+// 2. In the function, the permissions are used with several classes but are valid for all
+// 3. The permissions are not valid for some of the listed classes
+// In case 1, the function definition should assume the class will be passed in, and the call(s)
+// should pass the set of class with permissions
+// In case 2, the caller should generate a classmapping for the combined set of classes and perms
+// In case 3, validate_argument() is responsible to detect this and return a compile error
+//
+// A list of classes should be expanded to multiple calls on a single class
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum CilArg {
+    Name(String),
+    // class, permissions
+    PermList(String, Vec<String>),
+}
+
+impl From<&CilArg> for sexp::Sexp {
+    fn from(arg: &CilArg) -> Self {
+        match arg {
+            CilArg::Name(s) => atom_s(s),
+            CilArg::PermList(c, p) => {
+                let p: Vec<CascadeString> =
+                    p.iter().map(|s| CascadeString::from(s as &str)).collect();
+                list(&[atom_s(c), Sexp::List(perm_list_to_sexp(&p))])
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ValidatedCall {
     cil_name: String,
-    args: Vec<String>,
+    args: Vec<CilArg>,
 }
 
 impl ValidatedCall {
@@ -2206,7 +2246,7 @@ impl ValidatedCall {
         parent_type: Option<&TypeInfo>,
         context: &BlockContext,
         file: &SimpleFile<String, String>,
-    ) -> Result<ValidatedCall, CascadeErrors> {
+    ) -> Result<BTreeSet<ValidatedCall>, CascadeErrors> {
         // If we have gotten into the state where the class name is none
         // but the cast_name is some, something has gone wrong.
         if call.class_name.is_none() && call.cast_name.is_some() {
@@ -2268,12 +2308,17 @@ impl ValidatedCall {
             }
         }
 
-        let mut args = match (&call.class_name, function_info.class) {
+        let args = match (&call.class_name, function_info.class) {
             (Some(class_name), FunctionClass::Type(_)) => {
-                vec![convert_class_name_if_this(class_name, parent_type)?.get_cil_name()]
+                vec![CilArg::Name(
+                    convert_class_name_if_this(class_name, parent_type)?.get_cil_name(),
+                )]
             }
             _ => Vec::new(),
         };
+
+        let mut arg_lists = Vec::new();
+        arg_lists.push(args);
 
         for arg in validate_arguments(
             call,
@@ -2283,24 +2328,71 @@ impl ValidatedCall {
             context,
             Some(file),
         )? {
-            args.push(arg.get_name_or_string(context)?.to_string()); // TODO: Handle lists
+            // We don't know if these are symbols or lists.
+            // If they are symbols, we save them as CilArg::Name
+            // If they are lists, then we either need to explode our calls to the list count, or in
+            // specifically the list of perms case, we need to construct a classpermissionset
+            if let Ok(arg) = arg.get_name_or_string(context) {
+                for args in &mut arg_lists {
+                    args.push(CilArg::Name(arg.to_string()));
+                }
+            } else if let Ok(list) = arg.get_list(context) {
+                // Below is the not perm-set case
+                arg_lists = expand_arg_lists(arg_lists, list);
+            } else {
+                // Should not be possible, since get_name_or_string() and get_list() collectively
+                // should be comprehensive returning Ok() on TypeValue
+                return Err(InternalError::new().into());
+            }
         }
 
-        Ok(ValidatedCall { cil_name, args })
+        let mut ret = BTreeSet::new();
+        for args in arg_lists {
+            ret.insert(ValidatedCall {
+                cil_name: cil_name.clone(),
+                args,
+            });
+        }
+
+        Ok(ret)
     }
 
     fn get_renamed_call(&self, renames: &BTreeMap<String, String>) -> Self {
+        // The renaming only applies to type names, so we can ignore the CilArg::PermList case
         let new_args = self
             .args
             .iter()
             .cloned()
-            .map(|a| renames.get(&a).unwrap_or(&a).to_string())
+            .map(|a| {
+                if let CilArg::Name(s) = a {
+                    CilArg::Name(renames.get(&s).unwrap_or(&s).to_string())
+                } else {
+                    a
+                }
+            })
             .collect();
         ValidatedCall {
             cil_name: self.cil_name.clone(),
             args: new_args,
         }
     }
+}
+
+// Turns an arg list like: (arg1, [arg2 arg3]) into:
+// (arg1, arg2) and (arg1, arg3)
+fn expand_arg_lists(
+    existing_lists: Vec<Vec<CilArg>>,
+    next_arg_list: Vec<CascadeString>,
+) -> Vec<Vec<CilArg>> {
+    let mut new_arg_lists = Vec::new();
+    for existing_args in existing_lists {
+        for next_arg in &next_arg_list {
+            let mut new_arg_list = existing_args.clone();
+            new_arg_list.push(CilArg::Name(next_arg.to_string()));
+            new_arg_lists.push(new_arg_list);
+        }
+    }
+    new_arg_lists
 }
 
 pub fn validate_arguments<'a>(
@@ -2722,7 +2814,7 @@ fn validate_argument<'a>(
 
 impl From<&ValidatedCall> for sexp::Sexp {
     fn from(call: &ValidatedCall) -> sexp::Sexp {
-        let args = call.args.iter().map(|a| atom_s(a)).collect::<Vec<Sexp>>();
+        let args = call.args.iter().map(Sexp::from).collect::<Vec<Sexp>>();
 
         Sexp::List(vec![
             atom_s("call"),
@@ -2851,7 +2943,10 @@ mod tests {
     fn get_renamed_statement_test() {
         let statement1 = ValidatedStatement::Call(Box::new(ValidatedCall {
             cil_name: "foo".to_string(),
-            args: vec!["old_name".to_string(), "b".to_string()],
+            args: vec![
+                CilArg::Name("old_name".to_string()),
+                CilArg::Name("b".to_string()),
+            ],
         }));
 
         let statement2 = ValidatedStatement::AvRule(AvRule {
@@ -2902,5 +2997,52 @@ mod tests {
         assert!(validate_port(&CascadeString::from("65536"), None).is_err());
         assert!(validate_port(&CascadeString::from("-1"), None).is_err());
         assert!(validate_port(&CascadeString::from("2-1"), None).is_err());
+    }
+
+    #[test]
+    fn expand_arg_list_test() {
+        let existing_lists = vec![Vec::new()];
+        let next_arg_list = vec![
+            CascadeString::from("foo".to_string()),
+            CascadeString::from("bar".to_string()),
+        ];
+
+        let mut expanded_list = expand_arg_lists(existing_lists, next_arg_list);
+
+        assert_eq!(
+            expanded_list,
+            vec![
+                vec![CilArg::Name("foo".to_string())],
+                vec![CilArg::Name("bar".to_string())]
+            ]
+        );
+
+        let second_arg_list = vec![
+            CascadeString::from("baz".to_string()),
+            CascadeString::from("qux".to_string()),
+        ];
+        expanded_list = expand_arg_lists(expanded_list, second_arg_list);
+
+        assert_eq!(
+            expanded_list,
+            vec![
+                vec![
+                    CilArg::Name("foo".to_string()),
+                    CilArg::Name("baz".to_string())
+                ],
+                vec![
+                    CilArg::Name("foo".to_string()),
+                    CilArg::Name("qux".to_string())
+                ],
+                vec![
+                    CilArg::Name("bar".to_string()),
+                    CilArg::Name("baz".to_string())
+                ],
+                vec![
+                    CilArg::Name("bar".to_string()),
+                    CilArg::Name("qux".to_string())
+                ],
+            ]
+        )
     }
 }
