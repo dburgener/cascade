@@ -372,6 +372,25 @@ impl FromStr for FileType {
     }
 }
 
+impl FileType {
+    fn validate(
+        file_type: CascadeString,
+        file: &SimpleFile<String, String>,
+    ) -> Result<Self, CascadeErrors> {
+        match file_type.to_string().parse::<FileType>() {
+            Ok(ft) => Ok(ft),
+            Err(_) => Err(CascadeErrors::from(
+                ErrorItem::make_compile_or_internal_error(
+                    "Not a valid file type",
+                    Some(file),
+                    file_type.get_range(),
+                    "",
+                ),
+            )),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct FileContextRule<'a> {
     pub regex_string: String,
@@ -473,23 +492,11 @@ fn call_to_fc_rules<'a>(
     };
 
     for file_type in file_types {
-        let file_type = match file_type.to_string().parse::<FileType>() {
-            Ok(f) => f,
-            Err(_) => {
-                return Err(CascadeErrors::from(
-                    ErrorItem::make_compile_or_internal_error(
-                        "Not a valid file type",
-                        Some(file),
-                        file_type.get_range(),
-                        "",
-                    ),
-                ))
-            }
-        };
+        let ft = FileType::validate(file_type, file)?;
 
         ret.push(FileContextRule {
             regex_string: regex_string.clone(),
-            file_type,
+            file_type: ft,
             context: context.clone(),
         });
     }
@@ -986,19 +993,7 @@ fn call_to_fsc_rules<'a>(
                 });
             } else {
                 for file_type in file_types {
-                    let file_type = match file_type.to_string().parse::<FileType>() {
-                        Ok(f) => f,
-                        Err(_) => {
-                            return Err(CascadeErrors::from(
-                                ErrorItem::make_compile_or_internal_error(
-                                    "Not a valid file type",
-                                    Some(file),
-                                    file_type.get_range(),
-                                    "",
-                                ),
-                            ))
-                        }
-                    };
+                    let file_type = FileType::validate(file_type, file)?;
 
                     ret.push(FileSystemContextRule {
                         fscontext_type: fscontext_type.clone(),
