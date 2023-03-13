@@ -1124,7 +1124,7 @@ pub struct ResourcetransRule<'a> {
     pub default: Cow<'a, CascadeString>,
     pub domain: Cow<'a, CascadeString>,
     pub parent: Cow<'a, CascadeString>,
-    pub file_type: FileType,
+    pub file_type: Cow<'a, CascadeString>,
 }
 
 impl ResourcetransRule<'_> {
@@ -1226,41 +1226,12 @@ fn call_to_resource_transition<'a>(
         return Err(ErrorItem::Internal(InternalError::new()).into());
     }
 
-    // The issue with this is that we might be looking at an unresolved symbol, notably an argument
-    // (TODO: are normal bindings resolved already?)
-    // If it's an argument, then this validation needs to be done in validate_argument()
     for file_type in file_types {
-        let file_type = match file_type.to_string().parse::<FileType>() {
-            Ok(f) => f,
-            // TODO: DO NOT MERGE without adding associated check in validate_argument()
-            Err(_) => {
-                if context
-                    .symbol_in_context(file_type.as_ref(), types)
-                    .is_some()
-                {
-                    FileType::Symbol(file_type.to_string())
-                } else {
-                    // This should have been caught at the validation in validate_arguments()
-                    return Err(InternalError::new().into());
-                }
-
-                //Err(_) => {
-                //    return Err(CascadeErrors::from(
-                //        ErrorItem::make_compile_or_internal_error(
-                //            "Not a valid file type",
-                //            Some(file),
-                //            file_type.get_range(),
-                //            "",
-                //        ),
-                //    ))
-            }
-        };
-
         ret.push(ResourcetransRule {
             default: Cow::Owned(default.clone()),
             domain: Cow::Owned(domain.clone()),
             parent: Cow::Owned(parent.clone()),
-            file_type,
+            file_type: Cow::Owned(file_type.clone()),
         });
     }
 
