@@ -313,7 +313,7 @@ fn call_to_av_rule<'a>(
     Ok(av_rules.into_iter().collect())
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FileType {
     File,
     Directory,
@@ -323,6 +323,8 @@ pub enum FileType {
     Socket,
     Pipe,
     Any,
+    // A symbol bound at the CIL level to a file type string
+    Symbol(String),
 }
 
 // These are the CIL strings for the target CIL
@@ -342,6 +344,7 @@ impl fmt::Display for FileType {
                 FileType::Socket => "socket",
                 FileType::Pipe => "pipe",
                 FileType::Any => "any",
+                FileType::Symbol(s) => s,
             }
         )
     }
@@ -380,7 +383,7 @@ impl FileContextRule<'_> {
     fn get_renamed_statement(&self, renames: &BTreeMap<String, String>) -> Self {
         FileContextRule {
             regex_string: self.regex_string.clone(),
-            file_type: self.file_type,
+            file_type: self.file_type.clone(),
             context: self.context.get_renamed_context(renames),
         }
     }
@@ -729,14 +732,14 @@ impl Ord for FileSystemContextRule<'_> {
             &self.fscontext_type,
             &self.fs_name,
             &self.path,
-            self.file_type,
+            &self.file_type,
             &self.context,
         )
             .cmp(&(
                 &other.fscontext_type,
                 &other.fs_name,
                 &other.path,
-                other.file_type,
+                &other.file_type,
                 &other.context,
             ))
     }
@@ -748,7 +751,7 @@ impl FileSystemContextRule<'_> {
             fscontext_type: self.fscontext_type.clone(),
             fs_name: self.fs_name.clone(),
             path: self.path.clone(),
-            file_type: self.file_type,
+            file_type: self.file_type.clone(),
             context: self.context.get_renamed_context(renames),
             file: self.file.clone(),
             file_type_range: self.file_type_range.clone(),
@@ -1130,7 +1133,7 @@ impl ResourcetransRule<'_> {
             default: rename_cow(&self.default, renames),
             domain: rename_cow(&self.domain, renames),
             parent: rename_cow(&self.parent, renames),
-            file_type: self.file_type,
+            file_type: self.file_type.clone(),
         }
     }
 }
@@ -1223,18 +1226,33 @@ fn call_to_resource_transition<'a>(
         return Err(ErrorItem::Internal(InternalError::new()).into());
     }
 
+    // The issue with this is that we might be looking at an unresolved symbol, notably an argument
+    // (TODO: are normal bindings resolved already?)
+    // If it's an argument, then this validation needs to be done in validate_argument()
     for file_type in file_types {
         let file_type = match file_type.to_string().parse::<FileType>() {
             Ok(f) => f,
+            // TODO: DO NOT MERGE without adding associated check in validate_argument()
             Err(_) => {
-                return Err(CascadeErrors::from(
-                    ErrorItem::make_compile_or_internal_error(
-                        "Not a valid file type",
-                        Some(file),
-                        file_type.get_range(),
-                        "",
-                    ),
-                ))
+                if context
+                    .symbol_in_context(file_type.as_ref(), types)
+                    .is_some()
+                {
+                    FileType::Symbol(file_type.to_string())
+                } else {
+                    // This should have been caught at the validation in validate_arguments()
+                    return Err(InternalError::new().into());
+                }
+
+                //Err(_) => {
+                //    return Err(CascadeErrors::from(
+                //        ErrorItem::make_compile_or_internal_error(
+                //            "Not a valid file type",
+                //            Some(file),
+                //            file_type.get_range(),
+                //            "",
+                //        ),
+                //    ))
             }
         };
 
