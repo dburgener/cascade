@@ -1,8 +1,16 @@
 resource foo {
     resource_transition(this, domain, bar, [file dir]);
 
+    fn foo_filetrans(domain source, resource new_type, [class] classes) {
+        resource_transition(this, source, new_type, classes);
+    }
+
     // Policies must include at least one av rule
     allow(domain, foo, file, [read]);
 }
 
 resource bar {}
+
+domain some_dom {
+    foo.foo_filetrans(this, bar, [lnk_file]);
+}
