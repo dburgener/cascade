@@ -1794,11 +1794,28 @@ fn get_rules_vec_for_type(ti: &TypeInfo, s: sexp::Sexp, type_map: &TypeMap) -> V
         ]));
     }
 
+    // CIL only supports aliases on types.
+    // Since an attribute is just a name for a group of types, and attribute on aliases is just a
+    // new attribute
+    let alias_declaration_keyword = if !ti.is_virtual {
+        "typealias"
+    } else {
+        "typeattribute"
+    };
+    let alias_association_keyword = if !ti.is_virtual {
+        "typealiasactual"
+    } else {
+        "typeattributeset"
+    };
+
     for a in &ti.annotations {
         if let AnnotationInfo::Alias(a) = a {
-            ret.push(list(&[atom_s("typealias"), atom_s(a.as_ref())]));
             ret.push(list(&[
-                atom_s("typealiasactual"),
+                atom_s(alias_declaration_keyword),
+                atom_s(a.as_ref()),
+            ]));
+            ret.push(list(&[
+                atom_s(alias_association_keyword),
                 atom_s(a.as_ref()),
                 atom_s(ti.name.get_cil_name().as_ref()),
             ]));
