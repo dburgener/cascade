@@ -1,0 +1,8 @@
+@alias(an_alias)
+virtual resource some_res {}
+
+resource child inherits an_alias {}
+
+domain require_allow {
+	allow(this, child, file, read);
+}
