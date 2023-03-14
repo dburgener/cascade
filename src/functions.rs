@@ -2333,6 +2333,7 @@ impl ValidatedCall {
             } else if let Ok(list) = arg.get_list(context) {
                 // Below is the not perm-set case
                 arg_lists = expand_arg_lists(arg_lists, list);
+                // TODO: Add support for the perm-set case
             } else {
                 // Should not be possible, since get_name_or_string() and get_list() collectively
                 // should be comprehensive returning Ok() on TypeValue
