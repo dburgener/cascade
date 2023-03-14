@@ -999,7 +999,9 @@ pub fn get_reduced_types(
         for parent in &t.inherits {
             if let Some(parent_type_info) = type_map.get(parent.as_ref()) {
                 if !reduced_type_map.iter().any(|(k, _v)| k == parent.as_ref()) {
-                    reduced_type_map.insert(parent.to_string(), parent_type_info.clone())?;
+                    // The parent name may be an alias, so get the real name from the TypeInfo
+                    reduced_type_map
+                        .insert(parent_type_info.name.to_string(), parent_type_info.clone())?;
                 }
             }
         }
@@ -1538,6 +1540,10 @@ fn organize_type_map(types: &TypeMap) -> Result<Vec<&TypeInfo>, CascadeErrors> {
                     ));
                     continue;
                 }
+
+                // key may be an alias
+                let key = types.get(key.as_ref()).map(|t| &t.name).unwrap_or(key);
+
                 if !out.iter().any(|&x| &x.name == key) {
                     wait = true;
                     continue;
