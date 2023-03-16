@@ -315,6 +315,23 @@ impl TypeInfo {
         }
         ret
     }
+
+    // If this TI associates a type named associate_name, return its range
+    // Note that if the association is synthetic, the range will be None, so this finds
+    // specifically associations specifically in source, rather than somehow derived by the
+    // compiler
+    pub fn explicitly_associates(&self, associate_name: &str) -> Option<Range<usize>> {
+        for ann in &self.annotations {
+            if let AnnotationInfo::Associate(associations) = ann {
+                for res in &associations.resources {
+                    if res.as_ref() == associate_name && res.get_range().is_some() {
+                        return res.get_range();
+                    }
+                }
+            }
+        }
+        None
+    }
 }
 
 // This is the sexp for *declaring* the type

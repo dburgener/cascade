@@ -1,0 +1,10 @@
+virtual resource tmp {}
+
+@associate([tmp])
+virtual domain bar {}
+
+@associate([tmp])
+domain foo inherits bar {
+	allow(this, this.tmp, file, write);
+}
+

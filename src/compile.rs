@@ -1252,10 +1252,68 @@ fn create_synthetic_resource(
         .expressions
         // If dup_res_decl is concrete, do not inherit virtual functions
         .retain(|e| dup_res_is_virtual || !e.is_virtual_function());
-    if !global_exprs.insert(Expression::Decl(Declaration::Type(Box::new(dup_res_decl)))) {
-        return Err(InternalError::new().into());
+    if !global_exprs.insert(Expression::Decl(Declaration::Type(Box::new(
+        dup_res_decl.clone(),
+    )))) {
+        // The callers should be handling the situation where the same resource was declared at the
+        // same level of inheritance, but this can arise if a parent associated a resource and a
+        // child associated the same resource.  We should find them and return and error message
+        return match make_duplicate_associate_error(types, dom_info, &res_name) {
+            Some(e) => Err(e.into()),
+            None => Err(InternalError::new().into()),
+        };
     }
     Ok(res_name)
+}
+
+fn make_duplicate_associate_error(
+    types: &TypeMap,
+    child_domain: &TypeInfo,
+    res_name: &CascadeString,
+) -> Option<CompileError> {
+    let mut parent_ti = None;
+    let mut parent_associate_range = None;
+    for p in child_domain.get_all_parent_names(types) {
+        if let Some(p_ti) = types.get(p.as_ref()) {
+            parent_associate_range = p_ti.explicitly_associates(res_name.as_ref());
+            if parent_associate_range.is_some() {
+                parent_ti = Some(p_ti);
+                break;
+            }
+        }
+    }
+    let current_associate_range = match child_domain.explicitly_associates(res_name.as_ref()) {
+        Some(r) => r,
+        None => {
+            // This is an association via nested declaration, so find that
+            child_domain.decl.as_ref()?.expressions.iter().find_map(|e|
+                if let Expression::Decl(Declaration::Type(td)) = e {
+                    if &td.name == res_name {
+                        td.name.get_range()
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                })?
+        }
+    };
+
+    // If anything we need for a real error is None, all we can do is InternalError, so unwrap
+    // everything, returning InternalError on failure
+    let child_file = child_domain.declaration_file.as_ref()?;
+    let parent_file = parent_ti?.declaration_file.as_ref()?;
+    let parent_associate_range = parent_associate_range?;
+
+    Some(CompileError::new(
+                "This resource is explicitly associated to both the parent and child.  (Perhaps you meant to extend the existing resource in the child?)",
+                child_file,
+                current_associate_range,
+                "Associated in the child here")
+            .add_additional_message(
+                parent_file,
+                parent_associate_range,
+                "But it was already associated in this parent"))
 }
 
 fn interpret_associate(
