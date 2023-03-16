@@ -973,6 +973,16 @@ mod tests {
         valid_policy_test("implicit_this.cas", &["(call foo-read (foo bar))"], &[], 0);
     }
 
+    #[test]
+    fn inherit_alias_test() {
+        valid_policy_test(
+            "inherit_alias.cas",
+            &["(typeattributeset an_alias (child))"],
+            &[],
+            0,
+        );
+    }
+
     // This is just a quick compile test.  The true purpose of these files is to actually boot in
     // enforcing mode on a VM.  That is outside the scope of this test, but compile testing is a
     // minimum first step and reasonable to do here.
