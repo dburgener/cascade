@@ -1885,6 +1885,8 @@ fn validate_cast(
     }
     match (cast_ti, func_call, func_info) {
         (Some(cast_ti), Some(func_call), Some(func_info)) => {
+            // If we can validate the inheritance than things are castable.  If we cannot
+            // we need to check if the function itself is castable.
             if !validate_inheritance(func_call, type_info, &cast_ti.name, file)? {
                 if func_info.is_castable {
                     Ok(())
@@ -1908,6 +1910,10 @@ fn validate_cast(
 }
 
 // Validate that the parent provided both exists and is actually a parent of the current resource.
+// This function will return:
+//   true if classes exist and class_info does in fact inherit from the parent_name
+//   false if the classes exist but class_info does not inherit from parent_name
+//   Error if the classes do not exist.
 fn validate_inheritance(
     call: &FuncCall,
     class_info: Option<&TypeInfo>,
