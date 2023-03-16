@@ -457,6 +457,8 @@ impl Statement {
 
 // The function will take a vector of statements and reduce them down
 // to only their function calls.
+// Note: This will expand out all possible function calls regardless
+// of boolean & optional block state.
 pub fn get_all_func_calls(statements: Vec<Statement>) -> Vec<FuncCall> {
     let mut ret_vec: Vec<FuncCall> = Vec::new();
     for call in statements {

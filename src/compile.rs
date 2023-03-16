@@ -502,22 +502,6 @@ pub fn prevalidate_functions(
 
     let (mut terminated_functions, mut nonterm_functions) = initialize_terminated(functions);
 
-    if terminated_functions.is_empty() && !nonterm_functions.is_empty() {
-        let mut error: Option<CompileError> = None;
-
-        for func in functions.values() {
-            error = Some(add_or_create_compile_error(
-                error,
-                "No terminating call found",
-                func.declaration_file,
-                func.get_declaration_range().unwrap_or_default(),
-                "All function calls found in possible recursive loop",
-            ));
-        }
-        // Unwrap is safe since we need to go through the loop above at least once
-        return Err(CascadeErrors::from(error.unwrap()));
-    }
-
     search_for_recursion(&mut terminated_functions, &mut nonterm_functions, functions)?;
 
     Ok(())

@@ -1838,6 +1838,8 @@ fn validate_cast(
     // Initial type we are casting from
     start_type: &CascadeString,
     // Type Info for what we are casting to
+    // If cast_ti is Some() func_call and func_info
+    // must also be Some()
     cast_ti: Option<&TypeInfo>,
     // Function call we are trying to use
     // the cast version of a function.
@@ -1898,18 +1900,8 @@ fn validate_cast(
                 Ok(())
             }
         }
-        (Some(_), Some(_), None) => Err(ErrorItem::make_compile_or_internal_error(
-            "Func Call was given with no Func Info",
-            file,
-            None,
-            "If you are casting a function you must provide both the call and it's info",
-        )),
-        (Some(_), None, Some(_)) => Err(ErrorItem::make_compile_or_internal_error(
-            "Func Info was given with no Func Call",
-            file,
-            None,
-            "If you are casting a function you must provide both the call and it's info",
-        )),
+        (Some(_), Some(_), None) => Err(ErrorItem::Internal(InternalError::new())),
+        (Some(_), None, Some(_)) => Err(ErrorItem::Internal(InternalError::new())),
         (None, _, _) => Err(err_ret(start_type.get_range())),
         (_, _, _) => Ok(()),
     }
@@ -2819,14 +2811,9 @@ pub fn initialize_terminated<'a>(functions: &'a FunctionMap<'a>) -> (Vec<String>
         let func_calls = get_all_func_calls(func.original_body.to_vec());
 
         for call in func_calls {
-            match call.check_builtin() {
-                Some(_) => {
-                    continue;
-                }
-                None => {
-                    is_term = false;
-                    break;
-                }
+            if call.check_builtin().is_none() {
+                is_term = false;
+                break;
             }
         }
         if is_term {
@@ -2848,14 +2835,14 @@ pub fn search_for_recursion(
     while removed > 0 {
         removed = 0;
         for func in functions.clone().iter() {
-            let mut is_term = false;
+            let mut is_term = true;
             if let Some(function_info) = function_map.get(func) {
                 let func_calls = get_all_func_calls(function_info.original_body.to_vec());
                 for call in func_calls {
                     let mut call_cil_name = call.get_cil_name();
                     // If we are calling something with this it must be in the same class
                     // so hand place the class name
-                    if call_cil_name.contains("this-") {
+                    if call.class_name.as_ref() == Some(&CascadeString::from("this")) {
                         if let FunctionClass::Type(class) = function_info.class {
                             call_cil_name = get_cil_name(Some(&class.name), &call.name)
                         } else {
@@ -2870,8 +2857,8 @@ pub fn search_for_recursion(
                         }
                     }
 
-                    if terminated_list.contains(&call_cil_name) {
-                        is_term = true;
+                    if !terminated_list.contains(&call_cil_name) {
+                        is_term = false;
                         break;
                     }
                 }
@@ -2898,7 +2885,7 @@ pub fn search_for_recursion(
                     "Recursive Function call found",
                     function_info.declaration_file,
                     function_info.get_declaration_range().unwrap_or_default(),
-                    "Calls cannot recursively call each other",
+                    "These calls have been found in a recursive loop.  There may be more than one recursive loop.",
                 ));
             }
         }
