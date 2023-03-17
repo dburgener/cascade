@@ -33,9 +33,30 @@ resource xyz inherits abc {
 	}
 }
 
-// TODOs once we add the ability to cast to
-// non-inherited things
-//
-//domain asd {
-//	asd<abc>.read(this);
-//}
+domain asd {
+	asd<abc>.read(this);
+	foo<abc>.read(this);
+}
+
+domain jkl inherits boo {
+	jkl<boo>.read_boo_tmp(this);
+}
+
+virtual resource tmp {
+	@associated_call
+	fn associated_call_from_tmp(domain source) {
+		allow(source, tmp, file, [read]);
+	}
+}
+
+@associate([tmp])
+virtual domain boo {
+	// Creates new resources boo.tmp and implicitly calls
+	// boo.tmp.associated_call_from_tmp(boo)
+	//
+	// boo.tmp inherits tmp
+
+	fn read_boo_tmp(domain source) {
+		allow(source, boo.tmp, file, [read]);
+	}
+}

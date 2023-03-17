@@ -1418,8 +1418,8 @@ mod tests {
     }
 
     #[test]
-    fn invalid_parent_call() {
-        error_policy_test!("parent_call.cas", 4, ErrorItem::Compile(_));
+    fn invalid_call_casting() {
+        error_policy_test!("call_casting.cas", 6, ErrorItem::Compile(_));
     }
 
     #[test]
@@ -1428,16 +1428,29 @@ mod tests {
     }
 
     #[test]
-    fn valid_parent_call() {
+    fn valid_call_casting() {
         valid_policy_test(
-            "parent_call.cas",
+            "call_casting.cas",
             &[
                 "call bar-read (foo dom)",
                 "call bar-foobar (foo dom)",
+                "call abc-read (asd asd)",
+                "call abc-read (foo asd)",
+                "call boo-read_boo_tmp (jkl jkl)",
                 "macro xyz-read ((type this) (type source)) (call abc-read (abc source))",
             ],
             &["call foo-read (foo dom)", "call foo-read (bar dom)"],
             0,
         );
+    }
+
+    #[test]
+    fn invalid_function_recursion_test() {
+        error_policy_test!("functions_recursion.cas", 1, ErrorItem::Compile(_));
+    }
+
+    #[test]
+    fn invalid_function_noterm_test() {
+        error_policy_test!("functions_no_term.cas", 1, ErrorItem::Compile(_));
     }
 }

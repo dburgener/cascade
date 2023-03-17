@@ -1,0 +1,20 @@
+resource my_file {
+	fn read(domain source) {
+		allow(source, this, file, [ read open getattr ]);
+		other_read(source);
+	}
+
+	fn other_read(domain source) {
+		allow(source, this, file, [ read open getattr ]);
+		third_read(source);
+	}
+
+	fn third_read(domain source) {
+		allow(source, this, file, [ read open getattr ]);
+		read(source);
+	}
+}
+
+domain my_domain {
+	my_file.read(this); // TODO: support 'this' as default argument
+}

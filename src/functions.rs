@@ -14,12 +14,14 @@ use codespan_reporting::files::SimpleFile;
 
 use crate::alias_map::{AliasMap, Declared};
 use crate::ast::{
-    get_cil_name, Annotation, Argument, BuiltIns, CascadeString, DeclaredArgument, FuncCall,
-    FuncDecl, IpAddr, Port, Statement,
+    get_all_func_calls, get_cil_name, Annotation, Argument, BuiltIns, CascadeString,
+    DeclaredArgument, FuncCall, FuncDecl, IpAddr, Port, Statement,
 };
 use crate::constants;
 use crate::context::{BlockType, Context as BlockContext};
-use crate::error::{CascadeErrors, CompileError, ErrorItem, InternalError};
+use crate::error::{
+    add_or_create_compile_error, CascadeErrors, CompileError, ErrorItem, InternalError,
+};
 use crate::internal_rep::{
     convert_class_name_if_this, type_name_from_string, typeinfo_from_string, Annotated,
     AnnotationInfo, BoundTypeInfo, ClassList, Context, TypeInfo, TypeInstance, TypeMap,
@@ -1344,11 +1346,14 @@ pub struct FunctionInfo<'a> {
     pub is_virtual: bool,
     pub args: Vec<FunctionArgument<'a>>,
     pub annotations: BTreeSet<AnnotationInfo>,
-    original_body: &'a [Statement],
+    pub original_body: &'a [Statement],
     pub body: Option<BTreeSet<ValidatedStatement<'a>>>,
     pub declaration_file: &'a SimpleFile<String, String>,
     pub is_associated_call: bool,
     pub is_derived: bool,
+    // This will be initialized to true and prevalidate_functions will set this
+    // to false if needed.
+    pub is_castable: bool,
     decl: Option<&'a FuncDecl>,
 }
 
@@ -1497,6 +1502,7 @@ impl<'a> FunctionInfo<'a> {
             declaration_file,
             is_associated_call,
             is_derived: false,
+            is_castable: true,
             decl: Some(funcdecl),
         })
     }
@@ -1652,6 +1658,7 @@ impl<'a> FunctionInfo<'a> {
             declaration_file: file,
             is_associated_call: derived_is_associated_call,
             is_derived: true,
+            is_castable: true,
             decl: None,
         })
     }
@@ -1831,10 +1838,15 @@ fn validate_cast(
     // Initial type we are casting from
     start_type: &CascadeString,
     // Type Info for what we are casting to
+    // If cast_ti is Some() func_call and func_info
+    // must also be Some()
     cast_ti: Option<&TypeInfo>,
-    // Function info we are trying to use
+    // Function call we are trying to use
     // the cast version of a function.
     func_call: Option<&FuncCall>,
+    // Function info we are trying to use
+    // the cast version of a function.
+    func_info: Option<&FunctionInfo>,
     // Full type map
     types: &TypeMap,
     // Context block for the call
@@ -1871,33 +1883,48 @@ fn validate_cast(
     {
         return Err(err_ret(start_type.get_range()));
     }
-    match (cast_ti, func_call) {
-        (Some(cast_type_info), Some(func_call_info)) => {
-            // TODO add additional checks.  Also add cases which we will allow casting even if the casting type isn't a parent.
-            validate_inheritance(func_call_info, type_info, &cast_type_info.name, file)
+    match (cast_ti, func_call, func_info) {
+        (Some(cast_ti), Some(func_call), Some(func_info)) => {
+            // If we can validate the inheritance than things are castable.  If we cannot
+            // we need to check if the function itself is castable.
+            if !validate_inheritance(func_call, type_info, &cast_ti.name, file)? {
+                if func_info.is_castable {
+                    Ok(())
+                } else {
+                    Err(ErrorItem::make_compile_or_internal_error(
+                        "Not something we can cast to",
+                        file,
+                        func_call.get_name_range(),
+                        "The function is not castable or inherited by caller",
+                    ))
+                }
+            } else {
+                Ok(())
+            }
         }
-        (None, _) => Err(err_ret(start_type.get_range())),
-        (_, _) => Ok(()),
+        (Some(_), Some(_), None) => Err(ErrorItem::Internal(InternalError::new())),
+        (Some(_), None, Some(_)) => Err(ErrorItem::Internal(InternalError::new())),
+        (None, _, _) => Err(err_ret(start_type.get_range())),
+        (_, _, _) => Ok(()),
     }
 }
 
 // Validate that the parent provided both exists and is actually a parent of the current resource.
+// This function will return:
+//   true if classes exist and class_info does in fact inherit from the parent_name
+//   false if the classes exist but class_info does not inherit from parent_name
+//   Error if the classes do not exist.
 fn validate_inheritance(
     call: &FuncCall,
     class_info: Option<&TypeInfo>,
     parent_name: &CascadeString,
     file: Option<&SimpleFile<String, String>>,
-) -> Result<(), ErrorItem> {
+) -> Result<bool, ErrorItem> {
     match class_info {
         Some(class_info) => {
             if !class_info.inherits.contains(parent_name) && class_info.name != parent_name.as_ref()
             {
-                return Err(ErrorItem::make_compile_or_internal_error(
-                    "Invalid Parent",
-                    file,
-                    call.get_name_range(),
-                    "Type does not inherit from given parent",
-                ));
+                return Ok(false);
             }
         }
         None => {
@@ -1909,7 +1936,7 @@ fn validate_inheritance(
             ));
         }
     };
-    Ok(())
+    Ok(true)
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -2243,6 +2270,7 @@ impl ValidatedCall {
                     class_name,
                     types.get(cast_name.as_ref()),
                     Some(call),
+                    Some(function_info),
                     types,
                     context,
                     Some(file),
@@ -2533,6 +2561,7 @@ impl<'a> ArgForValidation<'a> {
                     s,
                     Some(cast_ti.type_info.borrow()),
                     None,
+                    None,
                     types,
                     context,
                     file,
@@ -2544,6 +2573,7 @@ impl<'a> ArgForValidation<'a> {
                     validate_cast(
                         s,
                         Some(cast_ti.type_info.borrow()),
+                        None,
                         None,
                         types,
                         context,
@@ -2718,6 +2748,160 @@ impl<'a> From<&'a FunctionArgument<'a>> for ExpectedArgInfo<'a, '_> {
     }
 }
 
+// Go through all functions and check if they are castable
+// based only on their args
+pub fn initialize_castable(functions: &mut FunctionMap, types: &TypeMap) {
+    for func in functions.values_mut() {
+        for arg in &func.args {
+            if arg.param_type.is_associated_resource(types) {
+                func.is_castable = false;
+
+                // If we have found one associated resource
+                // we can continue
+                continue;
+            }
+        }
+    }
+}
+
+// Go through all of the functions and check if they are castable
+// base on functions they call.
+pub fn determine_castable(functions: &mut FunctionMap, types: &TypeMap) -> u64 {
+    let mut num_changed: u64 = 0;
+    // We need tmp_functions to avoid a immutable borrow after a mutable one.
+    let tmp_functions = functions.clone();
+    'outer: for func in functions.values_mut() {
+        // If we are already false there is no reason to check our called functions.
+        if !func.is_castable {
+            continue;
+        }
+        for call in func.original_body {
+            if let Statement::Call(call) = call {
+                if let Some(inner_func) = tmp_functions.get(&call.get_cil_name()) {
+                    if !inner_func.is_castable {
+                        num_changed += 1;
+                        func.is_castable = false;
+                        continue 'outer;
+                    }
+                }
+                for arg in &call.args {
+                    if let Argument::Var(arg) = &arg.0 {
+                        // Need to special case this.*
+                        if arg.to_string().contains("this.") {
+                            num_changed += 1;
+                            func.is_castable = false;
+                            continue 'outer;
+                        }
+                        if let Some(ti) = types.get(arg.as_ref()) {
+                            if ti.is_associated_resource(types) {
+                                num_changed += 1;
+                                func.is_castable = false;
+                                continue 'outer;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    num_changed
+}
+
+pub fn initialize_terminated<'a>(functions: &'a FunctionMap<'a>) -> (Vec<String>, Vec<String>) {
+    let mut term_ret_vec: Vec<String> = Vec::new();
+    let mut nonterm_ret_vec: Vec<String> = Vec::new();
+
+    for func in functions.values() {
+        let mut is_term = true;
+
+        let func_calls = get_all_func_calls(func.original_body.to_vec());
+
+        for call in func_calls {
+            if call.check_builtin().is_none() {
+                is_term = false;
+                break;
+            }
+        }
+        if is_term {
+            term_ret_vec.push(func.get_cil_name().clone());
+        } else {
+            nonterm_ret_vec.push(func.get_cil_name().clone());
+        }
+    }
+
+    (term_ret_vec, nonterm_ret_vec)
+}
+
+pub fn search_for_recursion(
+    terminated_list: &mut Vec<String>,
+    functions: &mut Vec<String>,
+    function_map: &FunctionMap,
+) -> Result<(), CascadeErrors> {
+    let mut removed: u64 = 1;
+    while removed > 0 {
+        removed = 0;
+        for func in functions.clone().iter() {
+            let mut is_term = true;
+            if let Some(function_info) = function_map.get(func) {
+                let func_calls = get_all_func_calls(function_info.original_body.to_vec());
+                for call in func_calls {
+                    let mut call_cil_name = call.get_cil_name();
+                    // If we are calling something with this it must be in the same class
+                    // so hand place the class name
+                    if call.class_name.as_ref() == Some(&CascadeString::from("this")) {
+                        if let FunctionClass::Type(class) = function_info.class {
+                            call_cil_name = get_cil_name(Some(&class.name), &call.name)
+                        } else {
+                            return Err(CascadeErrors::from(
+                                ErrorItem::make_compile_or_internal_error(
+                                    "Could not determine class for 'this.' function call",
+                                    Some(function_info.declaration_file),
+                                    call.get_name_range(),
+                                    "Perhaps you meant to place the function in a resource or domain?",
+                                ),
+                            ));
+                        }
+                    }
+
+                    if !terminated_list.contains(&call_cil_name) {
+                        is_term = false;
+                        break;
+                    }
+                }
+                if is_term {
+                    terminated_list.push(function_info.get_cil_name());
+                    removed += 1;
+                    let index = functions
+                        .iter()
+                        .position(|x| *x == function_info.get_cil_name())
+                        .unwrap();
+                    functions.remove(index);
+                }
+            }
+        }
+    }
+
+    if !functions.is_empty() {
+        let mut error: Option<CompileError> = None;
+
+        for func in functions {
+            if let Some(function_info) = function_map.get(func) {
+                error = Some(add_or_create_compile_error(
+                    error,
+                    "Recursive Function call found",
+                    function_info.declaration_file,
+                    function_info.get_declaration_range().unwrap_or_default(),
+                    "These calls have been found in a recursive loop.  There may be more than one recursive loop.",
+                ));
+            }
+        }
+        // Unwrap is safe since we need to go through the loop above at least once
+        return Err(CascadeErrors::from(error.unwrap()));
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2763,6 +2947,7 @@ mod tests {
             declaration_file: &some_file,
             is_associated_call: false,
             is_derived: false,
+            is_castable: true,
             decl: None,
         };
 

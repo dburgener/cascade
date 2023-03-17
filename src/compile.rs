@@ -17,6 +17,7 @@ use crate::error::{
     add_or_create_compile_error, CascadeErrors, CompileError, ErrorItem, InternalError,
 };
 use crate::functions::{
+    determine_castable, initialize_castable, initialize_terminated, search_for_recursion,
     ArgForValidation, FSContextType, FileSystemContextRule, FunctionArgument, FunctionClass,
     FunctionInfo, FunctionMap, ValidatedCall, ValidatedStatement,
 };
@@ -488,6 +489,24 @@ pub fn validate_rules(statements: &BTreeSet<ValidatedStatement>) -> Result<(), C
     errors.into_result(())
 }
 
+pub fn prevalidate_functions(
+    functions: &mut FunctionMap,
+    types: &TypeMap,
+) -> Result<(), CascadeErrors> {
+    initialize_castable(functions, types);
+    // We initialize to 1 just to let the loop start once
+    let mut num_changed: u64 = 1;
+    while num_changed > 0 {
+        num_changed = determine_castable(functions, types);
+    }
+
+    let (mut terminated_functions, mut nonterm_functions) = initialize_terminated(functions);
+
+    search_for_recursion(&mut terminated_functions, &mut nonterm_functions, functions)?;
+
+    Ok(())
+}
+
 // Mutate hash map to set the validated body
 pub fn validate_functions<'a>(
     mut functions: FunctionMap<'a>,
@@ -953,7 +972,9 @@ pub fn get_reduced_infos(
     new_type_map.set_aliases(new_t_aliases);
 
     // Get the function infos
-    let new_func_map = get_funcs(policies, &new_type_map)?;
+    let mut new_func_map = get_funcs(policies, &new_type_map)?;
+
+    prevalidate_functions(&mut new_func_map, &new_type_map)?;
 
     // Validate functions, including deriving functions from annotations
     let new_func_map_copy = new_func_map.clone(); // In order to read function info while mutating

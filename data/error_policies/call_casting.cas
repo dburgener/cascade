@@ -1,0 +1,61 @@
+virtual resource bar {
+	fn read(domain source) {
+		allow(source, this, file, read);
+	}
+}
+
+virtual resource zap {
+	fn write(domain source) {
+		allow(source, this, file, write);
+	}
+}
+
+resource foo inherits bar {
+	fn read(domain source) {
+		allow(source, this, dir, read);
+	}
+}
+
+domain dom {
+	foo<qqq>.read(this); // Function does not exist
+	foo<zap>.read(this); // Function does not exist
+	foo<bar>.write(this); // Function does not exist
+}
+
+domain asd {
+	asd<boo>.read_boo_tmp(this); // Function is not castable
+	asd<boo>.read_boo_tmp_again(this); // Function is not castable
+	asd<boo>.read_boo_tmp_more(this); // Function is not castable
+	asd<boo>.some_function(foo);
+}
+
+virtual resource tmp {
+	@associated_call
+	fn associated_call_from_tmp(domain source) {
+		allow(source, tmp, file, [read]);
+	}
+}
+
+@associate([tmp])
+domain boo {
+	// Creates new resources boo.tmp and implicitly calls
+	// boo.tmp.associated_call_from_tmp(boo)
+	//
+	// boo.tmp inherits tmp
+
+	fn read_boo_tmp(domain source) {
+		allow(source, boo.tmp, file, [read]);
+	}
+
+	fn read_boo_tmp_again(domain source) {
+		boo.tmp.associated_call_from_tmp(source);
+	}
+
+	fn read_boo_tmp_more(domain source) {
+		this.some_function(this.tmp);
+	}
+
+	fn some_function(resource res) {
+		allow(this, res, file, read);
+	}
+}
