@@ -29,6 +29,27 @@ use crate::internal_rep::{
 use crate::obj_class::perm_list_to_sexp;
 use crate::warning::{Warning, Warnings, WithWarnings};
 
+macro_rules! nv_on_field {
+    ($self: ident, $field:ident, $rules:ident, $types:ident) => {
+        let nv_children = $types
+            .get($self.$field.as_ref().as_ref())
+            .map(|ti| ti.non_virtual_children.clone())
+            .unwrap_or_default();
+        let mut new_rules = BTreeSet::new();
+        for child in &nv_children {
+            let mut new_rule = $self.clone();
+            new_rule.$field = Cow::Owned(child.clone());
+            new_rules.insert(new_rule);
+            for rule in &$rules {
+                let mut new_rule = rule.clone();
+                new_rule.$field = Cow::Owned(child.clone());
+                new_rules.insert(new_rule);
+            }
+        }
+        $rules.append(&mut new_rules);
+    };
+}
+
 pub fn argument_to_typeinfo<'a>(
     a: &ArgForValidation<'_>,
     types: &'a TypeMap,
@@ -97,6 +118,19 @@ pub struct AvRule<'a> {
     pub class: Cow<'a, CascadeString>,
     // Lifetimes get weird once permissions get expanded, so AV rules should just own their permissions
     pub perms: Vec<CascadeString>,
+}
+
+impl<'a> AvRule<'a> {
+    pub fn create_non_virtual_child_rules(
+        &self,
+        types: &TypeMap,
+    ) -> BTreeSet<ValidatedStatement<'a>> {
+        let mut rules: BTreeSet<AvRule> = BTreeSet::new();
+        nv_on_field!(self, source, rules, types);
+        nv_on_field!(self, target, rules, types);
+
+        rules.into_iter().map(ValidatedStatement::AvRule).collect()
+    }
 }
 
 impl From<&AvRule<'_>> for sexp::Sexp {
@@ -1043,6 +1077,23 @@ pub struct DomtransRule<'a> {
     pub executable: Cow<'a, CascadeString>,
 }
 
+impl<'a> DomtransRule<'a> {
+    pub fn create_non_virtual_child_rules(
+        &self,
+        types: &TypeMap,
+    ) -> BTreeSet<ValidatedStatement<'a>> {
+        let mut rules: BTreeSet<DomtransRule> = BTreeSet::new();
+        nv_on_field!(self, source, rules, types);
+        nv_on_field!(self, target, rules, types);
+        nv_on_field!(self, executable, rules, types);
+
+        rules
+            .into_iter()
+            .map(ValidatedStatement::DomtransRule)
+            .collect()
+    }
+}
+
 impl From<&DomtransRule<'_>> for sexp::Sexp {
     fn from(d: &DomtransRule) -> Self {
         list(&[
@@ -1130,6 +1181,23 @@ pub struct ResourcetransRule<'a> {
     pub parent: Cow<'a, CascadeString>,
     pub file_type: Cow<'a, CascadeString>,
     pub obj_name: Option<CascadeString>,
+}
+
+impl<'a> ResourcetransRule<'a> {
+    pub fn create_non_virtual_child_rules(
+        &self,
+        types: &TypeMap,
+    ) -> BTreeSet<ValidatedStatement<'a>> {
+        let mut rules: BTreeSet<ResourcetransRule> = BTreeSet::new();
+        nv_on_field!(self, default, rules, types);
+        nv_on_field!(self, domain, rules, types);
+        nv_on_field!(self, parent, rules, types);
+
+        rules
+            .into_iter()
+            .map(ValidatedStatement::ResourcetransRule)
+            .collect()
+    }
 }
 
 impl From<&ResourcetransRule<'_>> for sexp::Sexp {
@@ -1721,6 +1789,8 @@ impl<'a> FunctionInfo<'a> {
                 Err(e) => errors.append(e),
             }
         }
+        let mut nv_rules = create_non_virtual_child_rules(&new_body, types);
+        new_body.append(&mut nv_rules);
         self.body = Some(new_body);
         errors.into_result(WithWarnings::new((), warnings))
     }
@@ -1964,6 +2034,33 @@ fn validate_inheritance(
         }
     };
     Ok(true)
+}
+
+// Take a list of VSs.  If any of them reference non-virtual children, make new VSs copied from
+// the original, subbing in the names of the validated children
+pub fn create_non_virtual_child_rules<'a>(
+    statements: &BTreeSet<ValidatedStatement<'a>>,
+    types: &'a TypeMap,
+) -> BTreeSet<ValidatedStatement<'a>> {
+    let mut ret = BTreeSet::new();
+    for statement in statements {
+        let mut rules = match statement {
+            // The context built ins don't get copied
+            // TODO: Consider if warning in that situation is too loud?
+            // TODO: Calls calling context functions is a bigger issue than just this, but
+            // could cause issues perhaps
+            ValidatedStatement::Call(c) => c.create_non_virtual_child_rules(types),
+            ValidatedStatement::AvRule(a) => a.create_non_virtual_child_rules(types),
+            ValidatedStatement::ResourcetransRule(r) => r.create_non_virtual_child_rules(types),
+            ValidatedStatement::DomtransRule(d) => d.create_non_virtual_child_rules(types),
+            ValidatedStatement::FcRule(_)
+            | ValidatedStatement::PortconRule(_)
+            | ValidatedStatement::FscRule(_)
+            | ValidatedStatement::Sid(_) => BTreeSet::new(),
+        };
+        ret.append(&mut rules);
+    }
+    ret
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -2341,6 +2438,43 @@ impl ValidatedCall {
         }
 
         Ok(ret)
+    }
+
+    pub fn create_non_virtual_child_rules<'a>(
+        &self,
+        types: &TypeMap,
+    ) -> BTreeSet<ValidatedStatement<'a>> {
+        let mut ret: BTreeSet<ValidatedStatement> = BTreeSet::new();
+        for (index, arg) in self.args.iter().enumerate() {
+            if let CilArg::Name(arg) = arg {
+                let nv_children = types
+                    .get(arg)
+                    .map(|ti| ti.non_virtual_children.clone())
+                    .unwrap_or_default();
+                for nv_child in nv_children {
+                    let mut new_call: ValidatedCall = self.clone();
+                    // This feels weird on two levels, but I believe it to be safe.
+                    // 1. Explicit indexing - This is guaranteed not to panic because new_call.args is
+                    //    a clone of self.args, so they are definitely the same length
+                    // 2. We validated the call already.  Does this child validate?  Should be "yes",
+                    //    because if the parent can validate the child can
+                    new_call.args[index] = CilArg::Name(nv_child.to_string());
+                    // There may be more children to resolve, so we call recursively
+                    // This is guaranteed to terminate, because the typemap has been checked for
+                    // inheritance loops already
+                    let mut recursive_rules = new_call.create_non_virtual_child_rules(types);
+                    if recursive_rules.is_empty() {
+                        // new_call didn't need anymore resolution
+                        ret.insert(ValidatedStatement::Call(Box::new(new_call)));
+                    } else {
+                        // We generated new rules from new_call, so we can discard it and use those
+                        // instead
+                        ret.append(&mut recursive_rules);
+                    }
+                }
+            }
+        }
+        ret
     }
 }
 

@@ -1054,7 +1054,23 @@ mod tests {
 
     #[test]
     fn non_virtual_inherit_test() {
-        error_policy_test!("non_virtual_inherit.cas", 1, ErrorItem::Compile(_));
+        valid_policy_test("non_virtual_inherit.cas", &["(macro bar-read ((type this) (type source)) (allow source this (file (read open getattr))))",
+        "(call bar-read (bar baz))",
+        "(call bar-read (bar qux))",
+        "(allow baz foo (file (write)))",
+        "(allow baz bar (file (write)))",
+        "(allow qux foo (file (write)))",
+        "(allow qux bar (file (write)))",
+        "(allow qux foo (dir (write)))",
+        "(allow qux bar (dir (write)))",
+        "(typetransition baz bar process other)",
+        "(typetransition baz foo process other)",
+        "(typetransition qux bar process other)",
+        "(typetransition qux foo process other)",
+        "(macro baz-reference_foo ((type this) (type other)) (allow other bar (file (setattr))) (allow other foo (file (setattr))))",
+        ],
+        &["(allow baz foo (dir (write)))"],
+        0);
     }
 
     #[test]
