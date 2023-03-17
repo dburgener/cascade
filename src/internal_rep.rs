@@ -160,6 +160,10 @@ pub struct TypeInfo {
     pub annotations: BTreeSet<AnnotationInfo>,
     // TODO: replace with Option<&TypeDecl>
     pub decl: Option<TypeDecl>,
+    // If self.is_virtual, then this should always be empty.  However, if !self.is_virtual, then
+    // this should contain the names of all children, and it uses to apply rules on this to the
+    // children as well
+    pub non_virtual_children: BTreeSet<CascadeString>,
 }
 
 impl PartialEq for TypeInfo {
@@ -242,6 +246,7 @@ impl TypeInfo {
                 declaration_file: Some(file.clone()), // TODO: Turn into reference
                 annotations: get_type_annotations(file, &td.annotations)?.inner(&mut warnings),
                 decl: Some(td),
+                non_virtual_children: BTreeSet::new(),
             },
             warnings,
         ))
@@ -259,6 +264,7 @@ impl TypeInfo {
             declaration_file: None,
             annotations: BTreeSet::new(),
             decl: None,
+            non_virtual_children: BTreeSet::new(),
         }
     }
 

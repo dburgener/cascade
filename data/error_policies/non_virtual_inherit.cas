@@ -1,4 +1,0 @@
-// TODO: This scenario will eventually supported.  Remove this test when it is
-domain foo {}
-
-domain bar inherits foo {}

@@ -1,0 +1,27 @@
+resource foo {
+	fn read(domain source) {
+		allow(source, this, file, [read open getattr]);
+	}
+}
+
+@derive(*,*)
+resource bar inherits foo {}
+
+domain baz {
+	bar.read();
+	allow(this, foo, file, write);
+	domain_transition(this, foo, other);
+
+	fn reference_foo(domain other) {
+		allow(other, foo, file, setattr);
+	}
+}
+
+domain qux inherits baz {
+	allow(this, foo, dir, write);
+}
+
+domain other {
+	baz.reference_foo(this);
+}
+

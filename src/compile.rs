@@ -18,9 +18,9 @@ use crate::error::{
     add_or_create_compile_error, CascadeErrors, CompileError, ErrorItem, InternalError,
 };
 use crate::functions::{
-    determine_castable, initialize_castable, initialize_terminated, search_for_recursion,
-    ArgForValidation, FSContextType, FileSystemContextRule, FunctionArgument, FunctionClass,
-    FunctionInfo, FunctionMap, ValidatedCall, ValidatedStatement,
+    create_non_virtual_child_rules, determine_castable, initialize_castable, initialize_terminated,
+    search_for_recursion, ArgForValidation, FSContextType, FileSystemContextRule, FunctionArgument,
+    FunctionClass, FunctionInfo, FunctionMap, ValidatedCall, ValidatedStatement,
 };
 use crate::internal_rep::{
     generate_sid_rules, get_type_annotations, validate_derive_args, Annotated, AnnotationInfo,
@@ -253,6 +253,7 @@ pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
         declaration_file: None,
         annotations: BTreeSet::new(),
         decl: None,
+        non_virtual_children: BTreeSet::new(),
     };
 
     let security_sid = TypeInfo {
@@ -265,6 +266,7 @@ pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
         declaration_file: None,
         annotations: BTreeSet::new(),
         decl: None,
+        non_virtual_children: BTreeSet::new(),
     };
 
     let unlabeled_sid = TypeInfo {
@@ -277,6 +279,7 @@ pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
         declaration_file: None,
         annotations: BTreeSet::new(),
         decl: None,
+        non_virtual_children: BTreeSet::new(),
     };
 
     for sid in [kernel_sid, security_sid, unlabeled_sid] {
@@ -1057,6 +1060,8 @@ pub fn get_reduced_infos(
         get_reduced_types(module, &mut new_type_map, type_map, module_map)?;
     }
 
+    mark_non_virtual_children(&mut new_type_map);
+
     // Generate type aliases for the new reduced type map
     let new_t_aliases = collect_aliases(new_type_map.iter());
     new_type_map.set_aliases(new_t_aliases);
@@ -1152,6 +1157,29 @@ pub fn get_reduced_types(
         }
     }
     Ok(())
+}
+
+pub fn mark_non_virtual_children(type_map: &mut TypeMap) {
+    let mut non_virtual_types = BTreeMap::new();
+    for t in type_map.values() {
+        if !t.is_virtual {
+            non_virtual_types.insert(t.name.to_string(), BTreeSet::new());
+        }
+    }
+
+    for t in type_map.values() {
+        for parent in t.get_all_parent_names(type_map) {
+            if let Some(val) = non_virtual_types.get_mut(parent.as_ref()) {
+                val.insert(t.name.clone());
+            }
+        }
+    }
+
+    for (type_name, children) in non_virtual_types.into_iter() {
+        if let Some(ti) = type_map.get_mut(type_name.as_ref()) {
+            ti.non_virtual_children = children;
+        }
+    }
 }
 
 pub fn get_funcs<'a>(
@@ -1765,27 +1793,6 @@ pub fn apply_associate_annotations(
     }
 }
 
-// Temporary check for non-virtual inheritance
-// TODO: remove when adding support for non-virtual inheritance
-fn check_non_virtual_inheritance(types: &TypeMap) -> Result<(), CascadeErrors> {
-    for t in types.values() {
-        for parent in &t.inherits {
-            if let Some(p) = types.get(parent.as_ref()) {
-                if !p.is_virtual {
-                    return Err(ErrorItem::make_compile_or_internal_error(
-                        "Inheriting from a non-virtual type is not yet supported",
-                        t.declaration_file.as_ref(),
-                        parent.get_range(),
-                        "This type is not virtual",
-                    )
-                    .into());
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
 // This function validates that the relationships in the map are valid, and organizes a Vector
 // of type declarations in a reasonable order to be output into CIL.
 // In order to be valid, the types must meet the following properties:
@@ -1798,10 +1805,6 @@ fn organize_type_map(types: &TypeMap) -> Result<Vec<&TypeInfo>, CascadeErrors> {
     let mut out: Vec<&TypeInfo> = Vec::new();
 
     let mut errors = CascadeErrors::new();
-
-    // TODO: This should be allowed, but isn't yet supported.  Remove this check once support for
-    // non-virtual inheritance is added
-    check_non_virtual_inheritance(types)?;
 
     while !tmp_types.is_empty() {
         let mut current_pass_types: Vec<&TypeInfo> = Vec::new();
@@ -2042,6 +2045,8 @@ fn do_rules_pass<'a>(
         }
     }
 
+    let mut nv_rules = create_non_virtual_child_rules(&ret, types);
+    ret.append(&mut nv_rules);
     errors.into_result(WithWarnings::new(ret, warnings))
 }
 
@@ -2073,7 +2078,7 @@ fn get_rules_vec_for_type(ti: &TypeInfo, s: sexp::Sexp, type_map: &TypeMap) -> V
 
     for i in &ti.inherits {
         if let Some(t) = type_map.get(i.as_ref()) {
-            if t.is_trait() {
+            if t.is_trait() || !t.is_virtual {
                 continue;
             }
         }
