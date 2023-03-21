@@ -89,3 +89,10 @@ extend nest_child {
 		allow(nest_child, this, dir, remove_name);
 	}
 }
+
+
+virtual domain diamond1 inherits foo {}
+virtual domain diamond2 inherits foo {}
+
+// Gets two copies of associated resources via multiple inheritance, but they should collapse to one
+domain diamond3 inherits diamond1, diamond2 {}

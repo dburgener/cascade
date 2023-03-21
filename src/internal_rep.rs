@@ -44,6 +44,78 @@ pub enum AnnotationInfo {
     Derive(Vec<Argument>),
 }
 
+impl AnnotationInfo {
+    // All data should exactly break into three sets: a.difference(b), b.difference(a) and
+    // a.intersection(b) (which is equivalent to b.intersection(a))
+
+    // Returns a single AnnotationInfo containing any overlap, if it exists
+    pub fn intersection(&self, other: &AnnotationInfo) -> Option<AnnotationInfo> {
+        use AnnotationInfo::*;
+        match (self, other) {
+            (MakeList, MakeList) => Some(AnnotationInfo::MakeList),
+            (Associate(left), Associate(right)) => {
+                let intersect: BTreeSet<CascadeString> = left
+                    .resources
+                    .intersection(&right.resources)
+                    .cloned()
+                    .collect();
+                if intersect.is_empty() {
+                    None
+                } else {
+                    Some(Associate(Associated {
+                        resources: intersect,
+                    }))
+                }
+            }
+            (Alias(left), Alias(right)) => {
+                if left == right {
+                    Some(Alias(left.clone()))
+                } else {
+                    None
+                }
+            }
+            // Treat all @derives as unique, because they require special processing later
+            (Derive(_), Derive(_)) => None,
+            // Enumerate the non-equal cases explicitly so that we get non-exhaustive match errors
+            // when updating the enum
+            (MakeList, _) | (Associate(_), _) | (Alias(_), _) | (Derive(_), _) => None,
+        }
+    }
+
+    // Returns an AnnotationInfo with only the portion in self but not other.
+    pub fn difference(&self, other: &AnnotationInfo) -> Option<AnnotationInfo> {
+        use AnnotationInfo::*;
+        match (self, other) {
+            (MakeList, MakeList) => None,
+            (Associate(left), Associate(right)) => {
+                let difference: BTreeSet<CascadeString> = left
+                    .resources
+                    .difference(&right.resources)
+                    .cloned()
+                    .collect();
+                if difference.is_empty() {
+                    None
+                } else {
+                    Some(Associate(Associated {
+                        resources: difference,
+                    }))
+                }
+            }
+            (Alias(left), Alias(right)) => {
+                if left == right {
+                    None
+                } else {
+                    Some(Alias(left.clone()))
+                }
+            }
+            // No need to special handle Derive/Derive.  Derives are always considered disjoint
+            (Derive(_), _) | (MakeList, _) | (Associate(_), _) | (Alias(_), _) => {
+                Some(self.clone())
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum BoundTypeInfo {
     Single(String),
