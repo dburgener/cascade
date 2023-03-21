@@ -22,3 +22,6 @@ domain foo {
 	allow(this, bar, file, nested_binding);
 	allow(foo, baz, file, write);
 }
+
+let class_list = [ file dir ];
+let cl2 = [ lnk_file class_list ];

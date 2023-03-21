@@ -249,6 +249,8 @@ impl<'a> Context<'a> {
                 let arg_typeinstance = TypeInstance::new(&arg, variant, Some(file), &*self);
                 if variant.is_perm(type_map) {
                     BindableObject::PermList(v.iter().map(|s| s.to_string()).collect())
+                } else if variant.is_class(type_map) {
+                    BindableObject::ClassList(v.iter().map(|s| s.to_string()).collect())
                 } else {
                     BindableObject::TypeList(arg_typeinstance)
                 }
