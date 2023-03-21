@@ -1314,6 +1314,9 @@ mod tests {
                 "(filecon \"/some/path/to/file\" file (system_u object_r nest_child-nest_resource ((s0) (s0))))",
                 "(allow nest_child nest_child-nest_resource (file (ioctl)))",
                 "(allow nest_child nest_child-nest_resource (dir (remove_name)))",
+                "(type diamond3-tmp)",
+                "(typeattributeset diamond1-tmp (diamond3-tmp))",
+                "(typeattributeset diamond2-tmp (diamond3-tmp))",
             ],
             &["(allow nest_parent nest_resource (file (write)))"],
             0,
@@ -1462,5 +1465,10 @@ mod tests {
     #[test]
     fn invalid_function_noterm_test() {
         error_policy_test!("functions_no_term.cas", 1, ErrorItem::Compile(_));
+    }
+
+    #[test]
+    fn duplicate_association_test() {
+        error_policy_test!("duplicate_association.cas", 2, ErrorItem::Compile(_));
     }
 }

@@ -1206,7 +1206,7 @@ fn get_synthetic_resource_name(
 fn create_synthetic_resource(
     types: &TypeMap,
     dom_info: &TypeInfo,
-    associated_parent: Option<&TypeInfo>,
+    associated_parents: &Vec<&TypeInfo>,
     class: &TypeInfo,
     class_string: &CascadeString,
     global_exprs: &mut HashSet<Expression>,
@@ -1225,11 +1225,18 @@ fn create_synthetic_resource(
     let res_name = get_synthetic_resource_name(dom_info, &class.name);
     dup_res_decl.name = res_name.clone();
     // See TypeDecl::new() in parser.lalrpop for resource inheritance.
-    let parent_name = match associated_parent {
-        None => class.name.clone(),
-        Some(parent) => get_synthetic_resource_name(parent, &class.name),
+    let mut parent_names = if associated_parents.is_empty() {
+        vec![class.name.clone()]
+    } else {
+        associated_parents
+            .iter()
+            .map(|parent| get_synthetic_resource_name(parent, &class.name))
+            .collect()
     };
-    dup_res_decl.inherits = vec![parent_name, constants::RESOURCE.into()];
+
+    parent_names.push(constants::RESOURCE.into());
+
+    dup_res_decl.inherits = parent_names;
     // Virtual resources become concrete when associated to concrete types
     dup_res_decl.is_virtual = dup_res_decl.is_virtual && dom_info.is_virtual;
     let dup_res_is_virtual = dup_res_decl.is_virtual;
@@ -1258,7 +1265,7 @@ fn create_synthetic_resource(
         // The callers should be handling the situation where the same resource was declared at the
         // same level of inheritance, but this can arise if a parent associated a resource and a
         // child associated the same resource.  We should find them and return and error message
-        return match make_duplicate_associate_error(types, dom_info, &res_name) {
+        return match make_duplicate_associate_error(types, dom_info, &class.name) {
             Some(e) => Err(e.into()),
             None => Err(InternalError::new().into()),
         };
@@ -1282,28 +1289,20 @@ fn make_duplicate_associate_error(
             }
         }
     }
-    let current_associate_range = match child_domain.explicitly_associates(res_name.as_ref()) {
-        Some(r) => r,
-        None => {
-            // This is an association via nested declaration, so find that
-            child_domain.decl.as_ref()?.expressions.iter().find_map(|e|
-                if let Expression::Decl(Declaration::Type(td)) = e {
-                    if &td.name == res_name {
-                        td.name.get_range()
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                })?
-        }
-    };
+    let current_associate_range: Range<usize> =
+        match child_domain.explicitly_associates(res_name.as_ref()) {
+            Some(r) => r,
+            None => {
+                return None;
+            }
+        };
 
     // If anything we need for a real error is None, all we can do is InternalError, so unwrap
     // everything, returning InternalError on failure
     let child_file = child_domain.declaration_file.as_ref()?;
     let parent_file = parent_ti?.declaration_file.as_ref()?;
     let parent_associate_range = parent_associate_range?;
+    let parent_name_range = parent_ti?.name.get_range()?;
 
     Some(CompileError::new(
                 "This resource is explicitly associated to both the parent and child.  (Perhaps you meant to extend the existing resource in the child?)",
@@ -1312,8 +1311,12 @@ fn make_duplicate_associate_error(
                 "Associated in the child here")
             .add_additional_message(
                 parent_file,
+                parent_name_range,
+                "But it was already associated in this parent")
+            .add_additional_message(
+                parent_file,
                 parent_associate_range,
-                "But it was already associated in this parent"))
+                "Note: parent association was here"))
 }
 
 fn interpret_associate(
@@ -1322,7 +1325,7 @@ fn interpret_associate(
     funcs: &FunctionMap<'_>,
     types: &TypeMap,
     associate: &Associated,
-    associated_parent: Option<&TypeInfo>,
+    associated_parents: &Vec<&TypeInfo>,
     dom_info: &TypeInfo,
 ) -> Result<(), CascadeErrors> {
     // Only allow a set of specific annotation names and strictly check their arguments.
@@ -1354,7 +1357,7 @@ fn interpret_associate(
                 let res_name = match create_synthetic_resource(
                     types,
                     dom_info,
-                    associated_parent,
+                    associated_parents,
                     class,
                     res,
                     global_exprs,
@@ -1381,7 +1384,7 @@ fn interpret_associate(
                 match create_synthetic_resource(
                     types,
                     dom_info,
-                    associated_parent,
+                    associated_parents,
                     class,
                     res,
                     global_exprs,
@@ -1413,10 +1416,92 @@ fn make_associated_call(resource_name: CascadeString, func_info: &FunctionInfo) 
 // domain -> related expressions
 type AssociateExprs = HashMap<CascadeString, HashSet<Expression>>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct InheritedAnnotation<'a> {
-    annotation: &'a AnnotationInfo,
-    parent: Option<&'a TypeInfo>,
+    annotation: AnnotationInfo,
+    // If we inherit the same annotation from multiple parents, we collapse to one
+    // InheritedAnnotation with multiple parents
+    parents: Vec<&'a TypeInfo>,
+}
+
+impl<'a> InheritedAnnotation<'a> {
+    // Call intersect on the annotation and combine the parents
+    fn intersection(self, other: InheritedAnnotation<'a>) -> Option<InheritedAnnotation<'a>> {
+        match self.annotation.intersection(&other.annotation) {
+            Some(intersect) => Some(InheritedAnnotation {
+                annotation: intersect,
+                parents: {
+                    let mut ret: Vec<&TypeInfo> = self
+                        .parents
+                        .into_iter()
+                        .chain(other.parents.into_iter())
+                        .collect();
+                    ret.sort();
+                    ret.dedup();
+                    ret
+                },
+            }),
+            None => None,
+        }
+    }
+
+    // Call difference on the annotation and return just the left parents
+    fn difference(self, other: InheritedAnnotation<'a>) -> Option<InheritedAnnotation<'a>> {
+        match self.annotation.difference(&other.annotation) {
+            Some(difference) => Some(InheritedAnnotation {
+                annotation: difference,
+                parents: self.parents.clone(),
+            }),
+            None => None,
+        }
+    }
+}
+
+fn dedup_inherited_annotations(anns: Vec<InheritedAnnotation<'_>>) -> Vec<InheritedAnnotation<'_>> {
+    let mut out = Vec::new();
+    for a in anns {
+        out = dedup_inherited_annotations_one(out, a);
+    }
+    out
+}
+
+// Take a list of annotations and a new one to append.  Return a list with that included and
+// deduped
+fn dedup_inherited_annotations_one<'a>(
+    existing_anns: Vec<InheritedAnnotation<'a>>,
+    new_ann: InheritedAnnotation<'a>,
+) -> Vec<InheritedAnnotation<'a>> {
+    let mut out = Vec::new();
+    // We may merge chunks into existing_anns
+    let mut remaining_new_ann = Some(new_ann);
+    for a in existing_anns {
+        match remaining_new_ann {
+            Some(new) => {
+                let left_diff = a.clone().difference(new.clone());
+                let right_diff = new.clone().difference(a.clone());
+                let intersect = a.intersection(new.clone());
+                // Clippy wants me to flatten the slice elements to skip the Nones.  It seems to me
+                // like that obscures the fact that we are conditionally inserting.  Maybe someone
+                // more fluent than me with iterator operations would disagree, but the logic here
+                // can get confusing, so I'd rather be explicit
+                #[allow(clippy::manual_flatten)]
+                for set in [left_diff, intersect] {
+                    if let Some(set) = set {
+                        out.push(set);
+                    }
+                }
+                remaining_new_ann = right_diff;
+            }
+            None => out.push(a),
+        }
+    }
+    // If we fully combined it with previous elements, it's None now.  Otherwise there's something
+    // left to append
+    if let Some(new) = remaining_new_ann {
+        out.push(new);
+    }
+
+    out
 }
 
 fn interpret_inherited_annotations<'a, T>(
@@ -1441,8 +1526,8 @@ where
         .annotations
         .iter()
         .map(|a| InheritedAnnotation {
-            annotation: a,
-            parent: None,
+            annotation: a.clone(),
+            parents: Vec::new(),
         })
         .chain(extra_annotations)
     {
@@ -1453,7 +1538,7 @@ where
                 funcs,
                 types,
                 associate,
-                inherited.parent,
+                &inherited.parents,
                 dom_info,
             ) {
                 Ok(()) => {}
@@ -1496,6 +1581,10 @@ fn inherit_annotations<'a>(
         }
         ret
     };
+    // We may have inherited the same annotation from mulitiple parents, so dedup, combining
+    // parents
+    let inherited_annotations = dedup_inherited_annotations(inherited_annotations);
+
     match interpret_inherited_annotations(
         global_exprs,
         associate_exprs,
@@ -1513,11 +1602,11 @@ fn inherit_annotations<'a>(
             .annotations
             .iter()
             .map(|a| InheritedAnnotation {
-                annotation: a,
-                parent: Some(dom_info),
+                annotation: a.clone(),
+                parents: vec![dom_info],
             })
             .chain(inherited_annotations.into_iter().map(|mut a| {
-                a.parent = Some(dom_info);
+                a.parents = vec![dom_info];
                 a
             }))
             .collect()
@@ -2064,5 +2153,98 @@ mod tests {
         //assert_eq!(type_vec[type_vec.len() - 1].name, "baz");
 
         assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn dedup_inherited_annotations_test() {
+        let types = get_built_in_types_map().unwrap();
+        let inherited_anns = vec![
+            InheritedAnnotation {
+                annotation: AnnotationInfo::MakeList,
+                parents: Vec::new(),
+            },
+            InheritedAnnotation {
+                annotation: AnnotationInfo::MakeList,
+                parents: vec![types.get("domain").unwrap()],
+            },
+            InheritedAnnotation {
+                annotation: AnnotationInfo::Associate(Associated {
+                    resources: BTreeSet::from([
+                        CascadeString::from("foo"),
+                        CascadeString::from("bar"),
+                    ]),
+                }),
+                parents: vec![types.get("resource").unwrap()],
+            },
+            InheritedAnnotation {
+                annotation: AnnotationInfo::Associate(Associated {
+                    resources: BTreeSet::from([
+                        CascadeString::from("bar"),
+                        CascadeString::from("baz"),
+                    ]),
+                }),
+                parents: vec![types.get("domain").unwrap()],
+            },
+            InheritedAnnotation {
+                annotation: AnnotationInfo::Alias(CascadeString::from("alias")),
+                parents: vec![types.get("domain").unwrap()],
+            },
+            InheritedAnnotation {
+                annotation: AnnotationInfo::Alias(CascadeString::from("alias")),
+                parents: vec![types.get("domain").unwrap()],
+            },
+            // derive never dedups
+            InheritedAnnotation {
+                annotation: AnnotationInfo::Derive(vec![Argument::Var(CascadeString::from("foo"))]),
+                parents: vec![types.get("domain").unwrap()],
+            },
+            InheritedAnnotation {
+                annotation: AnnotationInfo::Derive(vec![Argument::Var(CascadeString::from("foo"))]),
+                parents: vec![types.get("resource").unwrap()],
+            },
+        ];
+
+        // Note that dedup sorts the parents
+        let expected_dedup = vec![
+            InheritedAnnotation {
+                annotation: AnnotationInfo::MakeList,
+                parents: vec![types.get("domain").unwrap()],
+            },
+            InheritedAnnotation {
+                annotation: AnnotationInfo::Associate(Associated {
+                    resources: BTreeSet::from([CascadeString::from("foo")]),
+                }),
+                parents: vec![types.get("resource").unwrap()],
+            },
+            InheritedAnnotation {
+                annotation: AnnotationInfo::Associate(Associated {
+                    resources: BTreeSet::from([CascadeString::from("bar")]),
+                }),
+                parents: vec![types.get("domain").unwrap(), types.get("resource").unwrap()],
+            },
+            InheritedAnnotation {
+                annotation: AnnotationInfo::Associate(Associated {
+                    resources: BTreeSet::from([CascadeString::from("baz")]),
+                }),
+                parents: vec![types.get("domain").unwrap()],
+            },
+            InheritedAnnotation {
+                annotation: AnnotationInfo::Alias(CascadeString::from("alias")),
+                parents: vec![types.get("domain").unwrap()],
+            },
+            // Not deduped, because derive doesn't dedup by design
+            InheritedAnnotation {
+                annotation: AnnotationInfo::Derive(vec![Argument::Var(CascadeString::from("foo"))]),
+                parents: vec![types.get("domain").unwrap()],
+            },
+            InheritedAnnotation {
+                annotation: AnnotationInfo::Derive(vec![Argument::Var(CascadeString::from("foo"))]),
+                parents: vec![types.get("resource").unwrap()],
+            },
+        ];
+
+        let inherited_anns = dedup_inherited_annotations(inherited_anns);
+
+        assert_eq!(inherited_anns, expected_dedup);
     }
 }
