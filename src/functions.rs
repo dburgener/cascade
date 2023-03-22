@@ -2988,7 +2988,9 @@ pub fn search_for_recursion(
                         continue;
                     }
                     let call_cil_name = cil_name_helper(call, function_info)?;
-                    if !terminated_list.contains(&call_cil_name) && function_map.get(&call_cil_name).is_some() {
+                    if !terminated_list.contains(&call_cil_name)
+                        && function_map.get(&call_cil_name).is_some()
+                    {
                         is_term = false;
                         break;
                     }
