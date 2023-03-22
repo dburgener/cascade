@@ -2920,13 +2920,25 @@ pub fn initialize_terminated<'a>(functions: &'a FunctionMap<'a>) -> (Vec<String>
 }
 
 // Helper function to substitue class name if needed
-fn cil_name_helper(call: FuncCall, func_info: &FunctionInfo) -> Result<String, CascadeErrors> {
-    let original_cil_name = call.get_cil_name();
+fn cil_name_helper(
+    call: FuncCall,
+    func_info: &FunctionInfo,
+    function_map: &FunctionMap,
+) -> Result<String, CascadeErrors> {
+    let mut original_cil_name = call.get_cil_name();
+
+    // Deal with casting
+    if let Some(cast_class) = call.cast_name {
+        // This should be mostly safe since we have already looked at castables in prevalidate
+        original_cil_name = get_cil_name(Some(&cast_class), &call.name);
+    }
     // If we are calling something with this or None it must be in the same class
     // so hand place the class name
-    if call.class_name.as_ref() == Some(&CascadeString::from("this")) || call.class_name.is_none() {
+    else if call.class_name.as_ref() == Some(&CascadeString::from("this"))
+        || call.class_name.is_none()
+    {
         if let FunctionClass::Type(class) = func_info.class {
-            return Ok(get_cil_name(Some(&class.name), &call.name));
+            original_cil_name = get_cil_name(Some(&class.name), &call.name);
         } else {
             return Err(CascadeErrors::from(
                 ErrorItem::make_compile_or_internal_error(
@@ -2938,6 +2950,11 @@ fn cil_name_helper(call: FuncCall, func_info: &FunctionInfo) -> Result<String, C
             ));
         }
     }
+    // Finally deal with alias
+    if let Some(call_func_info) = function_map.get(&original_cil_name) {
+        original_cil_name = call_func_info.get_cil_name();
+    }
+
     Ok(original_cil_name)
 }
 
@@ -2948,13 +2965,14 @@ fn find_recursion_loop(
     terminated_list: &Vec<String>,
     visited: &mut Vec<String>,
 ) -> Result<Vec<String>, CascadeErrors> {
+    visited.push(func.to_string());
     if let Some(function_info) = function_map.get(func) {
         let func_calls = get_all_func_calls(function_info.original_body.to_vec());
         for call in func_calls {
             if call.check_builtin().is_some() {
                 continue;
             }
-            let call_cil_name = cil_name_helper(call, function_info)?;
+            let call_cil_name = cil_name_helper(call, function_info, function_map)?;
 
             if terminated_list.contains(&call_cil_name) {
                 continue;
@@ -2963,7 +2981,6 @@ fn find_recursion_loop(
             } else if function_map.get(&call_cil_name).is_none() {
                 continue;
             } else {
-                visited.push(call_cil_name.clone());
                 return find_recursion_loop(&call_cil_name, function_map, terminated_list, visited);
             }
         }
@@ -2987,7 +3004,7 @@ pub fn search_for_recursion(
                     if call.check_builtin().is_some() {
                         continue;
                     }
-                    let call_cil_name = cil_name_helper(call, function_info)?;
+                    let call_cil_name = cil_name_helper(call, function_info, function_map)?;
                     if !terminated_list.contains(&call_cil_name)
                         && function_map.get(&call_cil_name).is_some()
                     {
@@ -3052,7 +3069,7 @@ pub fn search_for_recursion(
                         function_info.declaration_file,
                         function_info.get_declaration_range().unwrap_or_default(),
                         &format!(
-                            "This function calls the previous function: {}.",
+                            "This function is called by the previous function: {}.",
                             previous_function
                         ),
                     ));
