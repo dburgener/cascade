@@ -2919,6 +2919,56 @@ pub fn initialize_terminated<'a>(functions: &'a FunctionMap<'a>) -> (Vec<String>
     (term_ret_vec, nonterm_ret_vec)
 }
 
+// Helper function to substitue class name if needed
+fn cil_name_helper(call: FuncCall, func_info: &FunctionInfo) -> Result<String, CascadeErrors> {
+    let original_cil_name = call.get_cil_name();
+    // If we are calling something with this or None it must be in the same class
+    // so hand place the class name
+    if call.class_name.as_ref() == Some(&CascadeString::from("this")) || call.class_name.is_none() {
+        if let FunctionClass::Type(class) = func_info.class {
+            return Ok(get_cil_name(Some(&class.name), &call.name));
+        } else {
+            return Err(CascadeErrors::from(
+                ErrorItem::make_compile_or_internal_error(
+                    "Could not determine class for 'this.' function call",
+                    Some(func_info.declaration_file),
+                    call.get_name_range(),
+                    "Perhaps you meant to place the function in a resource or domain?",
+                ),
+            ));
+        }
+    }
+    Ok(original_cil_name)
+}
+
+// Search through the non terminating functions to find loops
+fn find_recursion_loop(
+    func: &str,
+    function_map: &FunctionMap,
+    terminated_list: &Vec<String>,
+    visited: &mut Vec<String>,
+) -> Result<Vec<String>, CascadeErrors> {
+    if let Some(function_info) = function_map.get(func) {
+        let func_calls = get_all_func_calls(function_info.original_body.to_vec());
+        for call in func_calls {
+            if call.check_builtin().is_some() {
+                continue;
+            }
+            let call_cil_name = cil_name_helper(call, function_info)?;
+
+            if terminated_list.contains(&call_cil_name) {
+                continue;
+            } else if visited.contains(&call_cil_name) {
+                break;
+            } else {
+                visited.push(call_cil_name.clone());
+                return find_recursion_loop(&call_cil_name, function_map, terminated_list, visited);
+            }
+        }
+    }
+    Ok(visited.to_vec())
+}
+
 pub fn search_for_recursion(
     terminated_list: &mut Vec<String>,
     functions: &mut Vec<String>,
@@ -2932,24 +2982,10 @@ pub fn search_for_recursion(
             if let Some(function_info) = function_map.get(func) {
                 let func_calls = get_all_func_calls(function_info.original_body.to_vec());
                 for call in func_calls {
-                    let mut call_cil_name = call.get_cil_name();
-                    // If we are calling something with this it must be in the same class
-                    // so hand place the class name
-                    if call.class_name.as_ref() == Some(&CascadeString::from("this")) {
-                        if let FunctionClass::Type(class) = function_info.class {
-                            call_cil_name = get_cil_name(Some(&class.name), &call.name)
-                        } else {
-                            return Err(CascadeErrors::from(
-                                ErrorItem::make_compile_or_internal_error(
-                                    "Could not determine class for 'this.' function call",
-                                    Some(function_info.declaration_file),
-                                    call.get_name_range(),
-                                    "Perhaps you meant to place the function in a resource or domain?",
-                                ),
-                            ));
-                        }
+                    if call.check_builtin().is_some() {
+                        continue;
                     }
-
+                    let call_cil_name = cil_name_helper(call, function_info)?;
                     if !terminated_list.contains(&call_cil_name) {
                         is_term = false;
                         break;
@@ -2969,19 +3005,58 @@ pub fn search_for_recursion(
     }
 
     if !functions.is_empty() {
-        let mut error: Option<CompileError> = None;
+        let mut loops: Vec<Vec<String>> = Vec::new();
 
         for func in functions {
-            if let Some(function_info) = function_map.get(func) {
-                error = Some(add_or_create_compile_error(
-                    error,
-                    "Recursive Function call found",
-                    function_info.declaration_file,
-                    function_info.get_declaration_range().unwrap_or_default(),
-                    "These calls have been found in a recursive loop.  There may be more than one recursive loop.",
-                ));
+            loops.push(find_recursion_loop(
+                func,
+                function_map,
+                terminated_list,
+                &mut Vec::new(),
+            )?);
+        }
+
+        // Now we find the smallest loop and tell that to the user
+        let mut smallest: i32 = -1;
+        let mut smallest_loop: Vec<String> = Vec::new();
+        for current_loop in loops {
+            let size = current_loop.len() as i32;
+            if smallest == -1 || size < smallest {
+                smallest = size;
+                smallest_loop = current_loop;
             }
         }
+
+        let mut previous_function: String = String::new();
+        let mut error: Option<CompileError> = None;
+        for func in smallest_loop {
+            if let Some(function_info) = function_map.get(&func) {
+                // This is the start of the loop, so we want a slightly different message
+                if error.is_none() {
+                    error = Some(add_or_create_compile_error(
+                        error,
+                        "Recursive Function call found",
+                        function_info.declaration_file,
+                        function_info.get_declaration_range().unwrap_or_default(),
+                        "This function is the start of the loop.",
+                    ));
+                    previous_function = function_info.name.clone();
+                } else {
+                    error = Some(add_or_create_compile_error(
+                        error,
+                        "Recursive Function call found",
+                        function_info.declaration_file,
+                        function_info.get_declaration_range().unwrap_or_default(),
+                        &format!(
+                            "This function calls the previous function: {}.",
+                            previous_function
+                        ),
+                    ));
+                    previous_function = function_info.name.clone();
+                }
+            }
+        }
+
         // Unwrap is safe since we need to go through the loop above at least once
         return Err(CascadeErrors::from(error.unwrap()));
     }
