@@ -2960,6 +2960,8 @@ fn find_recursion_loop(
                 continue;
             } else if visited.contains(&call_cil_name) {
                 break;
+            } else if function_map.get(&call_cil_name).is_none() {
+                continue;
             } else {
                 visited.push(call_cil_name.clone());
                 return find_recursion_loop(&call_cil_name, function_map, terminated_list, visited);
@@ -2986,7 +2988,7 @@ pub fn search_for_recursion(
                         continue;
                     }
                     let call_cil_name = cil_name_helper(call, function_info)?;
-                    if !terminated_list.contains(&call_cil_name) {
+                    if !terminated_list.contains(&call_cil_name) && function_map.get(&call_cil_name).is_some() {
                         is_term = false;
                         break;
                     }
