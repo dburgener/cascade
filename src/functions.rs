@@ -2919,6 +2919,84 @@ pub fn initialize_terminated<'a>(functions: &'a FunctionMap<'a>) -> (Vec<String>
     (term_ret_vec, nonterm_ret_vec)
 }
 
+// Helper function to ressolve the "true" name of a function
+// given the FuncCall (the Function we are looking to get the true cil name),
+// FunctionInfo (for the function in which FuncCall is called) and FunctionMap (all FunctionInfos).
+// If the function call needs to be cast this will handle that.  This function will not
+// validate the cast that is done else where.
+// If the function call has a "this" class or no class, it will substitue the class of
+// the caller
+// Lastely if the function is type aliased this function will resolve the alias.
+fn resolve_true_cil_name(
+    call: FuncCall,
+    func_info: &FunctionInfo,
+    function_map: &FunctionMap,
+) -> Result<String, CascadeErrors> {
+    // First if check is to see if we need to cast the call.
+    let original_cil_name = if let Some(cast_class) = call.cast_name {
+        // This should be mostly safe since we have already looked at castables in prevalidate
+        get_cil_name(Some(&cast_class), &call.name)
+    }
+    // If we are calling something with this or None it must be in the same class
+    // so hand place the class name
+    else if call.class_name.as_ref() == Some(&CascadeString::from("this"))
+        || call.class_name.is_none()
+    {
+        if let FunctionClass::Type(class) = func_info.class {
+            get_cil_name(Some(&class.name), &call.name)
+        } else {
+            return Err(CascadeErrors::from(
+                ErrorItem::make_compile_or_internal_error(
+                    "Could not determine class for 'this.' function call",
+                    Some(func_info.declaration_file),
+                    call.get_name_range(),
+                    "Perhaps you meant to place the function in a resource or domain?",
+                ),
+            ));
+        }
+    } else {
+        call.get_cil_name()
+    };
+    // Finally deal with alias
+    if let Some(call_func_info) = function_map.get(&original_cil_name) {
+        return Ok(call_func_info.get_cil_name());
+    }
+
+    Ok(original_cil_name)
+}
+
+// Search through the non terminating functions to find loops
+fn find_recursion_loop(
+    func: &str,
+    function_map: &FunctionMap,
+    terminated_list: &Vec<String>,
+    visited: &mut Vec<String>,
+) -> Result<Vec<String>, CascadeErrors> {
+    visited.push(func.to_string());
+    if let Some(function_info) = function_map.get(func) {
+        let func_calls = get_all_func_calls(function_info.original_body.to_vec());
+        for call in func_calls {
+            if call.check_builtin().is_some() {
+                continue;
+            }
+            let call_cil_name = resolve_true_cil_name(call, function_info, function_map)?;
+
+            if terminated_list.contains(&call_cil_name) {
+                continue;
+            } else if visited.contains(&call_cil_name) {
+                break;
+            // If we cannot resolve the function continue.  It is not our job here
+            // to confirm if a function exists or not, that will be caught later.
+            } else if function_map.get(&call_cil_name).is_none() {
+                continue;
+            } else {
+                return find_recursion_loop(&call_cil_name, function_map, terminated_list, visited);
+            }
+        }
+    }
+    Ok(visited.to_vec())
+}
+
 pub fn search_for_recursion(
     terminated_list: &mut Vec<String>,
     functions: &mut Vec<String>,
@@ -2932,25 +3010,13 @@ pub fn search_for_recursion(
             if let Some(function_info) = function_map.get(func) {
                 let func_calls = get_all_func_calls(function_info.original_body.to_vec());
                 for call in func_calls {
-                    let mut call_cil_name = call.get_cil_name();
-                    // If we are calling something with this it must be in the same class
-                    // so hand place the class name
-                    if call.class_name.as_ref() == Some(&CascadeString::from("this")) {
-                        if let FunctionClass::Type(class) = function_info.class {
-                            call_cil_name = get_cil_name(Some(&class.name), &call.name)
-                        } else {
-                            return Err(CascadeErrors::from(
-                                ErrorItem::make_compile_or_internal_error(
-                                    "Could not determine class for 'this.' function call",
-                                    Some(function_info.declaration_file),
-                                    call.get_name_range(),
-                                    "Perhaps you meant to place the function in a resource or domain?",
-                                ),
-                            ));
-                        }
+                    if call.check_builtin().is_some() {
+                        continue;
                     }
-
-                    if !terminated_list.contains(&call_cil_name) {
+                    let call_cil_name = resolve_true_cil_name(call, function_info, function_map)?;
+                    if !terminated_list.contains(&call_cil_name)
+                        && function_map.get(&call_cil_name).is_some()
+                    {
                         is_term = false;
                         break;
                     }
@@ -2969,19 +3035,51 @@ pub fn search_for_recursion(
     }
 
     if !functions.is_empty() {
-        let mut error: Option<CompileError> = None;
+        let mut loops: Vec<Vec<String>> = Vec::new();
 
         for func in functions {
+            loops.push(find_recursion_loop(
+                func,
+                function_map,
+                terminated_list,
+                &mut Vec::new(),
+            )?);
+        }
+
+        // Unwrap is safe, if we are here functions must have at least one element, which means loops must
+        // have at least one element
+        let smallest_loop = loops.iter().min_by(|x, y| x.len().cmp(&y.len())).unwrap();
+
+        let mut previous_function: String = String::new();
+        let mut error: Option<CompileError> = None;
+        for func in smallest_loop {
             if let Some(function_info) = function_map.get(func) {
-                error = Some(add_or_create_compile_error(
-                    error,
-                    "Recursive Function call found",
-                    function_info.declaration_file,
-                    function_info.get_declaration_range().unwrap_or_default(),
-                    "These calls have been found in a recursive loop.  There may be more than one recursive loop.",
-                ));
+                // This is the start of the loop, so we want a slightly different message
+                if error.is_none() {
+                    error = Some(add_or_create_compile_error(
+                        error,
+                        "Recursive Function call found",
+                        function_info.declaration_file,
+                        function_info.get_declaration_range().unwrap_or_default(),
+                        "This function is the start of the loop.  There may be additional loops once this is resolved.",
+                    ));
+                    previous_function = function_info.name.clone();
+                } else {
+                    error = Some(add_or_create_compile_error(
+                        error,
+                        "Recursive Function call found",
+                        function_info.declaration_file,
+                        function_info.get_declaration_range().unwrap_or_default(),
+                        &format!(
+                            "This function is called by the previous function: {}.",
+                            previous_function
+                        ),
+                    ));
+                    previous_function = function_info.name.clone();
+                }
             }
         }
+
         // Unwrap is safe since we need to go through the loop above at least once
         return Err(CascadeErrors::from(error.unwrap()));
     }
