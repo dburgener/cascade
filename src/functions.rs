@@ -2911,7 +2911,7 @@ pub fn initialize_terminated<'a>(functions: &'a FunctionMap<'a>) -> (Vec<String>
     for func in functions.values() {
         let mut is_term = true;
 
-        let func_calls = get_all_func_calls(func.original_body.to_vec());
+        let func_calls = get_all_func_calls(func.original_body);
 
         for call in func_calls {
             if call.check_builtin().is_none() {
@@ -2938,14 +2938,14 @@ pub fn initialize_terminated<'a>(functions: &'a FunctionMap<'a>) -> (Vec<String>
 // the caller
 // Lastely if the function is type aliased this function will resolve the alias.
 fn resolve_true_cil_name(
-    call: FuncCall,
+    call: &FuncCall,
     func_info: &FunctionInfo,
     function_map: &FunctionMap,
 ) -> Result<String, CascadeErrors> {
     // First if check is to see if we need to cast the call.
-    let original_cil_name = if let Some(cast_class) = call.cast_name {
+    let original_cil_name = if let Some(cast_class) = &call.cast_name {
         // This should be mostly safe since we have already looked at castables in prevalidate
-        get_cil_name(Some(&cast_class), &call.name)
+        get_cil_name(Some(cast_class), &call.name)
     }
     // If we are calling something with this or None it must be in the same class
     // so hand place the class name
@@ -2984,7 +2984,7 @@ fn find_recursion_loop(
 ) -> Result<Vec<String>, CascadeErrors> {
     visited.push(func.to_string());
     if let Some(function_info) = function_map.get(func) {
-        let func_calls = get_all_func_calls(function_info.original_body.to_vec());
+        let func_calls = get_all_func_calls(function_info.original_body);
         for call in func_calls {
             if call.check_builtin().is_some() {
                 continue;
@@ -3018,7 +3018,7 @@ pub fn search_for_recursion(
         for func in functions.clone().iter() {
             let mut is_term = true;
             if let Some(function_info) = function_map.get(func) {
-                let func_calls = get_all_func_calls(function_info.original_body.to_vec());
+                let func_calls = get_all_func_calls(function_info.original_body);
                 for call in func_calls {
                     if call.check_builtin().is_some() {
                         continue;

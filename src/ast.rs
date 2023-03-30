@@ -459,22 +459,22 @@ impl Statement {
 // to only their function calls.
 // Note: This will expand out all possible function calls regardless
 // of boolean & optional block state.
-pub fn get_all_func_calls(statements: Vec<Statement>) -> Vec<FuncCall> {
-    let mut ret_vec: Vec<FuncCall> = Vec::new();
+pub fn get_all_func_calls(statements: &[Statement]) -> Vec<&FuncCall> {
+    let mut ret_vec: Vec<&FuncCall> = Vec::new();
     for call in statements {
         match call {
             Statement::Call(call) => {
-                ret_vec.push(*call);
+                ret_vec.push(call);
             }
             Statement::LetBinding(_) => {
                 continue;
             }
             Statement::IfBlock(call) => {
-                ret_vec.extend(get_all_func_calls(call.if_statements));
-                ret_vec.extend(get_all_func_calls(call.else_statements));
+                ret_vec.extend(get_all_func_calls(&call.if_statements));
+                ret_vec.extend(get_all_func_calls(&call.else_statements));
             }
             Statement::OptionalBlock(call) => {
-                ret_vec.extend(get_all_func_calls(call.contents));
+                ret_vec.extend(get_all_func_calls(&call.contents));
             }
         }
     }
