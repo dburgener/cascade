@@ -343,6 +343,52 @@ append.  This could be used, for example to generally allow log files to be
 both writable and appendable, while allowing exceptions for certain append-only
 log scenarios.
 
+## Type casting
+
+To help protect against incorrect AV rules there are rules in place that
+restrict sources to types that have been defined as domains and targets to
+types that have been defined as resources.  If these restrictions need to be
+bypassed type casting can be used.
+
+To cast a type as to something it is not, add the type or attribute you wish
+to cast to in a set of angle brackets after using the type.
+
+```
+domain foo {
+        allow(foo, foo<resource>, capability, [dac_override]);
+        allow(this, this<resource>, capability, [mac_override]);
+}
+```
+
+In the above example we see foo, a domain, being cast as a resource which
+allows it to act as a target for an allow rule. Note that `this` can also be
+cast.
+
+## Function casting
+
+Function casting allows use of a function of a given domain or resource but
+change the `this` reference for the function.
+
+```
+virtual resource abc {
+	fn read(domain source) {
+		allow(source, this, file, read);
+	}
+}
+
+domain xyz {
+	xyz<abc>.read(xyz);
+}
+```
+
+In the above example `xyz` will call `abc`'s `read` function but the `this`
+reference in the `read` function  will be `xyz` not `abc`.  The effective
+allowance will be `allow(xyz, xyz, file, read)`.
+
+A function is only castable if the function, or any function it calls, does
+not reference an associated type, unless the function is being called from
+an inherited type. 
+
 ## File labeling
 
 SELinux supports three types of labeling: dynamic labeling, file contexts and
