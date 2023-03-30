@@ -2427,11 +2427,21 @@ pub fn validate_arguments<'a>(
         &call.args
     };
 
+    // Validate the number of arguments.  A function with default values may have calls with
+    // various numbers of arguments.  There are three cases here:
+    // 1. If the call has < arguments than the non-default declared arguments, that's an error
+    // 2. If the call has >= arguments than non-default declared arguments and <= arguments to
+    //    total declared arguments, then length is okay and we continue with validation to
+    //    determine whether those arguments match the expected types
+    // 3. If the call has > arguments vs the total number of declared arguments, regardless of
+    //    default values, that's an error
+
     if function_args_iter
         .clone()
         .take_while(|a| matches!(a.default_value, None))
         .count()
         > call_args.len()
+        || function_args_len < call_args.len()
     {
         return Err(CascadeErrors::from(
             ErrorItem::make_compile_or_internal_error(
@@ -2452,22 +2462,22 @@ pub fn validate_arguments<'a>(
     for fa in function_args_iter {
         args.push(ExpectedArgInfo::from(fa));
     }
-    for (index, a) in call_args
+    for (call_arg, mut decl_arg) in call_args
         .iter()
         .take_while(|a| !matches!(a.0, Argument::Named(_, _)))
-        .enumerate()
+        .zip(args.iter_mut())
     {
         let validated_arg = validate_argument(
-            ArgForValidation::from(&a.0),
-            &a.1,
-            args[index].function_arg,
+            ArgForValidation::from(&call_arg.0),
+            &call_arg.1,
+            decl_arg.function_arg,
             types,
             class_perms,
             context,
             file,
             call.is_avc(),
         )?;
-        args[index].provided_arg = Some(validated_arg);
+        decl_arg.provided_arg = Some(validated_arg);
     }
 
     for a in call_args

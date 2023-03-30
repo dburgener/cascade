@@ -1471,4 +1471,9 @@ mod tests {
     fn duplicate_association_test() {
         error_policy_test!("duplicate_association.cas", 2, ErrorItem::Compile(_));
     }
+
+    #[test]
+    fn function_arg_count_test() {
+        error_policy_test!("functions_arg_count.cas", 3, ErrorItem::Compile(_));
+    }
 }
