@@ -1,0 +1,15 @@
+resource foo {
+	fn some_func(domain source) {
+		allow(source, this, file, read);
+	}
+
+	fn two_arg_func(domain source, domain other) {
+		allow(source, this, file, write);
+	}
+}
+
+domain bar {
+	foo.some_func(this, "a bad arg");
+	foo.two_arg_func(this);
+	foo.two_arg_func(this, this, this);
+}

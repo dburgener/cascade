@@ -2,6 +2,10 @@ resource foo {
 	fn read(domain source=bar) {
 		allow(source, this, file, read);
 	}
+
+	fn write_something(domain source, resource target=foo) {
+		allow(source, target, file, write);
+	}
 }
 
 domain bar {}
@@ -9,4 +13,6 @@ domain bar {}
 domain baz {
 	foo.read();
 	foo.read(this);
+	foo.write_something(this);
+	foo.write_something(this, target=resource);
 }
