@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::TryFrom;
 use std::ops::Range;
 
+use crate::alias_map::Declared;
 use crate::ast::{
     Argument, CascadeString, Declaration, Expression, FuncCall, LetBinding, Machine, Module,
     PolicyFile, Statement,
@@ -612,9 +613,35 @@ fn handle_derive<'a>(
             functions,
             target_type.declaration_file.as_ref().unwrap(),
         )?;
-        // TODO: If you explicitly derive and declare the same function, that should be a compile
-        // error, rather than an internal error
-        functions.insert(derived_function.get_cil_name(), derived_function)?;
+        let df_cil_name = derived_function.get_cil_name();
+        if functions
+            .insert(df_cil_name.clone(), derived_function)
+            .is_err()
+        {
+            // This would return an internal error, since derived_function is synthetic.  Turn it
+            // into a real one, since we know how we derived it
+            let mut error = ErrorItem::make_compile_or_internal_error(
+                "Derived function is also declared explicitly",
+                target_type.declaration_file.as_ref(),
+                f.get_range(),
+                "Deriving a function here...",
+            );
+
+            if let ErrorItem::Compile(e) = error {
+                let explicit_function =
+                    functions.get(&df_cil_name).ok_or_else(InternalError::new)?;
+                let range = explicit_function
+                    .get_name_range()
+                    .ok_or_else(InternalError::new)?;
+
+                error = ErrorItem::Compile(e.add_additional_message(
+                    explicit_function.declaration_file,
+                    range,
+                    "...but it was explicitly defined here",
+                ));
+            }
+            return Err(error.into());
+        }
     }
     Ok(())
 }

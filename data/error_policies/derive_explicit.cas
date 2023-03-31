@@ -1,0 +1,12 @@
+virtual resource foo {
+	fn read(domain source) {
+		allow(source, this, file, read);
+	}
+}
+
+@derive([read], [foo])
+resource bar inherits foo {
+	fn read(domain source) {
+		allow(source, this, file, write);
+	}
+}
