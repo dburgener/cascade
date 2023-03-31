@@ -343,6 +343,71 @@ append.  This could be used, for example to generally allow log files to be
 both writable and appendable, while allowing exceptions for certain append-only
 log scenarios.
 
+## Type casting
+
+Cascade enforces strict type checking on all function arguments in order to
+ensure correctness.  For example Cascade will check if the source of an allow
+rule is a domain and the target is a resource.  If these type checks need to be
+bypassed (e.g. granting access to files in /proc which share the domain's type)
+type casting can be used.
+
+To cast a type to something it is not, add the type or attribute you wish
+to cast to in a set of angle brackets after using the type.
+
+```
+domain abc {}
+domain foo {
+        // Allow foo read access to abc's files in /proc
+        allow(foo, abc<resource>, file, [read open getattr]);
+}
+```
+
+In the above example we see abc, a domain type, being cast as a resource which
+allows it to act as a target for an allow rule.
+
+## Function casting
+
+Function casting allows use of a function of a given domain or resource but
+change the `this` reference for the function.
+
+```
+virtual resource abc {
+	fn read(domain source) {
+		allow(source, this, file, read);
+	}
+}
+
+domain xyz {
+	xyz<abc>.read(xyz);
+}
+```
+
+In the above example `xyz` will call `abc`'s `read` function but the `this`
+reference in the `read` function  will be `xyz` not `abc`.  The effective
+allow rule will be `allow(xyz, xyz, file, read)`.
+
+A function is only castable if the function, or any function it calls, does
+not reference an associated type, unless the function is being called from
+a child of the domain or resource which defines the function.  For example:
+
+```
+virtual resource tmp {}
+
+@associate([tmp])
+virtual domain bar {
+	fn read_bar_tmp(domain source) {
+		allow(source, bar.tmp, file, [read]);
+	}
+}
+
+domain foo inherits bar {
+	foo<bar>.read_bar_tmp(this);
+}
+```
+
+`read_bar_tmp` references an associated type `bar.tmp`.  The function cast of
+`foo<bar>.read_bar_tmp` is allowed since foo is a child of bar.
+
 ## File labeling
 
 SELinux supports three types of labeling: dynamic labeling, file contexts and
