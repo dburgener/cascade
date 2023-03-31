@@ -1236,6 +1236,11 @@ mod tests {
     }
 
     #[test]
+    fn derive_dups_error() {
+        error_policy_test!("derive_explicit.cas", 1, ErrorItem::Compile(_));
+    }
+
+    #[test]
     fn associate_test() {
         valid_policy_test(
             "associate.cas",
