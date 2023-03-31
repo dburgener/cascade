@@ -597,7 +597,11 @@ fn handle_derive<'a>(
         validate_derive_args(target_type, derive_args, types, class_perms)?;
 
     if vec![CascadeString::from("*")] == func_names {
-        func_names = get_all_function_names(&parents, &*functions);
+        func_names = get_all_function_names(&parents, &*functions)
+            .iter()
+            .filter(|f_name| !target_type.defines_function(f_name.as_ref(), functions))
+            .cloned()
+            .collect()
     }
 
     for f in func_names {
@@ -608,6 +612,8 @@ fn handle_derive<'a>(
             functions,
             target_type.declaration_file.as_ref().unwrap(),
         )?;
+        // TODO: If you explicitly derive and declare the same function, that should be a compile
+        // error, rather than an internal error
         functions.insert(derived_function.get_cil_name(), derived_function)?;
     }
     Ok(())
