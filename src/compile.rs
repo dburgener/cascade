@@ -577,14 +577,31 @@ fn derive_functions<'a>(
     types: &'a TypeMap,
     class_perms: &'a ClassList,
 ) -> Result<(), CascadeErrors> {
+    let mut errors = CascadeErrors::new();
+    let mut internal_error_on_no_errors = false;
     for t in types.values() {
         for annotation in t.get_annotations() {
             if let AnnotationInfo::Derive(derive_args) = annotation {
-                handle_derive(t, derive_args, functions, types, class_perms)?;
+                if let Err(e) = handle_derive(t, derive_args, functions, types, class_perms) {
+                    // If the type we are deriving wasn't declared in source, then this derive
+                    // is inherited from a parent, and that parent should have the same error.
+                    // So we only add these errors for real types.  But if there are no errors
+                    // on real types, then something weird has happened, and we throw an
+                    // internal error so we can get a report and figure out what went wrong.
+                    if !t.is_synthetic() {
+                        errors.append(e)
+                    } else {
+                        internal_error_on_no_errors = true
+                    }
+                }
             }
         }
     }
-    Ok(())
+    if errors.is_empty() && internal_error_on_no_errors {
+        // We discarded an error on a synthetic type, but never found the real error
+        errors.append(InternalError::new().into());
+    }
+    errors.into_result(())
 }
 
 fn handle_derive<'a>(
@@ -605,45 +622,50 @@ fn handle_derive<'a>(
             .collect()
     }
 
+    let mut errors = CascadeErrors::new();
     for f in func_names {
-        let derived_function = FunctionInfo::new_derived_function(
+        match FunctionInfo::new_derived_function(
             &f,
             target_type,
             &parents,
             functions,
             target_type.declaration_file.as_ref().unwrap(),
-        )?;
-        let df_cil_name = derived_function.get_cil_name();
-        if functions
-            .insert(df_cil_name.clone(), derived_function)
-            .is_err()
-        {
-            // This would return an internal error, since derived_function is synthetic.  Turn it
-            // into a real one, since we know how we derived it
-            let mut error = ErrorItem::make_compile_or_internal_error(
-                "Derived function is also declared explicitly",
-                target_type.declaration_file.as_ref(),
-                f.get_range(),
-                "Deriving a function here...",
-            );
+        ) {
+            Ok(derived_function) => {
+                let df_cil_name = derived_function.get_cil_name();
+                if functions
+                    .insert(df_cil_name.clone(), derived_function)
+                    .is_err()
+                {
+                    // This would return an internal error, since derived_function is synthetic.  Turn it
+                    // into a real one, since we know how we derived it
+                    let mut error = ErrorItem::make_compile_or_internal_error(
+                        "Derived function is also declared explicitly",
+                        target_type.declaration_file.as_ref(),
+                        f.get_range(),
+                        "Deriving a function here...",
+                    );
 
-            if let ErrorItem::Compile(e) = error {
-                let explicit_function =
-                    functions.get(&df_cil_name).ok_or_else(InternalError::new)?;
-                let range = explicit_function
-                    .get_name_range()
-                    .ok_or_else(InternalError::new)?;
+                    if let ErrorItem::Compile(e) = error {
+                        let explicit_function =
+                            functions.get(&df_cil_name).ok_or_else(InternalError::new)?;
+                        let range = explicit_function
+                            .get_name_range()
+                            .ok_or_else(InternalError::new)?;
 
-                error = ErrorItem::Compile(e.add_additional_message(
-                    explicit_function.declaration_file,
-                    range,
-                    "...but it was explicitly defined here",
-                ));
+                        error = ErrorItem::Compile(e.add_additional_message(
+                            explicit_function.declaration_file,
+                            range,
+                            "...but it was explicitly defined here",
+                        ));
+                    }
+                    return Err(error.into());
+                }
             }
-            return Err(error.into());
+            Err(e) => errors.append(e),
         }
     }
-    Ok(())
+    errors.into_result(())
 }
 
 pub fn validate_modules<'a>(

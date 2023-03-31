@@ -355,6 +355,11 @@ impl TypeInfo {
         self.is_resource(types) && self.name.as_ref().contains('.')
     }
 
+    // Returns false if this type is explicitly declared in source code, and true otherwise
+    pub fn is_synthetic(&self) -> bool {
+        self.name.get_range().is_none()
+    }
+
     // All types must inherit from some built in.  Get one for this type.
     // It's possible to inherit from multiple built-ins, so order matters here.  We return the
     // first type in order of preference.
