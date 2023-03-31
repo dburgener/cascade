@@ -33,7 +33,7 @@ resource custom_define inherits foo, bar {
 @derive([read], parents=*)
 resource union_all_parents inherits foo, bar {}
 
-@derive([read], parents=[foo])
+@derive([read], parents=foo)
 resource derive_from_foo inherits foo, bar {}
 
 @derive(*, *)
