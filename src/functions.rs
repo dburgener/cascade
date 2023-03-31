@@ -2760,6 +2760,8 @@ fn validate_argument<'a>(
                 if arg_typeinfo.list_coercion
                     || matches!(arg_typeinfo.bound_type, BoundTypeInfo::List(_))
                     || arg.is_list_symbol(context)
+                    // Automatically coerce everything in annotations
+                    || context.in_annotation()
                 {
                     return validate_argument(
                         ArgForValidation::coerce_list(arg),
