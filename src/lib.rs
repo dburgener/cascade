@@ -945,8 +945,13 @@ mod tests {
         "(macro derive_all-write ((type this) (type source)) (allow source this (dir (write))))",
         "(macro defaults-write ((type this) (type source)) (allow source this (dir (write))))",
         "(call associates-to_associate-some_associated_call",
-        "(macro some_child-domtrans ((type this) (type source) (type exec)) (typetransition source exec process this))"],
-        &[],
+        "(macro some_child-domtrans ((type this) (type source) (type exec)) (typetransition source exec process this))",
+        "(macro overwrite_one-read ((type this) (type source)) (allow source this (lnk_file (read))))",
+        "(macro overwrite_one-write ((type this) (type source)) (allow source this (dir (write))))",
+        ],
+        &[
+        "(macro overwrite_one-read ((type this) (type source)) (allow source this (dir (read))))",
+        ],
         0);
     }
 
