@@ -345,24 +345,25 @@ log scenarios.
 
 ## Type casting
 
-To help protect against incorrect AV rules there are rules in place that
-restrict sources to types that have been defined as domains and targets to
-types that have been defined as resources.  If these restrictions need to be
-bypassed type casting can be used.
+Cascade enforces strict type checking on all function arguments in order to
+ensure correctness.  For example Cascade will check if the source of an allow
+rule is a domain and the target is a resource.  If these type checks need to be
+bypassed (e.g. granting access to files in /proc which share the domain's type)
+type casting can be used.
 
-To cast a type as to something it is not, add the type or attribute you wish
+To cast a type to something it is not, add the type or attribute you wish
 to cast to in a set of angle brackets after using the type.
 
 ```
+domain abc {}
 domain foo {
-        allow(foo, foo<resource>, capability, [dac_override]);
-        allow(this, this<resource>, capability, [mac_override]);
+        // Allow foo read access to abc's files in /proc
+        allow(foo, abc<resource>, file, [read open getattr]);
 }
 ```
 
-In the above example we see foo, a domain, being cast as a resource which
-allows it to act as a target for an allow rule. Note that `this` can also be
-cast.
+In the above example we see abc, a domain type, being cast as a resource which
+allows it to act as a target for an allow rule.
 
 ## Function casting
 
@@ -383,11 +384,29 @@ domain xyz {
 
 In the above example `xyz` will call `abc`'s `read` function but the `this`
 reference in the `read` function  will be `xyz` not `abc`.  The effective
-allowance will be `allow(xyz, xyz, file, read)`.
+allow rule will be `allow(xyz, xyz, file, read)`.
 
 A function is only castable if the function, or any function it calls, does
 not reference an associated type, unless the function is being called from
-an inherited type. 
+a child of the domain or resource which defines the function.  For example:
+
+```
+virtual resource tmp {}
+
+@associate([tmp])
+virtual domain bar {
+	fn read_bar_tmp(domain source) {
+		allow(source, bar.tmp, file, [read]);
+	}
+}
+
+domain foo inherits bar {
+	foo<bar>.read_bar_tmp(this);
+}
+```
+
+`read_bar_tmp` references an associated type `bar.tmp`.  The function cast of
+`foo<bar>.read_bar_tmp` is allowed since foo is a child of bar.
 
 ## File labeling
 
