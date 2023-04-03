@@ -2,8 +2,13 @@ resource my_file {
 	fn read(domain source) {
 		allow(source, this, file, [ read open getattr ]);
 	}
+
+	fn call_read(domain source) {
+		this.read(source);
+	}
 }
 
 domain my_domain {
-	my_file.read(this); // TODO: support 'this' as default argument
+	my_file.read(this);
+	my_file.call_read();
 }
