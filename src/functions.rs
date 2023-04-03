@@ -2933,7 +2933,7 @@ pub fn initialize_terminated<'a>(functions: &'a FunctionMap<'a>) -> (Vec<String>
 
 // Helper function to ressolve the "true" name of a function
 // given the FuncCall (the Function we are looking to get the true cil name),
-// FunctionInfo (for the function in which FuncCall is called) and FunctionMap (all FunctionInfos).
+// Context it is called in and FunctionMap (all FunctionInfos).
 // If the function call needs to be cast this will handle that.  This function will not
 // validate the cast that is done else where.
 // If the function call has a "this" class or no class, it will substitue the class of
@@ -2941,35 +2941,41 @@ pub fn initialize_terminated<'a>(functions: &'a FunctionMap<'a>) -> (Vec<String>
 // Lastely if the function is type aliased this function will resolve the alias.
 fn resolve_true_cil_name(
     call: &FuncCall,
-    func_info: &FunctionInfo,
+    context: &BlockContext,
+    file: &SimpleFile<String, String>,
     function_map: &FunctionMap,
 ) -> Result<String, CascadeErrors> {
-    // First if check is to see if we need to cast the call.
-    let original_cil_name = if let Some(cast_class) = &call.cast_name {
-        // This should be mostly safe since we have already looked at castables in prevalidate
-        get_cil_name(Some(cast_class), &call.name)
+    // The double as_ref() is kind of weird, but I think it's correct.  Option<T>::as_ref() does
+    // &T, rather than T.as_ref().  Since Cascade has implemented the as_ref() trait, we need to
+    // call it explicitly
+    // convert_arg_this() handles this.*, then we handle a bare "this", since we'll be combining it
+    // with a function name ourselves
+    let mut true_call_class = context.convert_arg_this(
+        call.cast_name.as_ref().map(|s| s.as_ref()).unwrap_or(
+            call.class_name
+                .as_ref()
+                .map(|s| s.as_ref())
+                .unwrap_or("this"),
+        ),
+    );
+    if &true_call_class == "this" {
+        true_call_class = match context.get_parent_type_name() {
+            Some(type_name) => type_name.to_string(),
+            None => {
+                return Err(CascadeErrors::from(
+                    ErrorItem::make_compile_or_internal_error(
+                        "Could not determine class for 'this.' function call",
+                        Some(file),
+                        call.get_name_range(),
+                        "Perhaps you meant to place the function in a resource or domain?",
+                    ),
+                ))
+            }
+        };
     }
-    // If we are calling something with this or None it must be in the same class
-    // so hand place the class name
-    else if call.class_name.as_ref() == Some(&CascadeString::from("this"))
-        || call.class_name.is_none()
-    {
-        if let FunctionClass::Type(class) = func_info.class {
-            get_cil_name(Some(&class.name), &call.name)
-        } else {
-            return Err(CascadeErrors::from(
-                ErrorItem::make_compile_or_internal_error(
-                    "Could not determine class for 'this.' function call",
-                    Some(func_info.declaration_file),
-                    call.get_name_range(),
-                    "Perhaps you meant to place the function in a resource or domain?",
-                ),
-            ));
-        }
-    } else {
-        call.get_cil_name()
-    };
-    // Finally deal with alias
+    let original_cil_name = get_cil_name(Some(&CascadeString::from(true_call_class)), &call.name);
+
+    // Deal with aliases
     if let Some(call_func_info) = function_map.get(&original_cil_name) {
         return Ok(call_func_info.get_cil_name());
     }
@@ -2986,12 +2992,18 @@ fn find_recursion_loop(
 ) -> Result<Vec<String>, CascadeErrors> {
     visited.push(func.to_string());
     if let Some(function_info) = function_map.get(func) {
+        let func_context = BlockContext::new(BlockType::Function, function_info.class.into(), None);
         let func_calls = get_all_func_calls(function_info.original_body);
         for call in func_calls {
             if call.check_builtin().is_some() {
                 continue;
             }
-            let call_cil_name = resolve_true_cil_name(call, function_info, function_map)?;
+            let call_cil_name = resolve_true_cil_name(
+                call,
+                &func_context,
+                function_info.declaration_file,
+                function_map,
+            )?;
 
             if terminated_list.contains(&call_cil_name) {
                 continue;
@@ -3020,12 +3032,19 @@ pub fn search_for_recursion(
         for func in functions.clone().iter() {
             let mut is_term = true;
             if let Some(function_info) = function_map.get(func) {
+                let func_context =
+                    BlockContext::new(BlockType::Function, function_info.class.into(), None);
                 let func_calls = get_all_func_calls(function_info.original_body);
                 for call in func_calls {
                     if call.check_builtin().is_some() {
                         continue;
                     }
-                    let call_cil_name = resolve_true_cil_name(call, function_info, function_map)?;
+                    let call_cil_name = resolve_true_cil_name(
+                        call,
+                        &func_context,
+                        function_info.declaration_file,
+                        function_map,
+                    )?;
                     if !terminated_list.contains(&call_cil_name)
                         && function_map.get(&call_cil_name).is_some()
                     {
