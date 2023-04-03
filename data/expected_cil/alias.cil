@@ -151,7 +151,7 @@
 (macro baz-list ((type this) (type source)) (call baz-read (this source)))
 (macro foo-list ((type this) (type source)) (call baz-read (this source)))
 (macro foo-read ((type this) (type source)) (call baz-read (this source)))
-(call baz-list (foo quz))
+(call baz-read (foo quz))
 (allow quz bar (file (write)))
 (allow quz baz (file (open)))
 (allow quz foo (file (read)))

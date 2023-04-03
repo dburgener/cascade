@@ -2246,24 +2246,7 @@ impl ValidatedCall {
             return Err(ErrorItem::Internal(InternalError::new()).into());
         }
 
-        let cil_name = match &call.class_name {
-            Some(class_name) => {
-                // Resolve aliases
-                let tmp_str = match types
-                    .get(convert_class_name_if_this(class_name, parent_type)?.as_ref())
-                {
-                    Some(type_name) => get_cil_name(Some(&type_name.name), &call.name),
-                    None => call.get_cil_name(), // Expected to error out below
-                };
-                // If we have a cast name we really want to call that instead.
-                if let Some(cast_name) = &call.cast_name {
-                    tmp_str.replacen(&class_name.to_string(), cast_name.to_string().as_ref(), 1)
-                } else {
-                    tmp_str
-                }
-            }
-            None => get_cil_name(call.cast_name.as_ref(), &call.name),
-        };
+        let cil_name = resolve_true_cil_name(call, context, file, functions)?;
         let function_info = match functions.get(&cil_name) {
             Some(function_info) => function_info,
             None => {
