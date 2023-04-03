@@ -120,6 +120,8 @@ impl<'a> Context<'a> {
         }
     }
 
+    // Converts this.* to resolve "this".  Leaves "this" alone, because a bare this is resolved at
+    // the CIL level
     pub fn convert_arg_this(&self, arg: &str) -> String {
         match self.parent_type {
             Some(parent) => {
