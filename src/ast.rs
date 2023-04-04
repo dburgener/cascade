@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::iter;
@@ -425,6 +426,24 @@ pub struct IfBlock {
     pub else_statements: Vec<Statement>,
 }
 
+impl IfBlock {
+    pub fn get_renamed(&self, renames: &BTreeMap<String, String>) -> Self {
+        IfBlock {
+            keyword_range: self.keyword_range.clone(),
+            if_statements: self
+                .if_statements
+                .iter()
+                .map(|s| s.get_renamed_statement(renames))
+                .collect(),
+            else_statements: self
+                .else_statements
+                .iter()
+                .map(|s| s.get_renamed_statement(renames))
+                .collect(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct OptionalBlock {
     pub contents: Vec<Statement>,
@@ -433,6 +452,16 @@ pub struct OptionalBlock {
 impl OptionalBlock {
     pub fn new(contents: Vec<Statement>) -> Self {
         OptionalBlock { contents }
+    }
+
+    pub fn get_renamed(&self, renames: &BTreeMap<String, String>) -> Self {
+        OptionalBlock {
+            contents: self
+                .contents
+                .iter()
+                .map(|s| s.get_renamed_statement(renames))
+                .collect(),
+        }
     }
 }
 
@@ -451,6 +480,22 @@ impl Statement {
             Statement::LetBinding(l) => l.add_annotation(annotation),
             Statement::IfBlock(_) => todo!(),
             Statement::OptionalBlock(_) => todo!(),
+        }
+    }
+
+    // Create a new statement based on the original which changes all the keys in renames into the
+    // associated value.  This is used when renaming function arguments during derivation.  If we
+    // derive from two parents who have the same signature, but different names for an argument,
+    // such as func(domain foo) {} and func(domain bar), then we rename to the argument names
+    // combined with an underscore ("foo_bar" in this example)
+    pub fn get_renamed_statement(&self, renames: &BTreeMap<String, String>) -> Self {
+        match self {
+            Statement::Call(c) => Statement::Call(Box::new(c.get_renamed(renames))),
+            Statement::LetBinding(l) => Statement::LetBinding(Box::new(l.get_renamed(renames))),
+            Statement::IfBlock(i) => Statement::IfBlock(Box::new(i.get_renamed(renames))),
+            Statement::OptionalBlock(o) => {
+                Statement::OptionalBlock(Box::new(o.get_renamed(renames)))
+            }
         }
     }
 }
@@ -592,6 +637,24 @@ impl FuncCall {
     pub fn set_drop(&mut self) {
         self.drop = true;
     }
+
+    pub fn get_renamed(&self, renames: &BTreeMap<String, String>) -> Self {
+        let rename = |s: &CascadeString| {
+            CascadeString::from(renames.get(&s.to_string()).unwrap_or(&s.to_string()) as &str)
+        };
+        FuncCall {
+            class_name: self.class_name.as_ref().map(rename),
+            cast_name: self.cast_name.as_ref().map(rename),
+            name: rename(&self.name),
+            args: self
+                .args
+                .iter()
+                .map(|(arg, cast)| (arg.rename(renames), cast.as_ref().map(rename)))
+                .collect(),
+            annotations: self.annotations.clone(),
+            drop: self.drop,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -612,6 +675,17 @@ impl LetBinding {
 
     pub fn add_annotation(&mut self, annotation: Annotation) {
         self.annotations.push(annotation);
+    }
+
+    pub fn get_renamed(&self, renames: &BTreeMap<String, String>) -> Self {
+        let rename = |s: &CascadeString| {
+            CascadeString::from(renames.get(&s.to_string()).unwrap_or(&s.to_string()) as &str)
+        };
+        LetBinding {
+            name: rename(&self.name),
+            value: self.value.rename(renames),
+            annotations: self.annotations.clone(),
+        }
     }
 }
 
@@ -817,6 +891,18 @@ impl Argument {
             Argument::Quote(a) => a.get_range(),
             Argument::Port(p) => p.get_range(),
             Argument::IpAddr(i) => i.get_range(),
+        }
+    }
+
+    pub fn rename(&self, renames: &BTreeMap<String, String>) -> Self {
+        let rename = |s: &CascadeString| {
+            CascadeString::from(renames.get(&s.to_string()).unwrap_or(&s.to_string()) as &str)
+        };
+        match self {
+            Argument::Var(s) => Argument::Var(rename(s)),
+            Argument::Named(n, a) => Argument::Named(n.clone(), Box::new(a.rename(renames))),
+            Argument::List(strings) => Argument::List(strings.iter().map(rename).collect()),
+            Argument::Quote(_) | Argument::Port(_) | Argument::IpAddr(_) => self.clone(),
         }
     }
 }
@@ -1140,5 +1226,42 @@ mod tests {
 
         assert_eq!(g, h);
         assert_eq!(hash(g), hash(h));
+    }
+
+    #[test]
+    fn test_get_renamed() {
+        let statement1 = Statement::Call(Box::new(FuncCall::new(
+            Some(("old_name".into(), Some("old_name".into()))),
+            "old_name".into(),
+            vec![Argument::Var("old_name".into())],
+        )));
+
+        let statement2 = statement1.clone();
+
+        let statement3 = Statement::LetBinding(Box::new(LetBinding::new(
+            "old_name".into(),
+            Argument::Quote("unchanged".into()),
+        )));
+
+        let opt_block =
+            Statement::OptionalBlock(Box::new(OptionalBlock::new(vec![statement3, statement2])));
+
+        let if_block = Statement::IfBlock(Box::new(IfBlock {
+            keyword_range: 1..2,
+            if_statements: vec![statement1],
+            else_statements: vec![opt_block],
+        }));
+
+        let mut renames = BTreeMap::new();
+        renames.insert("old_name".to_string(), "new_name".to_string());
+        renames.insert("unchanged".to_string(), "changed_in_quote".to_string());
+        let result = if_block.get_renamed_statement(&renames);
+
+        // matches!() won't work because matching against box patterns is nightly only
+        let debug_str = format!("{:?}", result);
+        assert!(debug_str.contains("new_name"));
+        assert!(!debug_str.contains("old_name"));
+        assert!(debug_str.contains("unchanged"));
+        assert!(!debug_str.contains("changed_in_quote"));
     }
 }

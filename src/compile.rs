@@ -520,6 +520,8 @@ pub fn validate_functions<'a>(
     let mut warnings = Warnings::new();
     let mut classes_to_required_functions: BTreeMap<&CascadeString, BTreeSet<&str>> =
         BTreeMap::new();
+    let mut derived_function_error = false;
+
     // TODO: We pass the global context in here, but most function declarations are in a type
     // block, and should have bindings in that block exposed
     for function in functions.values_mut() {
@@ -531,11 +533,28 @@ pub fn validate_functions<'a>(
             function.declaration_file,
         ) {
             Ok(ww) => ww.inner(&mut warnings),
-            Err(e) => errors.append(e),
+            Err(e) => {
+                // If the function is derived and fails to validate one of two things have
+                // happened:
+                // 1. (Most likely) one of the parents its deriving from has a CompileError.  We'll
+                //    report that elsewhere
+                // 2. We have a Cascade bug
+                // In case 1, we just report the derived parent error.  Once that's fixed, we
+                // expect the derived function to validate as well.  In case it's case 2, we set
+                // that we've seen a derived_function_error and if we don't encounter any other
+                // errors, we'll throw an internal error
+                if !function.is_derived {
+                    errors.append(e);
+                } else {
+                    derived_function_error = true;
+                }
+            }
         }
     }
 
-    derive_functions(&mut functions, types, class_perms)?;
+    if derived_function_error && errors.is_empty() {
+        errors.append(InternalError::new().into());
+    }
 
     for function in functions.values() {
         if let FunctionClass::Type(func_class) = function.class {
@@ -1028,6 +1047,8 @@ pub fn get_reduced_infos(
 
     // Get the function infos
     let mut new_func_map = get_funcs(policies, &new_type_map)?;
+
+    derive_functions(&mut new_func_map, &new_type_map, classlist)?;
 
     prevalidate_functions(&mut new_func_map, &new_type_map)?;
 

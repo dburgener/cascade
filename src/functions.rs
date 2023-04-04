@@ -81,18 +81,6 @@ pub fn argument_to_typeinfo_vec<'a>(
     Ok(ret)
 }
 
-fn rename_cow<'a>(
-    cow_str: &CascadeString,
-    renames: &BTreeMap<String, String>,
-) -> Cow<'a, CascadeString> {
-    Cow::Owned(CascadeString::from(
-        renames
-            .get::<str>(cow_str.as_ref())
-            .unwrap_or(&cow_str.to_string())
-            .clone(),
-    ))
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AvRuleFlavor {
     Allow,
@@ -109,29 +97,6 @@ pub struct AvRule<'a> {
     pub class: Cow<'a, CascadeString>,
     // Lifetimes get weird once permissions get expanded, so AV rules should just own their permissions
     pub perms: Vec<CascadeString>,
-}
-
-impl AvRule<'_> {
-    fn get_renamed_statement(&self, renames: &BTreeMap<String, String>) -> Self {
-        AvRule {
-            av_rule_flavor: self.av_rule_flavor,
-            source: rename_cow(&self.source, renames),
-            target: rename_cow(&self.target, renames),
-            class: rename_cow(&self.class, renames),
-            perms: self
-                .perms
-                .iter()
-                .map(|p| {
-                    CascadeString::from(
-                        renames
-                            .get(&p.to_string())
-                            .unwrap_or(&p.to_string())
-                            .clone(),
-                    )
-                })
-                .collect(),
-        }
-    }
 }
 
 impl From<&AvRule<'_>> for sexp::Sexp {
@@ -175,7 +140,7 @@ fn is_collapsed_class(class: &str) -> bool {
 // Returns a set of AV Rules, because one Cascade allow() call could generate multiple CIL level AV
 // rules, for example when intermixing capability and capability2 permissions
 fn call_to_av_rule<'a>(
-    c: &'a FuncCall,
+    c: &FuncCall,
     types: &'a TypeMap,
     class_perms: &ClassList,
     context: &BlockContext<'_>,
@@ -398,16 +363,6 @@ pub struct FileContextRule<'a> {
     pub context: Context<'a>,
 }
 
-impl FileContextRule<'_> {
-    fn get_renamed_statement(&self, renames: &BTreeMap<String, String>) -> Self {
-        FileContextRule {
-            regex_string: self.regex_string.clone(),
-            file_type: self.file_type.clone(),
-            context: self.context.get_renamed_context(renames),
-        }
-    }
-}
-
 impl From<&FileContextRule<'_>> for sexp::Sexp {
     fn from(f: &FileContextRule) -> sexp::Sexp {
         list(&[
@@ -420,7 +375,7 @@ impl From<&FileContextRule<'_>> for sexp::Sexp {
 }
 
 fn call_to_fc_rules<'a>(
-    c: &'a FuncCall,
+    c: &FuncCall,
     types: &'a TypeMap,
     class_perms: &ClassList,
     context: &BlockContext<'_>,
@@ -615,16 +570,6 @@ pub fn call_to_portcon_rules<'a>(
     Ok(ret)
 }
 
-impl PortconRule<'_> {
-    fn get_renamed_statement(&self, renames: &BTreeMap<String, String>) -> Self {
-        PortconRule {
-            proto: self.proto,
-            port_num: self.port_num.clone(),
-            context: self.context.get_renamed_context(renames),
-        }
-    }
-}
-
 // Recursively validate a port
 // First, split on commas, then hyphens
 // Each comma separated string is validated separatedly
@@ -752,21 +697,6 @@ impl Ord for FileSystemContextRule<'_> {
     }
 }
 
-impl FileSystemContextRule<'_> {
-    fn get_renamed_statement(&self, renames: &BTreeMap<String, String>) -> Self {
-        FileSystemContextRule {
-            fscontext_type: self.fscontext_type.clone(),
-            fs_name: self.fs_name.clone(),
-            path: self.path.clone(),
-            file_type: self.file_type.clone(),
-            context: self.context.get_renamed_context(renames),
-            file: self.file.clone(),
-            file_type_range: self.file_type_range.clone(),
-            context_range: self.context_range.clone(),
-        }
-    }
-}
-
 impl TryFrom<&FileSystemContextRule<'_>> for sexp::Sexp {
     type Error = ErrorItem;
 
@@ -816,7 +746,7 @@ impl TryFrom<&FileSystemContextRule<'_>> for sexp::Sexp {
 }
 
 fn call_to_fsc_rules<'a>(
-    c: &'a FuncCall,
+    c: &FuncCall,
     types: &'a TypeMap,
     class_perms: &ClassList,
     context: &BlockContext<'_>,
@@ -1036,18 +966,8 @@ impl From<&DomtransRule<'_>> for sexp::Sexp {
     }
 }
 
-impl DomtransRule<'_> {
-    fn get_renamed_statement(&self, renames: &BTreeMap<String, String>) -> Self {
-        DomtransRule {
-            source: rename_cow(&self.source, renames),
-            target: rename_cow(&self.target, renames),
-            executable: rename_cow(&self.executable, renames),
-        }
-    }
-}
-
 fn call_to_domain_transition<'a>(
-    c: &'a FuncCall,
+    c: &FuncCall,
     types: &'a TypeMap,
     class_perms: &ClassList,
     context: &BlockContext<'_>,
@@ -1122,17 +1042,6 @@ pub struct ResourcetransRule<'a> {
     pub file_type: Cow<'a, CascadeString>,
 }
 
-impl ResourcetransRule<'_> {
-    fn get_renamed_statement(&self, renames: &BTreeMap<String, String>) -> Self {
-        ResourcetransRule {
-            default: rename_cow(&self.default, renames),
-            domain: rename_cow(&self.domain, renames),
-            parent: rename_cow(&self.parent, renames),
-            file_type: self.file_type.clone(),
-        }
-    }
-}
-
 impl From<&ResourcetransRule<'_>> for sexp::Sexp {
     fn from(r: &ResourcetransRule) -> Self {
         list(&[
@@ -1146,7 +1055,7 @@ impl From<&ResourcetransRule<'_>> for sexp::Sexp {
 }
 
 fn call_to_resource_transition<'a>(
-    c: &'a FuncCall,
+    c: &FuncCall,
     types: &'a TypeMap,
     class_perms: &ClassList,
     context: &BlockContext<'_>,
@@ -1330,7 +1239,7 @@ pub struct FunctionInfo<'a> {
     pub is_virtual: bool,
     pub args: Vec<FunctionArgument<'a>>,
     pub annotations: BTreeSet<AnnotationInfo>,
-    pub original_body: &'a [Statement],
+    pub original_body: Vec<Statement>,
     pub body: Option<BTreeSet<ValidatedStatement<'a>>>,
     pub declaration_file: &'a SimpleFile<String, String>,
     pub is_associated_call: bool,
@@ -1481,7 +1390,7 @@ impl<'a> FunctionInfo<'a> {
             is_virtual: funcdecl.is_virtual,
             args,
             annotations,
-            original_body: &funcdecl.body,
+            original_body: funcdecl.body.clone(),
             body: None,
             declaration_file,
             is_associated_call,
@@ -1503,7 +1412,7 @@ impl<'a> FunctionInfo<'a> {
         file: &'a SimpleFile<String, String>,
     ) -> Result<FunctionInfo<'a>, CascadeErrors> {
         let mut first_parent = None;
-        let mut derived_body = BTreeSet::new();
+        let mut derived_body = Vec::new();
         let mut derived_is_associated_call = false;
         let mut derived_arg_names: Vec<BTreeSet<String>> = Vec::new();
 
@@ -1606,9 +1515,7 @@ impl<'a> FunctionInfo<'a> {
 
             derived_body.append(
                 &mut parent_function
-                    .body
-                    .clone()
-                    .unwrap_or_default()
+                    .original_body
                     .iter()
                     .map(|s| s.get_renamed_statement(&renames))
                     .collect(),
@@ -1637,8 +1544,8 @@ impl<'a> FunctionInfo<'a> {
             is_virtual: false, // TODO: Check documentation for correct behavior here
             args: derived_args,
             annotations: BTreeSet::new(),
-            original_body: &[], // Unused after validation
-            body: Some(derived_body),
+            original_body: derived_body,
+            body: None,
             declaration_file: file,
             is_associated_call: derived_is_associated_call,
             is_derived: true,
@@ -1670,7 +1577,7 @@ impl<'a> FunctionInfo<'a> {
         let mut warnings = Warnings::new();
         let local_context = BlockContext::new_from_args(&self.args, self.class.into(), context);
 
-        for statement in self.original_body {
+        for statement in &self.original_body {
             // TODO: This needs to become global in a bit
             match ValidatedStatement::new(
                 statement,
@@ -1941,7 +1848,7 @@ pub enum ValidatedStatement<'a> {
 
 impl<'a> ValidatedStatement<'a> {
     pub fn new(
-        statement: &'a Statement,
+        statement: &Statement,
         functions: &FunctionMap<'a>,
         types: &'a TypeMap,
         class_perms: &ClassList<'a>,
@@ -2146,32 +2053,6 @@ impl<'a> ValidatedStatement<'a> {
             }
         }
     }
-
-    fn get_renamed_statement(&self, renames: &BTreeMap<String, String>) -> Self {
-        match self {
-            ValidatedStatement::Call(c) => {
-                ValidatedStatement::Call(Box::new(c.get_renamed_call(renames)))
-            }
-            ValidatedStatement::AvRule(a) => {
-                ValidatedStatement::AvRule(a.get_renamed_statement(renames))
-            }
-            ValidatedStatement::FcRule(f) => {
-                ValidatedStatement::FcRule(f.get_renamed_statement(renames))
-            }
-            ValidatedStatement::DomtransRule(d) => {
-                ValidatedStatement::DomtransRule(d.get_renamed_statement(renames))
-            }
-            ValidatedStatement::ResourcetransRule(r) => {
-                ValidatedStatement::ResourcetransRule(r.get_renamed_statement(renames))
-            }
-            ValidatedStatement::FscRule(f) => {
-                ValidatedStatement::FscRule(f.get_renamed_statement(renames))
-            }
-            ValidatedStatement::PortconRule(p) => {
-                ValidatedStatement::PortconRule(p.get_renamed_statement(renames))
-            }
-        }
-    }
 }
 
 impl TryFrom<&ValidatedStatement<'_>> for sexp::Sexp {
@@ -2333,26 +2214,6 @@ impl ValidatedCall {
         }
 
         Ok(ret)
-    }
-
-    fn get_renamed_call(&self, renames: &BTreeMap<String, String>) -> Self {
-        // The renaming only applies to type names, so we can ignore the CilArg::PermList case
-        let new_args = self
-            .args
-            .iter()
-            .cloned()
-            .map(|a| {
-                if let CilArg::Name(s) = a {
-                    CilArg::Name(renames.get(&s).unwrap_or(&s).to_string())
-                } else {
-                    a
-                }
-            })
-            .collect();
-        ValidatedCall {
-            cil_name: self.cil_name.clone(),
-            args: new_args,
-        }
     }
 }
 
@@ -2857,7 +2718,7 @@ pub fn determine_castable(functions: &mut FunctionMap, types: &TypeMap) -> u64 {
         if !func.is_castable {
             continue;
         }
-        for call in func.original_body {
+        for call in &func.original_body {
             if let Statement::Call(call) = call {
                 if let Some(inner_func) = tmp_functions.get(&call.get_cil_name()) {
                     if !inner_func.is_castable {
@@ -2896,7 +2757,7 @@ pub fn initialize_terminated<'a>(functions: &'a FunctionMap<'a>) -> (Vec<String>
     for func in functions.values() {
         let mut is_term = true;
 
-        let func_calls = get_all_func_calls(func.original_body);
+        let func_calls = get_all_func_calls(&func.original_body);
 
         for call in func_calls {
             if call.check_builtin().is_none() {
@@ -2976,7 +2837,7 @@ fn find_recursion_loop(
     visited.push(func.to_string());
     if let Some(function_info) = function_map.get(func) {
         let func_context = BlockContext::new(BlockType::Function, function_info.class.into(), None);
-        let func_calls = get_all_func_calls(function_info.original_body);
+        let func_calls = get_all_func_calls(&function_info.original_body);
         for call in func_calls {
             if call.check_builtin().is_some() {
                 continue;
@@ -3017,7 +2878,7 @@ pub fn search_for_recursion(
             if let Some(function_info) = function_map.get(func) {
                 let func_context =
                     BlockContext::new(BlockType::Function, function_info.class.into(), None);
-                let func_calls = get_all_func_calls(function_info.original_body);
+                let func_calls = get_all_func_calls(&function_info.original_body);
                 for call in func_calls {
                     if call.check_builtin().is_some() {
                         continue;
@@ -3141,7 +3002,7 @@ mod tests {
             is_virtual: false,
             args: Vec::new(),
             annotations: BTreeSet::new(),
-            original_body: &[],
+            original_body: Vec::new(),
             body: None,
             declaration_file: &some_file,
             is_associated_call: false,
@@ -3201,52 +3062,6 @@ mod tests {
         assert!(matches!(file_type, FileType::Any));
 
         assert!("bad_type".parse::<FileType>().is_err());
-    }
-
-    #[test]
-    fn get_renamed_statement_test() {
-        let statement1 = ValidatedStatement::Call(Box::new(ValidatedCall {
-            cil_name: "foo".to_string(),
-            args: vec![
-                CilArg::Name("old_name".to_string()),
-                CilArg::Name("b".to_string()),
-            ],
-        }));
-
-        let statement2 = ValidatedStatement::AvRule(AvRule {
-            av_rule_flavor: AvRuleFlavor::Allow,
-            source: Cow::Owned(CascadeString::from("foo")),
-            target: Cow::Owned(CascadeString::from("bar")),
-            class: Cow::Owned(CascadeString::from("old_name")),
-            perms: vec![CascadeString::from("read")],
-        });
-
-        let statement3 = ValidatedStatement::FcRule(FileContextRule {
-            regex_string: "/bin".to_string(),
-            file_type: FileType::SymLink,
-            context: Context::new(false, None, None, Cow::Borrowed("old_name"), None, None),
-        });
-
-        let statement4 = ValidatedStatement::DomtransRule(DomtransRule {
-            source: Cow::Owned(CascadeString::from("old_name")),
-            target: Cow::Owned(CascadeString::from("old_name")),
-            executable: Cow::Owned(CascadeString::from("old_name")),
-        });
-
-        let statement5 = ValidatedStatement::PortconRule(PortconRule {
-            proto: Protocol::Tcp,
-            port_num: Port::new(1234, None),
-            context: Context::new(false, None, None, Cow::Borrowed("old_name"), None, None),
-        });
-
-        for statement in [statement1, statement2, statement3, statement4, statement5] {
-            let mut renames = BTreeMap::new();
-            renames.insert("old_name".to_string(), "new_name".to_string());
-            let renamed_statement = statement.get_renamed_statement(&renames);
-            let sexp = Sexp::try_from(&renamed_statement).unwrap();
-            assert!(sexp.to_string().contains("new_name"));
-            assert!(!sexp.to_string().contains("old_name"));
-        }
     }
 
     #[test]
