@@ -1328,6 +1328,7 @@ mod tests {
                 "(type diamond3-tmp)",
                 "(typeattributeset diamond1-tmp (diamond3-tmp))",
                 "(typeattributeset diamond2-tmp (diamond3-tmp))",
+                "call foo-tmp-not_an_associated_call (foo-tmp nest_child))",
             ],
             &["(allow nest_parent nest_resource (file (write)))"],
             0,
