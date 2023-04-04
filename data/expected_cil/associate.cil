@@ -269,6 +269,7 @@
 (call diamond3-var-associated_call_from_var (diamond3-var diamond3))
 (call foo-tmp-associated_call_from_tmp (foo-tmp foo))
 (call foo-tmp-associated_call_from_tmp (foo-tmp qux))
+(call foo-tmp-not_an_associated_call (foo-tmp nest_child))
 (call foo-var-associated_call_from_var (foo-var foo))
 (call nest_child-nest_resource-call (nest_child-nest_resource nest_child))
 (call nest_parent-nest_resource-call (nest_parent-nest_resource nest_parent))

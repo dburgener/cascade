@@ -82,6 +82,8 @@ domain nest_child inherits nest_parent {
 		allow(nest_child, this, file, ioctl);
 		file_context("/some/path/to/file", [file], system_u:object_r:nest_child.nest_resource:s0);
 	}
+
+	foo.tmp.not_an_associated_call();
 }
 
 extend nest_child {
