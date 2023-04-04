@@ -52,6 +52,10 @@ domain some_domain {
 	name_diff_child.diff_name(this);
 
 	some_child.domtrans(this, derive_from_foo);
+
+	fn call_derive_in_func(domain arg) {
+		union_all_parents.read(arg);
+	}
 }
 
 @derive([some_associated_call], parents=*)
