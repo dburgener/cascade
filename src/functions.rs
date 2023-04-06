@@ -498,7 +498,6 @@ pub fn call_to_portcon_rules<'a>(
     class_perms: &ClassList,
     context: &BlockContext,
     file: &SimpleFile<String, String>,
-    parent_type: &'a TypeInfo,
 ) -> Result<BTreeSet<PortconRule<'a>>, CascadeErrors> {
     let target_args = vec![
         FunctionArgument::new(
@@ -516,6 +515,16 @@ pub fn call_to_portcon_rules<'a>(
                 param_type: CascadeString::from("number"),
                 is_list_param: false, // TODO: Need to support lists and ranges
                 name: CascadeString::from("port"),
+                default: None,
+            },
+            types,
+            None,
+        )?,
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: CascadeString::from("context"),
+                is_list_param: false,
+                name: CascadeString::from("port_context"),
                 default: None,
             },
             types,
@@ -552,7 +561,12 @@ pub fn call_to_portcon_rules<'a>(
 
     let ports = validate_port(&port, Some(file))?;
 
-    let context = match Context::try_from(parent_type.name.as_ref()) {
+    let context_str = args_iter
+        .next()
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
+        .get_name_or_string(context)?;
+
+    let context = match Context::try_from(context_str.to_string()) {
         Ok(c) => c,
         Err(()) => {
             return Err(ErrorItem::Internal(InternalError::new()).into());
@@ -1951,17 +1965,10 @@ impl<'a> ValidatedStatement<'a> {
                         // Unwrap is safe because in_resource can only be true when parent_type
                         // is Some
                         Ok(WithWarnings::from(
-                            call_to_portcon_rules(
-                                c,
-                                types,
-                                class_perms,
-                                context,
-                                file,
-                                Option::from(parent_type).unwrap(),
-                            )?
-                            .into_iter()
-                            .map(ValidatedStatement::PortconRule)
-                            .collect::<BTreeSet<ValidatedStatement>>(),
+                            call_to_portcon_rules(c, types, class_perms, context, file)?
+                                .into_iter()
+                                .map(ValidatedStatement::PortconRule)
+                                .collect::<BTreeSet<ValidatedStatement>>(),
                         ))
                     } else {
                         Err(CascadeErrors::from(
