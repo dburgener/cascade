@@ -80,7 +80,9 @@ impl AnnotationInfo {
             (Derive(_), Derive(_)) => None,
             // Enumerate the non-equal cases explicitly so that we get non-exhaustive match errors
             // when updating the enum
-            (MakeList, _) | (Associate(_), _) | (Alias(_), _) | (Derive(_), _) | (NoDerive, _) => None,
+            (MakeList, _) | (Associate(_), _) | (Alias(_), _) | (Derive(_), _) | (NoDerive, _) => {
+                None
+            }
         }
     }
 
@@ -237,6 +239,9 @@ impl TypeInfo {
         }
 
         let variant = TypeVar::new(&td.name, &td.inherits);
+
+        let annotations = get_type_annotations(file, &td.annotations)?.inner(&mut warnings);
+
         Ok(WithWarnings::new(
             TypeInfo {
                 name: td.name.clone(),
@@ -247,7 +252,7 @@ impl TypeInfo {
                 // TODO: Use AnnotationInfo::MakeList instead
                 list_coercion: td.annotations.has_annotation("makelist"),
                 declaration_file: Some(file.clone()), // TODO: Turn into reference
-                annotations: get_type_annotations(file, &td.annotations)?.inner(&mut warnings),
+                annotations,
                 decl: Some(td),
                 non_virtual_children: BTreeSet::new(),
             },

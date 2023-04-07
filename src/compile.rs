@@ -621,9 +621,12 @@ fn derive_functions<'a>(
 ) -> Result<(), CascadeErrors> {
     let mut errors = CascadeErrors::new();
     let mut internal_error_on_no_errors = false;
+    let mut saw_derive = false;
+    let mut saw_no_derive = false;
     for t in types.values() {
         for annotation in t.get_annotations() {
             if let AnnotationInfo::Derive(derive_args) = annotation {
+                saw_derive = true;
                 if let Err(e) = handle_derive(t, derive_args, functions, types, class_perms) {
                     // If the type we are deriving wasn't declared in source, then this derive
                     // is inherited from a parent, and that parent should have the same error.
@@ -635,6 +638,22 @@ fn derive_functions<'a>(
                     } else {
                         internal_error_on_no_errors = true
                     }
+                }
+            }
+            if let AnnotationInfo::NoDerive = annotation {
+                saw_no_derive = true;
+            }
+        }
+        if saw_derive && saw_no_derive {
+            // TODO: Add error
+        } else if !saw_derive && !saw_no_derive {
+            // Do @derive(*,*)
+            let derive_args = vec![Argument::Var("*".into()), Argument::Var("*".into())];
+            if let Err(e) = handle_derive(t, &derive_args, functions, types, class_perms) {
+                if !t.is_synthetic() {
+                    errors.append(e)
+                } else {
+                    internal_error_on_no_errors = true
                 }
             }
         }
