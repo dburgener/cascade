@@ -1,0 +1,139 @@
+// Stress Cascade by creating a lot of functions
+
+virtual resource foo {
+	fn a(domain source) {
+		allow(source, this, file, read);
+	}
+
+	fn b(domain source) {
+		this.a(source);
+	}
+	fn c(domain source) {
+		this.b(source);
+	}
+	fn d(domain source) {
+		this.c(source);
+	}
+	fn e(domain source) {
+		this.d(source);
+	}
+	fn f(domain source) {
+		this.e(source);
+	}
+	fn g(domain source) {
+		this.f(source);
+	}
+	fn h(domain source) {
+		this.g(source);
+	}
+	fn i(domain source) {
+		this.h(source);
+	}
+	fn j(domain source) {
+		this.i(source);
+	}
+	fn k(domain source) {
+		this.j(source);
+	}
+	fn l(domain source) {
+		this.k(source);
+	}
+	fn m(domain source) {
+		this.l(source);
+	}
+	fn n(domain source) {
+		this.m(source);
+	}
+	fn o(domain source) {
+		this.n(source);
+	}
+	fn p(domain source) {
+		this.o(source);
+	}
+	fn q(domain source) {
+		this.p(source);
+	}
+	fn r(domain source) {
+		this.q(source);
+	}
+	fn s(domain source) {
+		this.r(source);
+	}
+	fn t(domain source) {
+		this.s(source);
+	}
+	fn u(domain source) {
+		this.t(source);
+	}
+	fn v(domain source) {
+		this.u(source);
+	}
+	fn w(domain source) {
+		this.v(source);
+	}
+	fn x(domain source) {
+		this.w(source);
+	}
+	fn y(domain source) {
+		this.x(source);
+	}
+	fn z(domain source) {
+		this.y(source);
+	}
+}
+
+@derive(*,*)
+virtual resource r1 inherits foo {}
+@derive(*,*)
+virtual resource r2 inherits foo {}
+@derive(*,*)
+virtual resource r3 inherits foo {}
+@derive(*,*)
+virtual resource r4 inherits foo {}
+@derive(*,*)
+virtual resource r5 inherits foo {}
+@derive(*,*)
+virtual resource r6 inherits foo {}
+@derive(*,*)
+virtual resource r7 inherits foo {}
+@derive(*,*)
+virtual resource r8 inherits foo {}
+@derive(*,*)
+virtual resource r9 inherits foo {}
+@derive(*,*)
+virtual resource r10 inherits foo {}
+
+@associate([r1 r2 r3 r4 r5 r6 r7 r8 r9 r10])
+domain bar {
+	this.r10.z();
+}
+
+@associate([r1 r2 r3 r4 r5 r6 r7 r8 r9 r10])
+domain baz {
+	this.r10.z();
+}
+
+@associate([r1 r2 r3 r4 r5 r6 r7 r8 r9 r10])
+domain qux {
+	this.r10.z();
+}
+
+@associate([r1 r2 r3 r4 r5 r6 r7 r8 r9 r10])
+domain quux {
+	this.r10.z();
+}
+
+@associate([r1 r2 r3 r4 r5 r6 r7 r8 r9 r10])
+virtual domain p1 {}
+
+virtual domain p2 inherits p1 {}
+virtual domain p3 inherits p2 {}
+virtual domain p4 inherits p3 {}
+virtual domain p5 inherits p4 {}
+virtual domain p6 inherits p5 {}
+virtual domain p7 inherits p6 {}
+virtual domain p8 inherits p7 {}
+virtual domain p9 inherits p8 {}
+domain child inherits p9 {
+	this.r10.z();
+}

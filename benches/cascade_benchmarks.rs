@@ -26,5 +26,16 @@ pub fn full_system(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, full_system);
+pub fn stress_functions(c: &mut Criterion) {
+    let policy_files = vec!["data/policies/stress/functions.cas"];
+    c.bench_function("Stress functions", |b| {
+        b.iter_batched(
+            || policy_files.clone(),
+            |policy_files| compile_combined(black_box(policy_files)),
+            BatchSize::SmallInput,
+        )
+    });
+}
+
+criterion_group!(benches, full_system, stress_functions);
 criterion_main!(benches);
