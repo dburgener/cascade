@@ -1556,11 +1556,6 @@ fn dedup_inherited_annotations_one<'a>(
                 let left_diff = a.clone().difference(new.clone());
                 let right_diff = new.clone().difference(a.clone());
                 let intersect = a.intersection(new.clone());
-                // Clippy wants me to flatten the slice elements to skip the Nones.  It seems to me
-                // like that obscures the fact that we are conditionally inserting.  Maybe someone
-                // more fluent than me with iterator operations would disagree, but the logic here
-                // can get confusing, so I'd rather be explicit
-                #[allow(clippy::manual_flatten)]
                 for set in [left_diff, intersect] {
                     if let Some(set) = set {
                         out.push(set);
