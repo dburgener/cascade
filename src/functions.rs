@@ -1276,6 +1276,13 @@ impl Declared for FunctionInfo<'_> {
     fn get_generic_name(&self) -> String {
         String::from("function")
     }
+
+    fn get_secondary_indices(&self) -> Vec<String> {
+        match self.class.get_name() {
+            Some(name) => vec![name.to_string()],
+            None => Vec::new(),
+        }
+    }
 }
 
 impl<'a> FunctionInfo<'a> {

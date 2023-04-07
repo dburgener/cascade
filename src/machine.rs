@@ -35,6 +35,10 @@ impl Declared for ValidatedModule<'_> {
     fn get_generic_name(&self) -> String {
         String::from("module")
     }
+
+    fn get_secondary_indices(&self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 impl<'a> Annotated for &ValidatedModule<'a> {
@@ -145,6 +149,9 @@ impl Declared for ValidatedMachine<'_> {
 
     fn get_generic_name(&self) -> String {
         String::from("machine")
+    }
+    fn get_secondary_indices(&self) -> Vec<String> {
+        Vec::new()
     }
 }
 

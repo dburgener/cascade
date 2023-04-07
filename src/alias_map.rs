@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
 
 use codespan_reporting::files::SimpleFile;
@@ -12,6 +12,10 @@ pub struct AliasMap<T> {
     declarations: BTreeMap<String, T>,
     #[allow(dead_code)]
     aliases: BTreeMap<String, String>,
+    // Secondary_indices allow efficient lookups based on some other key.  This is useful to
+    // efficiently get a subset of the map based on a prepopulated key, such as all functions for a
+    // given type
+    secondary_indices: BTreeMap<String, BTreeSet<String>>,
 }
 
 pub type AliasMapIter<'a, T> = std::collections::btree_map::Iter<'a, String, T>;
@@ -42,6 +46,7 @@ impl<T: Declared> AliasMap<T> {
         AliasMap {
             declarations: BTreeMap::new(),
             aliases: BTreeMap::new(),
+            secondary_indices: BTreeMap::new(),
         }
     }
 
@@ -78,6 +83,17 @@ impl<T: Declared> AliasMap<T> {
             return Err(error.into());
         }
 
+        for index in value.get_secondary_indices() {
+            match self.secondary_indices.get_mut(&index) {
+                Some(val) => {
+                    val.insert(index);
+                }
+                None => {
+                    self.secondary_indices
+                        .insert(index, BTreeSet::from([key.clone()]));
+                }
+            }
+        }
         self.declarations.insert(key, value);
         Ok(())
     }
@@ -90,6 +106,14 @@ impl<T: Declared> AliasMap<T> {
         self.declarations.values_mut()
     }
 
+    pub fn values_by_index(&self, index: String) -> Vec<&T> {
+        if let Some(secondary) = self.secondary_indices.get(&index) {
+            secondary.iter().map(|v| self.get(v)).flatten().collect()
+        } else {
+            Vec::new()
+        }
+    }
+
     pub fn iter(&self) -> AliasMapIter<'_, T> {
         self.declarations.iter()
     }
@@ -97,6 +121,16 @@ impl<T: Declared> AliasMap<T> {
     pub fn append(&mut self, other: &mut AliasMap<T>) {
         self.declarations.append(&mut other.declarations);
         self.aliases.append(&mut other.aliases);
+        while let Some((k, mut v)) = other.secondary_indices.pop_first() {
+            match self.secondary_indices.get_mut(&k) {
+                Some(val) => {
+                    val.append(&mut v);
+                }
+                None => {
+                    self.secondary_indices.insert(k, v);
+                }
+            }
+        }
     }
 
     pub fn set_aliases(&mut self, aliases: BTreeMap<String, String>) {
@@ -134,4 +168,6 @@ pub trait Declared {
     fn get_file(&self) -> Option<SimpleFile<String, String>>;
     fn get_name_range(&self) -> Option<Range<usize>>;
     fn get_generic_name(&self) -> String;
+    // Get a list of values to access this via secondary index.
+    fn get_secondary_indices(&self) -> Vec<String>;
 }
