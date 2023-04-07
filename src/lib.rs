@@ -989,6 +989,24 @@ mod tests {
         );
     }
 
+    #[test]
+    fn initial_context_test() {
+        valid_policy_test(
+            "initial_context.cas",
+            &[
+                "(sidcontext \"kernel\" (system_u object_r kernel_con ((s0) (s0))))",
+                "(sidcontext \"security\" (system_u object_r security_con ((s0) (s0))))",
+                "(sidcontext \"unlabeled\" (system_u object_r unlabeled_con ((s0) (s0)))",
+            ],
+            &[
+                "(sidcontext kernel (system_u system_r kernel_sid ((s0) (s0))))",
+                "(sidcontext security (system_u object_r security_sid ((s0) (s0))))",
+                "(sidcontext unlabeled (system_u object_r unlabeled_sid ((s0) (s0))))",
+            ],
+            0,
+        )
+    }
+
     // This is just a quick compile test.  The true purpose of these files is to actually boot in
     // enforcing mode on a VM.  That is outside the scope of this test, but compile testing is a
     // minimum first step and reasonable to do here.

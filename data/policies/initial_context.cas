@@ -1,0 +1,15 @@
+resource kernel_con {
+        initial_context("kernel", this);
+}
+
+resource unlabeled_con {
+        initial_context("unlabeled", this);
+}
+
+resource security_con {
+        initial_context("security", this);
+}
+
+domain some_dom {
+	allow(this, unlabeled_con, file, read);
+}

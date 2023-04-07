@@ -535,6 +535,7 @@ pub enum BuiltIns {
     ResourceTransition,
     FileSystemContext,
     DomainTransition,
+    InitialContext,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -601,6 +602,8 @@ impl FuncCall {
             Some(BuiltIns::ResourceTransition)
         } else if self.name == constants::DOMTRANS_FUNCTION_NAME {
             Some(BuiltIns::DomainTransition)
+        } else if self.name == constants::INITIAL_CONTEXT_FUNCTION_NAME {
+            Some(BuiltIns::InitialContext)
         } else {
             None
         }

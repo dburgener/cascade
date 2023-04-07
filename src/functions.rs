@@ -24,7 +24,7 @@ use crate::error::{
 };
 use crate::internal_rep::{
     convert_class_name_if_this, type_name_from_string, typeinfo_from_string, Annotated,
-    AnnotationInfo, ClassList, Context, TypeInfo, TypeInstance, TypeMap,
+    AnnotationInfo, ClassList, Context, Sid, TypeInfo, TypeInstance, TypeMap,
 };
 use crate::obj_class::perm_list_to_sexp;
 use crate::warning::{Warning, Warnings, WithWarnings};
@@ -961,6 +961,66 @@ fn call_to_fsc_rules<'a>(
     Ok(ret)
 }
 
+fn call_to_sids<'a>(
+    c: &FuncCall,
+    types: &TypeMap,
+    class_perms: &ClassList,
+    context: &BlockContext<'_>,
+    file: &SimpleFile<String, String>,
+) -> Result<Vec<Sid<'a>>, CascadeErrors> {
+    // TODO: This isn't valid in a function context.  Check that and return an error
+
+    let target_args = vec![
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: CascadeString::from("string"),
+                is_list_param: false,
+                name: CascadeString::from("sid_name"),
+                default: None,
+            },
+            types,
+            None,
+        )?,
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: CascadeString::from("context"),
+                is_list_param: false,
+                name: CascadeString::from("fs_label"),
+                default: None,
+            },
+            types,
+            None,
+        )?,
+    ];
+    let validated_args =
+        validate_arguments(c, &target_args, types, class_perms, context, Some(file))?;
+    let mut args_iter = validated_args.iter();
+
+    let sid_name = args_iter
+        .next()
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
+        .get_name_or_string(context)?;
+    let context_str = args_iter
+        .next()
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
+        .get_name_or_string(context)?;
+    let sid_context = match Context::try_from(context_str.to_string()) {
+        Ok(c) => c,
+        Err(_) => {
+            return Err(CascadeErrors::from(
+                ErrorItem::make_compile_or_internal_error(
+                    "Invalid context",
+                    Some(file),
+                    context_str.get_range(),
+                    "Cannot parse this into a context",
+                ),
+            ))
+        }
+    };
+
+    Ok(vec![Sid::new(sid_name.to_string(), sid_context)])
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DomtransRule<'a> {
     pub source: Cow<'a, CascadeString>,
@@ -1701,6 +1761,9 @@ impl TryFrom<&FunctionInfo<'_>> for sexp::Sexp {
                         ValidatedStatement::ResourcetransRule(r) => macro_cil.push(Sexp::from(r)),
                         ValidatedStatement::FscRule(fs) => macro_cil.push(Sexp::try_from(fs)?),
                         ValidatedStatement::DomtransRule(d) => macro_cil.push(Sexp::from(d)),
+                        ValidatedStatement::Sid(_) => {
+                            return Err(InternalError::new().into());
+                        }
                     }
                 }
             }
@@ -1898,6 +1961,7 @@ pub enum ValidatedStatement<'a> {
     ResourcetransRule(ResourcetransRule<'a>),
     FscRule(FileSystemContextRule<'a>),
     DomtransRule(DomtransRule<'a>),
+    Sid(Sid<'a>),
 }
 
 impl<'a> ValidatedStatement<'a> {
@@ -2021,7 +2085,12 @@ impl<'a> ValidatedStatement<'a> {
                         ))
                     }
                 }
-
+                Some(BuiltIns::InitialContext) => Ok(WithWarnings::from(
+                    call_to_sids(c, types, class_perms, context, file)?
+                        .into_iter()
+                        .map(ValidatedStatement::Sid)
+                        .collect::<BTreeSet<ValidatedStatement>>(),
+                )),
                 Some(BuiltIns::DomainTransition) => {
                     if !in_resource {
                         Ok(WithWarnings::from(
@@ -2113,6 +2182,9 @@ impl TryFrom<&ValidatedStatement<'_>> for sexp::Sexp {
             ValidatedStatement::ResourcetransRule(r) => Ok(Sexp::from(r)),
             ValidatedStatement::FscRule(fs) => Sexp::try_from(fs),
             ValidatedStatement::DomtransRule(d) => Ok(Sexp::from(d)),
+            // Sids in functions should error during validation.  Global SIDs are filtered out
+            // before sexp generation
+            ValidatedStatement::Sid(_) => Err(InternalError::new().into()),
         }
     }
 }
