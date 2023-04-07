@@ -2131,14 +2131,7 @@ impl ValidatedCall {
         let function_info = match functions.get(&cil_name) {
             Some(function_info) => function_info,
             None => {
-                return Err(CascadeErrors::from(
-                    ErrorItem::make_compile_or_internal_error(
-                        "No such function",
-                        Some(file),
-                        call.get_name_range(),
-                        "",
-                    ),
-                ));
+                return Err(make_no_such_function_error(file, call, types, context));
             }
         };
 
@@ -2214,6 +2207,59 @@ impl ValidatedCall {
         }
 
         Ok(ret)
+    }
+}
+
+fn make_no_such_function_error(
+    file: &SimpleFile<String, String>,
+    call: &FuncCall,
+    types: &TypeMap,
+    context: &BlockContext,
+) -> CascadeErrors {
+    for n in [&call.class_name, &call.cast_name]
+        .iter()
+        .copied()
+        .flatten()
+    {
+        let true_name = match call.get_true_call_name(context, file) {
+            Ok(n) => n,
+            Err(_) => {
+                // We just called this from resolve_true_cil_name() and should have already errored
+                // out
+                return ErrorItem::Internal(InternalError::new()).into();
+            }
+        };
+        if types.get(&true_name).is_none() {
+            return CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
+                "No such type",
+                Some(file),
+                n.get_range(),
+                "",
+            ));
+        }
+    }
+    if let Some(class_name) = &call.class_name {
+        let func_definer = if let Some(cast_name) = &call.cast_name {
+            cast_name
+        } else {
+            class_name
+        };
+        CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
+            "No such member function",
+            Some(file),
+            call.name.get_range(),
+            &format!(
+                "{} does not define a function named {}",
+                &func_definer, &call.name
+            ),
+        ))
+    } else {
+        CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
+            "No such function",
+            Some(file),
+            call.get_name_range(),
+            "",
+        ))
     }
 }
 
@@ -2794,29 +2840,7 @@ fn resolve_true_cil_name(
     // call it explicitly
     // convert_arg_this() handles this.*, then we handle a bare "this", since we'll be combining it
     // with a function name ourselves
-    let mut true_call_class = context.convert_arg_this(
-        call.cast_name.as_ref().map(|s| s.as_ref()).unwrap_or(
-            call.class_name
-                .as_ref()
-                .map(|s| s.as_ref())
-                .unwrap_or("this"),
-        ),
-    );
-    if &true_call_class == "this" {
-        true_call_class = match context.get_parent_type_name() {
-            Some(type_name) => type_name.to_string(),
-            None => {
-                return Err(CascadeErrors::from(
-                    ErrorItem::make_compile_or_internal_error(
-                        "Could not determine class for 'this.' function call",
-                        Some(file),
-                        call.get_name_range(),
-                        "Perhaps you meant to place the function in a resource or domain?",
-                    ),
-                ))
-            }
-        };
-    }
+    let true_call_class = call.get_true_call_name(context, file)?;
     let original_cil_name = get_cil_name(Some(&CascadeString::from(true_call_class)), &call.name);
 
     // Deal with aliases
