@@ -4,4 +4,5 @@ trait resource my_trait {
 	}
 }
 
+@noderive
 resource foo inherits my_trait {}

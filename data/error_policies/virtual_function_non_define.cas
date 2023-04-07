@@ -2,4 +2,5 @@ virtual resource foo_parent {
 	virtual fn foo_func(domain source) {}
 }
 
+@noderive
 resource foo inherits foo_parent {} // Illegal non-inheritance

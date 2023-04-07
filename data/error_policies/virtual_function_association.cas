@@ -6,4 +6,8 @@ virtual resource tmp {
 @associate([tmp])
 virtual domain foo {}
 
-domain bar inherits foo {}
+domain bar inherits foo {
+
+	@noderive
+	extend tmp {}
+}
