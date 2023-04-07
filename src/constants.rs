@@ -8,6 +8,7 @@ pub const FILE_CONTEXT_FUNCTION_NAME: &str = "file_context";
 pub const RESOURCE_TRANS_FUNCTION_NAME: &str = "resource_transition";
 pub const FS_CONTEXT_FUNCTION_NAME: &str = "fs_context";
 pub const DOMTRANS_FUNCTION_NAME: &str = "domain_transition";
+pub const INITIAL_CONTEXT_FUNCTION_NAME: &str = "initial_context";
 pub const SYSTEM_TYPE: &str = "machine_type";
 pub const MONOLITHIC: &str = "monolithic";
 pub const HANDLE_UNKNOWN_PERMS: &str = "handle_unknown_perms";

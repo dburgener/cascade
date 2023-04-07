@@ -52,8 +52,9 @@ pub fn compile_rules_one_file<'a>(
 pub fn generate_sexp(
     type_map: &TypeMap,
     classlist: &ClassList,
-    policy_rules: BTreeSet<ValidatedStatement>,
+    policy_rules: &BTreeSet<ValidatedStatement>,
     func_map: &FunctionMap<'_>,
+    sids: &BTreeSet<Sid<'_>>,
     machine_configurations: &Option<&BTreeMap<String, &Argument>>,
 ) -> Result<Vec<sexp::Sexp>, CascadeErrors> {
     let type_decl_list = organize_type_map(type_map)?;
@@ -62,8 +63,7 @@ pub fn generate_sexp(
     let headers = generate_cil_headers(classlist, *machine_configurations);
     let cil_rules = rules_list_to_sexp(policy_rules)?;
     let cil_macros = func_map_to_sexp(func_map)?;
-    let sid_statements =
-        generate_sid_rules(generate_sids("kernel_sid", "security_sid", "unlabeled_sid"));
+    let sid_statements = generate_sid_rules(sids.iter().collect());
 
     let mut ret = headers;
     ret.extend(cil_types);
@@ -470,24 +470,40 @@ pub fn validate_fs_context_duplicates(
     errors.into_result(())
 }
 
-pub fn validate_rules(statements: &BTreeSet<ValidatedStatement>) -> Result<(), CascadeErrors> {
+fn validate_sids(_sids: &BTreeSet<Sid>) -> Result<(), CascadeErrors> {
+    // TODO
+    Ok(())
+}
+
+pub fn validate_rules<'a>(
+    statements: &'a BTreeSet<ValidatedStatement>,
+) -> Result<BTreeSet<Sid<'a>>, CascadeErrors> {
     let mut errors = CascadeErrors::new();
 
     let mut fsc_rules: BTreeMap<String, BTreeSet<&FileSystemContextRule>> = BTreeMap::new();
+    let mut sids: BTreeSet<Sid> = BTreeSet::new();
     for statement in statements {
-        // Add all file system context rules to a new map to check for semi duplicates later
-        if let ValidatedStatement::FscRule(fs) = statement {
-            fsc_rules
-                .entry(fs.fs_name.to_string())
-                .or_default()
-                .insert(fs);
+        match statement {
+            ValidatedStatement::FscRule(fs) => {
+                fsc_rules
+                    .entry(fs.fs_name.to_string())
+                    .or_default()
+                    .insert(fs);
+            }
+            ValidatedStatement::Sid(s) => {
+                sids.insert(s.clone());
+            }
+            _ => (),
         }
     }
 
     if let Err(call_errors) = validate_fs_context_duplicates(fsc_rules) {
         errors.append(call_errors);
     }
-    errors.into_result(())
+    if let Err(call_errors) = validate_sids(&sids) {
+        errors.append(call_errors);
+    }
+    errors.into_result(sids)
 }
 
 pub fn prevalidate_functions(
@@ -1064,7 +1080,7 @@ pub fn get_reduced_infos(
     .inner(&mut warnings);
 
     // Get the policy rules
-    let new_policy_rules = get_policy_rules(
+    let mut new_policy_rules = get_policy_rules(
         policies,
         &new_type_map,
         classlist,
@@ -1073,7 +1089,20 @@ pub fn get_reduced_infos(
     )?
     .inner(&mut warnings);
 
-    validate_rules(&new_policy_rules)?;
+    // TODO: This is a hack to work around the fact that SIDs contain Contexts, which *might*
+    // contain a reference that is only valid for the lifetime of rules.  In fact, the Contexts in
+    // the SIDs, are all owned, so there's no issue, but I can't figure out how to convince the
+    // compiler of that.  Probably the better solution is to convert the Contexts to pure owned
+    // types instead of Cows, so that we can just clone the SIDs here, but this is the expedient
+    // approach for 0.1
+    let orig_policy_rules = new_policy_rules.clone();
+    let mut sids = validate_rules(&orig_policy_rules)?;
+
+    if sids.is_empty() {
+        sids = generate_sids("kernel_sid", "security_sid", "unlabeled_sid");
+    } else {
+        new_policy_rules.retain(|rule| !matches!(rule, ValidatedStatement::Sid(_)))
+    }
 
     // generate_sexp(...) is called at this step because new_func_map and new_policy_rules,
     // which are needed for the generate_sexp call, cannot be returned from this function.
@@ -1082,8 +1111,9 @@ pub fn get_reduced_infos(
     let new_cil_tree = generate_sexp(
         &new_type_map,
         classlist,
-        new_policy_rules,
+        &new_policy_rules,
         &new_func_map,
+        &sids,
         &Some(&machine.configurations),
     )?;
 
@@ -2086,9 +2116,9 @@ fn get_rules_vec_for_type(ti: &TypeInfo, s: sexp::Sexp, type_map: &TypeMap) -> V
 
 fn rules_list_to_sexp<'a, T>(rules: T) -> Result<Vec<sexp::Sexp>, ErrorItem>
 where
-    T: IntoIterator<Item = ValidatedStatement<'a>>,
+    T: IntoIterator<Item = &'a ValidatedStatement<'a>>,
 {
-    let ret: Result<Vec<_>, _> = rules.into_iter().map(|r| Sexp::try_from(&r)).collect();
+    let ret: Result<Vec<_>, _> = rules.into_iter().map(Sexp::try_from).collect();
     ret
 }
 
@@ -2096,21 +2126,21 @@ fn generate_sids<'a>(
     kernel_sid: &'a str,
     security_sid: &'a str,
     unlabeled_sid: &'a str,
-) -> Vec<Sid<'a>> {
-    vec![
+) -> BTreeSet<Sid<'a>> {
+    BTreeSet::from([
         Sid::new(
-            "kernel",
+            "kernel".to_string(),
             Context::new(true, None, None, Cow::Borrowed(kernel_sid), None, None),
         ),
         Sid::new(
-            "security",
+            "security".to_string(),
             Context::new(false, None, None, Cow::Borrowed(security_sid), None, None),
         ),
         Sid::new(
-            "unlabeled",
+            "unlabeled".to_string(),
             Context::new(false, None, None, Cow::Borrowed(unlabeled_sid), None, None),
         ),
-    ]
+    ])
 }
 
 fn func_map_to_sexp(funcs: &FunctionMap<'_>) -> Result<Vec<sexp::Sexp>, CascadeErrors> {

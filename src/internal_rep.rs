@@ -882,37 +882,39 @@ impl<'a> fmt::Display for Context<'a> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Sid<'a> {
-    name: &'a str,
+    name: String,
     context: Context<'a>,
 }
 
 impl<'a> Sid<'a> {
-    pub fn new(name: &'a str, context: Context<'a>) -> Self {
+    pub fn new(name: String, context: Context<'a>) -> Self {
         Sid { name, context }
     }
 
     fn get_sid_statement(&self) -> Sexp {
-        Sexp::List(vec![atom_s("sid"), atom_s(self.name)])
+        Sexp::List(vec![atom_s("sid"), atom_s(&self.name)])
     }
 
     fn get_sidcontext_statement(&self) -> Sexp {
         Sexp::List(vec![
             atom_s("sidcontext"),
-            atom_s(self.name),
+            atom_s(&self.name),
             Sexp::from(&self.context),
         ])
     }
 
     fn get_name_as_sexp_atom(&self) -> Sexp {
-        atom_s(self.name)
+        atom_s(&self.name)
     }
 }
 
-pub fn generate_sid_rules(sids: Vec<Sid>) -> Vec<Sexp> {
+pub fn generate_sid_rules(sids: Vec<&Sid>) -> Vec<Sexp> {
     let mut ret = Vec::new();
     let mut order = Vec::new();
     for s in sids {
+        // Handled in ValidatedStatement::try_from<sexp>
         ret.push(s.get_sid_statement());
         ret.push(s.get_sidcontext_statement());
         order.push(s.get_name_as_sexp_atom());
@@ -1353,15 +1355,15 @@ mod tests {
     #[test]
     fn generate_sid_rules_test() {
         let sid1 = Sid::new(
-            "foo",
+            "foo".to_string(),
             Context::new(true, None, None, Cow::Borrowed("foo_t"), None, None),
         );
         let sid2 = Sid::new(
-            "bar",
+            "bar".to_string(),
             Context::new(false, None, None, Cow::Borrowed("bar_t"), None, None),
         );
 
-        let rules = generate_sid_rules(vec![sid1, sid2]);
+        let rules = generate_sid_rules(vec![&sid1, &sid2]);
         let cil_expected = vec![
             "(sid foo)",
             "(sidcontext foo (system_u system_r foo_t ((s0) (s0))))",
