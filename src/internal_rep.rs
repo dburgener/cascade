@@ -172,6 +172,10 @@ impl Declared for TypeInfo {
     fn get_generic_name(&self) -> String {
         String::from("type")
     }
+
+    fn get_secondary_indices(&self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 impl TypeInfo {
@@ -327,7 +331,7 @@ impl TypeInfo {
     }
 
     pub fn defines_function(&self, virtual_function_name: &str, functions: &FunctionMap) -> bool {
-        for f in functions.values() {
+        for f in functions.values_by_index(self.name.to_string()) {
             if f.class == FunctionClass::Type(self) && f.name == virtual_function_name {
                 return true;
             }
