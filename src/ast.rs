@@ -11,7 +11,8 @@ use std::ops::Range;
 use codespan_reporting::files::SimpleFile;
 
 use crate::constants;
-use crate::error::ParseErrorMsg;
+use crate::context::Context;
+use crate::error::{CascadeErrors, ErrorItem, ParseErrorMsg};
 
 #[derive(Clone, Debug, Eq)]
 pub struct CascadeString {
@@ -654,6 +655,43 @@ impl FuncCall {
             annotations: self.annotations.clone(),
             drop: self.drop,
         }
+    }
+
+    // Handle this and casting to return the resolved class name
+    pub fn get_true_call_name(
+        &self,
+        context: &Context,
+        file: &SimpleFile<String, String>,
+    ) -> Result<String, CascadeErrors> {
+        // The double as_ref() is kind of weird, but I think it's correct.  Option<T>::as_ref() does
+        // &T, rather than T.as_ref().  Since Cascade has implemented the as_ref() trait, we need to
+        // call it explicitly
+        // convert_arg_this() handles this.*, then we handle a bare "this", since we'll be combining it
+        // with a function name ourselves
+        let mut true_call_class = context.convert_arg_this(
+            self.cast_name.as_ref().map(|s| s.as_ref()).unwrap_or(
+                self.class_name
+                    .as_ref()
+                    .map(|s| s.as_ref())
+                    .unwrap_or("this"),
+            ),
+        );
+        if &true_call_class == "this" {
+            true_call_class = match context.get_parent_type_name() {
+                Some(type_name) => type_name.to_string(),
+                None => {
+                    return Err(CascadeErrors::from(
+                        ErrorItem::make_compile_or_internal_error(
+                            "Could not determine class for 'this.' function call",
+                            Some(file),
+                            self.get_name_range(),
+                            "Perhaps you meant to place the function in a resource or domain?",
+                        ),
+                    ))
+                }
+            };
+        }
+        Ok(true_call_class)
     }
 }
 
