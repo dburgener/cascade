@@ -2803,9 +2803,11 @@ pub fn determine_castable(functions: &mut FunctionMap, types: &TypeMap) -> u64 {
     num_changed
 }
 
-pub fn initialize_terminated<'a>(functions: &'a FunctionMap<'a>) -> (Vec<String>, Vec<String>) {
-    let mut term_ret_vec: Vec<String> = Vec::new();
-    let mut nonterm_ret_vec: Vec<String> = Vec::new();
+pub fn initialize_terminated<'a>(
+    functions: &'a FunctionMap<'a>,
+) -> (BTreeSet<String>, BTreeSet<String>) {
+    let mut term_ret_vec: BTreeSet<String> = BTreeSet::new();
+    let mut nonterm_ret_vec: BTreeSet<String> = BTreeSet::new();
 
     for func in functions.values() {
         let mut is_term = true;
@@ -2819,9 +2821,9 @@ pub fn initialize_terminated<'a>(functions: &'a FunctionMap<'a>) -> (Vec<String>
             }
         }
         if is_term {
-            term_ret_vec.push(func.get_cil_name().clone());
+            term_ret_vec.insert(func.get_cil_name().clone());
         } else {
-            nonterm_ret_vec.push(func.get_cil_name().clone());
+            nonterm_ret_vec.insert(func.get_cil_name().clone());
         }
     }
 
@@ -2862,10 +2864,10 @@ fn resolve_true_cil_name(
 fn find_recursion_loop(
     func: &str,
     function_map: &FunctionMap,
-    terminated_list: &Vec<String>,
-    visited: &mut Vec<String>,
-) -> Result<Vec<String>, CascadeErrors> {
-    visited.push(func.to_string());
+    terminated_list: &BTreeSet<String>,
+    visited: &mut BTreeSet<String>,
+) -> Result<BTreeSet<String>, CascadeErrors> {
+    visited.insert(func.to_string());
     if let Some(function_info) = function_map.get(func) {
         let func_context = BlockContext::new(BlockType::Function, function_info.class.into(), None);
         let func_calls = get_all_func_calls(&function_info.original_body);
@@ -2893,12 +2895,12 @@ fn find_recursion_loop(
             }
         }
     }
-    Ok(visited.to_vec())
+    Ok(visited.clone())
 }
 
 pub fn search_for_recursion(
-    terminated_list: &mut Vec<String>,
-    functions: &mut Vec<String>,
+    terminated_list: &mut BTreeSet<String>,
+    functions: &mut BTreeSet<String>,
     function_map: &FunctionMap,
 ) -> Result<(), CascadeErrors> {
     let mut removed: u64 = 1;
@@ -2928,27 +2930,23 @@ pub fn search_for_recursion(
                     }
                 }
                 if is_term {
-                    terminated_list.push(function_info.get_cil_name());
+                    terminated_list.insert(function_info.get_cil_name());
                     removed += 1;
-                    let index = functions
-                        .iter()
-                        .position(|x| *x == function_info.get_cil_name())
-                        .unwrap();
-                    functions.remove(index);
+                    functions.remove(&function_info.get_cil_name());
                 }
             }
         }
     }
 
     if !functions.is_empty() {
-        let mut loops: Vec<Vec<String>> = Vec::new();
+        let mut loops: Vec<BTreeSet<String>> = Vec::new();
 
-        for func in functions {
+        for func in functions.iter() {
             loops.push(find_recursion_loop(
                 func,
                 function_map,
                 terminated_list,
-                &mut Vec::new(),
+                &mut BTreeSet::new(),
             )?);
         }
 
