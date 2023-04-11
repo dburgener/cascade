@@ -116,23 +116,6 @@ impl AnnotationInfo {
     }
 }
 
-#[derive(Clone, Debug)]
-pub enum BoundTypeInfo {
-    Single(String),
-    List(Vec<String>),
-    Unbound,
-}
-
-impl BoundTypeInfo {
-    pub fn get_contents_as_vec(&self) -> Vec<String> {
-        match self {
-            BoundTypeInfo::Single(s) => vec![s.clone()],
-            BoundTypeInfo::List(v) => v.clone(),
-            BoundTypeInfo::Unbound => Vec::new(),
-        }
-    }
-}
-
 pub trait Annotated {
     fn get_annotations(&self) -> std::collections::btree_set::Iter<AnnotationInfo>;
 }
@@ -148,7 +131,6 @@ pub struct TypeInfo {
     pub annotations: BTreeSet<AnnotationInfo>,
     // TODO: replace with Option<&TypeDecl>
     pub decl: Option<TypeDecl>,
-    pub bound_type: BoundTypeInfo,
 }
 
 impl PartialEq for TypeInfo {
@@ -224,31 +206,6 @@ impl TypeInfo {
                 declaration_file: Some(file.clone()), // TODO: Turn into reference
                 annotations: get_type_annotations(file, &td.annotations)?.inner(&mut warnings),
                 decl: Some(td),
-                bound_type: BoundTypeInfo::Unbound,
-            },
-            warnings,
-        ))
-    }
-
-    pub fn new_bound_type(
-        name: CascadeString,
-        variant: &str,
-        file: &SimpleFile<String, String>,
-        bound_type: BoundTypeInfo,
-        annotations: &Annotations,
-    ) -> Result<WithWarnings<TypeInfo>, CascadeErrors> {
-        let mut warnings = Warnings::new();
-        Ok(WithWarnings::new(
-            TypeInfo {
-                name,
-                inherits: vec![variant.into()], // Does this need to somehow grab the bound parents? Does this work for the single case?
-                is_virtual: true,               // Maybe?
-                is_trait: false,                // TODO: Allow bound traits?
-                list_coercion: annotations.has_annotation("makelist"),
-                declaration_file: Some(file.clone()),
-                annotations: get_type_annotations(file, annotations)?.inner(&mut warnings),
-                decl: None, // TODO: Where is this used?
-                bound_type,
             },
             warnings,
         ))
@@ -264,7 +221,6 @@ impl TypeInfo {
             declaration_file: None,
             annotations: BTreeSet::new(),
             decl: None,
-            bound_type: BoundTypeInfo::Unbound,
         }
     }
 

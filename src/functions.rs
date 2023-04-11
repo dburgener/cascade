@@ -24,7 +24,7 @@ use crate::error::{
 };
 use crate::internal_rep::{
     convert_class_name_if_this, type_name_from_string, typeinfo_from_string, Annotated,
-    AnnotationInfo, BoundTypeInfo, ClassList, Context, TypeInfo, TypeInstance, TypeMap,
+    AnnotationInfo, ClassList, Context, TypeInfo, TypeInstance, TypeMap,
 };
 use crate::obj_class::perm_list_to_sexp;
 use crate::warning::{Warning, Warnings, WithWarnings};
@@ -2655,7 +2655,6 @@ fn validate_argument<'a>(
             let arg_typeinfo = argument_to_typeinfo(&arg, types, class_perms, context, file)?;
             if target_argument.is_list_param {
                 if arg_typeinfo.list_coercion
-                    || matches!(arg_typeinfo.bound_type, BoundTypeInfo::List(_))
                     || arg.is_list_symbol(context)
                     // Automatically coerce everything in annotations
                     || context.in_annotation()
