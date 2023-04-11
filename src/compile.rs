@@ -24,7 +24,7 @@ use crate::functions::{
 };
 use crate::internal_rep::{
     generate_sid_rules, get_type_annotations, validate_derive_args, Annotated, AnnotationInfo,
-    Associated, ClassList, Context, Sid, TypeInfo, TypeInstance, TypeMap,
+    Associated, ClassList, Context, Sid, TypeInfo, TypeInstance, TypeMap, TypeVar,
 };
 use crate::machine::{MachineMap, ModuleMap, ValidatedMachine, ValidatedModule};
 use crate::warning::{Warnings, WithWarnings};
@@ -246,6 +246,7 @@ pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
     let kernel_sid = TypeInfo {
         name: CascadeString::from("kernel_sid"),
         inherits: vec![CascadeString::from(constants::DOMAIN)],
+        variant: TypeVar::Domain,
         is_virtual: false,
         is_trait: false,
         list_coercion: false,
@@ -257,6 +258,7 @@ pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
     let security_sid = TypeInfo {
         name: CascadeString::from("security_sid"),
         inherits: vec![CascadeString::from(constants::RESOURCE)],
+        variant: TypeVar::Resource,
         is_virtual: false,
         is_trait: false,
         list_coercion: false,
@@ -268,6 +270,7 @@ pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
     let unlabeled_sid = TypeInfo {
         name: CascadeString::from("unlabeled_sid"),
         inherits: vec![CascadeString::from(constants::RESOURCE)],
+        variant: TypeVar::Resource,
         is_virtual: false,
         is_trait: false,
         list_coercion: false,

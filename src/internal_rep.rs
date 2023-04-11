@@ -120,10 +120,39 @@ pub trait Annotated {
     fn get_annotations(&self) -> std::collections::btree_set::Iter<AnnotationInfo>;
 }
 
+// TODO: This is only pub because compile.rs hardcodes sids right now.  Once those are removed,
+// make this private
+#[derive(Clone, Debug, Copy, PartialEq, Eq)]
+pub enum TypeVar {
+    Domain,
+    Resource,
+    Other,
+}
+
+impl TypeVar {
+    fn new(name: &CascadeString, inherits: &[CascadeString]) -> Self {
+        if name == constants::DOMAIN {
+            return TypeVar::Domain;
+        } else if name == constants::RESOURCE {
+            return TypeVar::Resource;
+        }
+
+        if inherits.contains(&CascadeString::from(constants::RESOURCE)) {
+            TypeVar::Resource
+        } else if inherits.contains(&CascadeString::from(constants::DOMAIN)) {
+            TypeVar::Domain
+        } else {
+            TypeVar::Other
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct TypeInfo {
     pub name: CascadeString,
     pub inherits: Vec<CascadeString>,
+    // TODO: this field (and maybe others?) can become private once compile doesn't build in sids
+    pub variant: TypeVar,
     pub is_virtual: bool,
     pub is_trait: bool,
     pub list_coercion: bool, // Automatically transform single instances of this type to a single element list
@@ -199,10 +228,13 @@ impl TypeInfo {
                 }
             }
         }
+
+        let variant = TypeVar::new(&td.name, &td.inherits);
         Ok(WithWarnings::new(
             TypeInfo {
                 name: td.name.clone(),
                 inherits: td.inherits.clone(),
+                variant,
                 is_virtual: td.is_virtual,
                 is_trait: td.is_trait,
                 // TODO: Use AnnotationInfo::MakeList instead
@@ -216,9 +248,11 @@ impl TypeInfo {
     }
 
     pub fn make_built_in(name: String, makelist: bool) -> TypeInfo {
+        let variant = TypeVar::new(&CascadeString::from(&name as &str), &[]);
         TypeInfo {
             name: CascadeString::from(name),
             inherits: Vec::new(),
+            variant,
             is_virtual: true,
             is_trait: false,
             list_coercion: makelist,
@@ -287,8 +321,8 @@ impl TypeInfo {
         self.is_child_or_actual_type(ti, types)
     }
 
-    pub fn is_resource(&self, types: &TypeMap) -> bool {
-        self.is_type_by_name(types, constants::RESOURCE)
+    pub fn is_resource(&self, _types: &TypeMap) -> bool {
+        self.variant == TypeVar::Resource
     }
 
     pub fn is_perm(&self, types: &TypeMap) -> bool {
@@ -299,8 +333,8 @@ impl TypeInfo {
         self.is_type_by_name(types, constants::CLASS)
     }
 
-    pub fn is_domain(&self, types: &TypeMap) -> bool {
-        self.is_type_by_name(types, constants::DOMAIN)
+    pub fn is_domain(&self, _types: &TypeMap) -> bool {
+        self.variant == TypeVar::Domain
     }
 
     pub fn is_setype(&self, types: &TypeMap) -> bool {
