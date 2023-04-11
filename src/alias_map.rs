@@ -108,7 +108,7 @@ impl<T: Declared> AliasMap<T> {
 
     pub fn values_by_index(&self, index: String) -> Vec<&T> {
         if let Some(secondary) = self.secondary_indices.get(&index) {
-            secondary.iter().map(|v| self.get(v)).flatten().collect()
+            secondary.iter().filter_map(|v| self.get(v)).collect()
         } else {
             Vec::new()
         }
