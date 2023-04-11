@@ -24,7 +24,7 @@ use crate::functions::{
 };
 use crate::internal_rep::{
     generate_sid_rules, get_type_annotations, validate_derive_args, Annotated, AnnotationInfo,
-    Associated, BoundTypeInfo, ClassList, Context, Sid, TypeInfo, TypeInstance, TypeMap,
+    Associated, ClassList, Context, Sid, TypeInfo, TypeInstance, TypeMap,
 };
 use crate::machine::{MachineMap, ModuleMap, ValidatedMachine, ValidatedModule};
 use crate::warning::{Warnings, WithWarnings};
@@ -252,7 +252,6 @@ pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
         declaration_file: None,
         annotations: BTreeSet::new(),
         decl: None,
-        bound_type: BoundTypeInfo::Unbound,
     };
 
     let security_sid = TypeInfo {
@@ -264,7 +263,6 @@ pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
         declaration_file: None,
         annotations: BTreeSet::new(),
         decl: None,
-        bound_type: BoundTypeInfo::Unbound,
     };
 
     let unlabeled_sid = TypeInfo {
@@ -276,7 +274,6 @@ pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
         declaration_file: None,
         annotations: BTreeSet::new(),
         decl: None,
-        bound_type: BoundTypeInfo::Unbound,
     };
 
     for sid in [kernel_sid, security_sid, unlabeled_sid] {
