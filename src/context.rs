@@ -279,6 +279,10 @@ impl<'a> Context<'a> {
 
     pub fn in_function_block(&self) -> bool {
         self.block_type == BlockType::Function
+            || self
+                .parent_context
+                .map(|p| p.in_function_block())
+                .unwrap_or(false)
     }
 
     pub fn in_annotation(&self) -> bool {
