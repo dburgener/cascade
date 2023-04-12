@@ -1525,4 +1525,9 @@ mod tests {
     fn function_arg_count_test() {
         error_policy_test!("functions_arg_count.cas", 3, ErrorItem::Compile(_));
     }
+
+    #[test]
+    fn initial_context_error_test() {
+        error_policy_test!("initial_context.cas", 1, ErrorItem::Compile(_));
+    }
 }
