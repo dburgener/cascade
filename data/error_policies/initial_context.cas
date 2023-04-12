@@ -1,0 +1,9 @@
+resource foo {
+	fn create_initial_context(resource context) {
+		initial_context("unlabeled", context); // illegal
+	}
+}
+
+domain d {
+	allow(this, foo, file, read);
+}

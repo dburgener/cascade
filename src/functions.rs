@@ -968,7 +968,16 @@ fn call_to_sids<'a>(
     context: &BlockContext<'_>,
     file: &SimpleFile<String, String>,
 ) -> Result<Vec<Sid<'a>>, CascadeErrors> {
-    // TODO: This isn't valid in a function context.  Check that and return an error
+    if context.in_function_block() {
+        return Err(CascadeErrors::from(
+            ErrorItem::make_compile_or_internal_error(
+                "initial_context() calls are not valid in functions",
+                Some(file),
+                c.name.get_range(),
+                "You may want to place this call directly inside a type definition",
+            ),
+        ));
+    }
 
     let target_args = vec![
         FunctionArgument::new(
