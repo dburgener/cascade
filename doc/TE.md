@@ -443,6 +443,14 @@ built in function, which has the following prototype:
 fn resource_transition(resource default, source domain, resource parent, [class] obj_classes);
 ```
 
+Named resource transitions are also available.  In a named resource transition
+the transition will only occur if the objected being created matches the obj_name
+exactly.
+
+```
+fn resource_transition(resource default, source domain, resource parent, [class] obj_classes, string "obj_name");
+```
+
 File contexts are set through the file_context() function, which has the following prototype:
 
 ```
