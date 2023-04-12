@@ -1170,24 +1170,20 @@ fn call_to_resource_transition<'a>(
         return Err(ErrorItem::Internal(InternalError::new()).into());
     }
 
+    let obj_name = if obj_name.to_string().is_empty() {
+        None
+    } else {
+        Some(obj_name)
+    };
+
     for file_type in file_types {
-        if obj_name.to_string().is_empty() {
-            ret.push(ResourcetransRule {
-                default: Cow::Owned(default.clone()),
-                domain: Cow::Owned(domain.clone()),
-                parent: Cow::Owned(parent.clone()),
-                file_type: Cow::Owned(file_type.clone()),
-                obj_name: None,
-            });
-        } else {
-            ret.push(ResourcetransRule {
-                default: Cow::Owned(default.clone()),
-                domain: Cow::Owned(domain.clone()),
-                parent: Cow::Owned(parent.clone()),
-                file_type: Cow::Owned(file_type.clone()),
-                obj_name: Some(obj_name.clone()),
-            });
-        }
+        ret.push(ResourcetransRule {
+            default: Cow::Owned(default.clone()),
+            domain: Cow::Owned(domain.clone()),
+            parent: Cow::Owned(parent.clone()),
+            file_type: Cow::Owned(file_type.clone()),
+            obj_name: obj_name.clone(),
+        });
     }
 
     Ok(ret)

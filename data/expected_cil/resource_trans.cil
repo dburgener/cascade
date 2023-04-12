@@ -144,7 +144,7 @@
 (type unlabeled_sid)
 (roletype object_r unlabeled_sid)
 (typeattributeset resource (unlabeled_sid))
-(macro foo-foo_filetrans ((type this) (type source) (type new_type) (class classes)) (typetransition source new_type classes this))
+(macro foo-foo_filetrans ((type this) (type source) (type parent_type) (class classes)) (typetransition source parent_type classes this))
 (call foo-foo_filetrans (foo some_dom bar lnk_file))
 (allow domain foo (file (read)))
 (typetransition domain bar dir foo)

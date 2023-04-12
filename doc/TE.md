@@ -440,15 +440,22 @@ Runtime resource transitions are achieved through the resource_transition()
 built in function, which has the following prototype:
 
 ```
-fn resource_transition(resource default, source domain, resource parent, [class] obj_classes);
-```
-
-Named resource transitions are also available.  In a named resource transition
-the transition will only occur if the objected being created matches the obj_name
-exactly.
-
-```
 fn resource_transition(resource default, source domain, resource parent, [class] obj_classes, string "obj_name");
+```
+
+* `default` is the type you want the resource to transition to.
+* `domain` is the domain which is creating the resource.
+* `parent` is the type which the resource is being created in.  E.g. The type of
+  the directory a file is being created in.
+* `obj_classes` is the object class(es) of the resource being created.
+* `obj_name` is an optional argument which will only evoke the transition if
+  the name of the resource being created matches `obj_name` exactly.  If this
+  argument is present the resource transition is considered "named".
+
+E.g. A process with the domain `foo` is creating a file named "foo.txt" in a
+directory with the type `bar` and wants the type on the new file to be `foo_bar`:
+```
+resource_transition(foo_bar, foo, bar, [file], "foo.txt")
 ```
 
 File contexts are set through the file_context() function, which has the following prototype:
