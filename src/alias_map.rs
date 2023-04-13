@@ -86,7 +86,7 @@ impl<T: Declared> AliasMap<T> {
         for index in value.get_secondary_indices() {
             match self.secondary_indices.get_mut(&index) {
                 Some(val) => {
-                    val.insert(index);
+                    val.insert(key.clone());
                 }
                 None => {
                     self.secondary_indices

@@ -95,3 +95,16 @@ resource overwrite_one inherits bar {
 		allow(source, this, lnk_file, read);
 	}
 }
+
+@derive(*, *)
+resource overwrite_two inherits bar {
+	// define our own read
+	fn read(domain source) {
+		allow(source, this, lnk_file, read);
+	}
+
+	// define our own write
+	fn write(domain source) {
+		allow(source, this, lnk_file, write);
+	}
+}
