@@ -103,11 +103,10 @@ virtual domain userdomain {}
 
 @associate([user_tmp])
 domain foo_userdomain inherits userdomain {
-	// Creates new resources foo.tmp and foo.var, and implicitly calls
-	// foo.tmp.associated_call_from_tmp(foo) and foo.var.associated_call_from_var(foo)
+	// Creates new resources foo_userdomain.user_tmp, and implicitly calls
+	// foo_userdomain.user_tmp.associated_call_from_user_tmp(foo_userdomain)
 	//
-	// foo.tmp inherits tmp
-	// foo.var inherits var
+	// foo_userdomain.user_tmp inherits tmp
 }
 
 virtual domain diamond1 inherits foo {}

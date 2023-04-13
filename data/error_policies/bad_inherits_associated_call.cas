@@ -9,9 +9,6 @@ virtual resource user_tmp {
 
 @associate([user_tmp])
 domain bad_userdomain {
-	// Creates new resources foo.tmp and foo.var, and implicitly calls
-	// foo.tmp.associated_call_from_tmp(foo) and foo.var.associated_call_from_var(foo)
-	//
-	// foo.tmp inherits tmp
-	// foo.var inherits var
+	// Errors because bad_userdomain does not inherit userdomain, which
+    // the associated call above requires
 }
