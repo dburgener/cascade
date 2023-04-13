@@ -1,8 +1,8 @@
 resource foo {
     resource_transition(this, domain, bar, [file dir]);
 
-    fn foo_filetrans(domain source, resource new_type, [class] classes) {
-        resource_transition(this, source, new_type, classes);
+    fn foo_filetrans(domain source, resource parent_type, [class] classes) {
+        resource_transition(this, source, parent_type, classes);
     }
 
     // Policies must include at least one av rule

@@ -1420,6 +1420,11 @@ mod tests {
     }
 
     #[test]
+    fn invalid_named_resourcetrans() {
+        error_policy_test!("named_resource_trans.cas", 1, ErrorItem::Compile(_));
+    }
+
+    #[test]
     fn invalid_networking_rules() {
         error_policy_test!("networking_rules.cas", 1, ErrorItem::Compile(_));
     }
@@ -1436,6 +1441,20 @@ mod tests {
             &[
                 "(typetransition domain bar file foo)",
                 "(typetransition domain bar dir foo)",
+            ],
+            &[],
+            0,
+        )
+    }
+
+    #[test]
+    fn valid_named_resourcetrans() {
+        valid_policy_test(
+            "named_resource_trans.cas",
+            &[
+                "(typetransition domain bar file \"test.txt\" foo)",
+                "(typetransition domain bar dir \"test.txt\" foo)",
+                "(call foo-foo_filetrans (foo some_dom bar lnk_file \"test.sh\"))",
             ],
             &[],
             0,

@@ -1054,17 +1054,29 @@ pub struct ResourcetransRule<'a> {
     pub domain: Cow<'a, CascadeString>,
     pub parent: Cow<'a, CascadeString>,
     pub file_type: Cow<'a, CascadeString>,
+    pub obj_name: Option<CascadeString>,
 }
 
 impl From<&ResourcetransRule<'_>> for sexp::Sexp {
     fn from(r: &ResourcetransRule) -> Self {
-        list(&[
-            atom_s("typetransition"),
-            atom_s(&r.domain.get_cil_name()),
-            atom_s(&r.parent.get_cil_name()),
-            Sexp::Atom(Atom::S(r.file_type.to_string())),
-            atom_s(&r.default.get_cil_name()),
-        ])
+        if let Some(obj_name) = &r.obj_name {
+            list(&[
+                atom_s("typetransition"),
+                atom_s(&r.domain.get_cil_name()),
+                atom_s(&r.parent.get_cil_name()),
+                Sexp::Atom(Atom::S(r.file_type.to_string())),
+                atom_s(obj_name.as_ref()),
+                atom_s(&r.default.get_cil_name()),
+            ])
+        } else {
+            list(&[
+                atom_s("typetransition"),
+                atom_s(&r.domain.get_cil_name()),
+                atom_s(&r.parent.get_cil_name()),
+                Sexp::Atom(Atom::S(r.file_type.to_string())),
+                atom_s(&r.default.get_cil_name()),
+            ])
+        }
     }
 }
 
@@ -1116,6 +1128,16 @@ fn call_to_resource_transition<'a>(
             types,
             None,
         )?,
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: CascadeString::from("string"),
+                is_list_param: false,
+                name: CascadeString::from("obj_name"),
+                default: Some(Argument::Quote(CascadeString::from(""))),
+            },
+            types,
+            None,
+        )?,
     ];
 
     let validated_args =
@@ -1139,10 +1161,20 @@ fn call_to_resource_transition<'a>(
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
         .get_list(context)?;
+    let obj_name = args_iter
+        .next()
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
+        .get_name_or_string(context)?;
 
     if args_iter.next().is_some() {
         return Err(ErrorItem::Internal(InternalError::new()).into());
     }
+
+    let obj_name = if obj_name.to_string().is_empty() {
+        None
+    } else {
+        Some(obj_name)
+    };
 
     for file_type in file_types {
         ret.push(ResourcetransRule {
@@ -1150,6 +1182,7 @@ fn call_to_resource_transition<'a>(
             domain: Cow::Owned(domain.clone()),
             parent: Cow::Owned(parent.clone()),
             file_type: Cow::Owned(file_type.clone()),
+            obj_name: obj_name.clone(),
         });
     }
 
