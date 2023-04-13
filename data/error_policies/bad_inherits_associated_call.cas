@@ -1,0 +1,17 @@
+virtual domain userdomain {}
+
+virtual resource user_tmp {
+	@associated_call
+	fn associated_call_from_user_tmp(userdomain source) {
+		allow(source, user_tmp, file, [read]);
+	}
+}
+
+@associate([user_tmp])
+domain bad_userdomain {
+	// Creates new resources foo.tmp and foo.var, and implicitly calls
+	// foo.tmp.associated_call_from_tmp(foo) and foo.var.associated_call_from_var(foo)
+	//
+	// foo.tmp inherits tmp
+	// foo.var inherits var
+}

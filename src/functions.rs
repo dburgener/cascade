@@ -1333,6 +1333,7 @@ fn check_associated_call(
     annotation: &Annotation,
     funcdecl: &FuncDecl,
     file: &SimpleFile<String, String>,
+    types: &TypeMap,
 ) -> Result<bool, ErrorItem> {
     // Checks that annotation arguments match the expected signature.
     let mut annotation_args = annotation.arguments.iter();
@@ -1363,12 +1364,21 @@ fn check_associated_call(
             name: _,
             default: _,
         }) => {
-            if param_type.as_ref() != constants::DOMAIN || *is_list_param {
+            if let Some(type_info) = types.get(param_type.as_ref()) {
+                if !type_info.is_domain(types) || *is_list_param {
+                    return Err(ErrorItem::make_compile_or_internal_error(
+                        "Invalid method signature for @associated_call annotation: invalid first argument",
+                        Some(file),
+                        param_type.get_range(),
+                        "The type of the first method argument must be a domain.",
+                    ));
+                }
+            } else {
                 return Err(ErrorItem::make_compile_or_internal_error(
-                    "Invalid method signature for @associated_call annotation: invalid first argument",
+                    "Invalid method signature for @associated_call annotation: could not resolve first argument type",
                     Some(file),
                     param_type.get_range(),
-                    "The type of the first method argument must be 'domain'.",
+                    "Is the first argument type properly defined?",
                 ));
             }
         }
@@ -1526,7 +1536,7 @@ impl<'a> FunctionInfo<'a> {
                         .into());
                     }
                     is_associated_call =
-                        check_associated_call(annotation, funcdecl, declaration_file)?;
+                        check_associated_call(annotation, funcdecl, declaration_file, types)?;
                     // We're done with these, so no need to save them in the annotations
                 }
                 "alias" => {
@@ -2992,6 +3002,22 @@ fn validate_argument<'a>(
             if arg_typeinfo.is_child_or_actual_type(target_argument.param_type, types) {
                 Ok(TypeInstance::new(&arg, arg_typeinfo, file, context))
             } else {
+                if let Some(file) = file {
+                    if file.name().is_empty() {
+                        return Err(ErrorItem::make_compile_or_internal_error(
+                            &format!(
+                                "Expected type inheriting {} for associated call",
+                                target_argument.param_type.name
+                            ),
+                            arg_typeinfo.get_file().as_ref(),
+                            arg_typeinfo.name.get_range(),
+                            &format!(
+                                "An associated call was made for this domain.  This type should inherit {}",
+                                target_argument.param_type.name
+                            ),
+                        ));
+                    }
+                }
                 Err(ErrorItem::make_compile_or_internal_error(
                     &format!(
                         "Expected type inheriting {}",

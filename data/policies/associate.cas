@@ -9,6 +9,13 @@ virtual resource tmp {
 	}
 }
 
+virtual resource user_tmp {
+	@associated_call
+	fn associated_call_from_user_tmp(userdomain source) {
+		allow(source, user_tmp, file, [read]);
+	}
+}
+
 virtual resource var {
 	@associated_call
 	fn associated_call_from_var(domain source) {
@@ -92,6 +99,16 @@ extend nest_child {
 	}
 }
 
+virtual domain userdomain {}
+
+@associate([user_tmp])
+domain foo_userdomain inherits userdomain {
+	// Creates new resources foo.tmp and foo.var, and implicitly calls
+	// foo.tmp.associated_call_from_tmp(foo) and foo.var.associated_call_from_var(foo)
+	//
+	// foo.tmp inherits tmp
+	// foo.var inherits var
+}
 
 virtual domain diamond1 inherits foo {}
 virtual domain diamond2 inherits foo {}
