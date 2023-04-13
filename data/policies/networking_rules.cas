@@ -5,6 +5,8 @@ resource my_port {
 	portcon("UDP", 1235, this);
 	portcon("tcp", 5000-5010, this);
 	portcon("tcp", ssh_port, this);
+	portcon("dccp", 1337, this);
+	portcon("sctp", 43, this);
 }
 
 domain foo {

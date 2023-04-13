@@ -463,6 +463,8 @@ fn call_to_fc_rules<'a>(
 pub enum Protocol {
     Tcp,
     Udp,
+    Dccp,
+    Sctp,
 }
 
 impl From<Protocol> for &str {
@@ -470,6 +472,8 @@ impl From<Protocol> for &str {
         match p {
             Protocol::Tcp => "tcp",
             Protocol::Udp => "udp",
+            Protocol::Dccp => "dccp",
+            Protocol::Sctp => "sctp",
         }
     }
 }
@@ -543,12 +547,14 @@ pub fn call_to_portcon_rules<'a>(
     let proto = match proto.as_ref() {
         "\"tcp\"" | "\"TCP\"" => Protocol::Tcp,
         "\"udp\"" | "\"UDP\"" => Protocol::Udp,
+        "\"dccp\"" | "\"DCCP\"" => Protocol::Dccp,
+        "\"sctp\"" | "\"SCTP\"" => Protocol::Sctp,
         _ => {
             return Err(ErrorItem::make_compile_or_internal_error(
                 "Not a valid protocol",
                 Some(file),
                 proto.get_range(),
-                "Valid protocols are \"tcp\" and \"udp\"",
+                "Valid protocols are \"tcp\", \"udp\", \"dccp\", and \"sctp\"",
             )
             .into());
         }

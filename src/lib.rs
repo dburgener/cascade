@@ -738,6 +738,8 @@ mod tests {
                 "(portcon tcp 1234 (system_u object_r my_port ((s0) (s0))))",
                 "(portcon udp 1235 (system_u object_r my_port ((s0) (s0))))",
                 "(portcon tcp 22 (system_u object_r my_port ((s0) (s0))))",
+                "(portcon dccp 1337 (system_u object_r my_port ((s0) (s0))))",
+                "(portcon sctp 43 (system_u object_r my_port ((s0) (s0))))",
             ],
             &[],
             0,
