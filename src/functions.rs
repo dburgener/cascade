@@ -235,7 +235,15 @@ fn call_to_av_rule<'a>(
         )?,
     ];
 
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
+    let validated_args = validate_arguments(
+        c,
+        &target_args,
+        types,
+        class_perms,
+        context,
+        file,
+        None,
+    )?;
     let mut args_iter = validated_args.iter();
 
     let source = args_iter
@@ -451,7 +459,15 @@ fn call_to_fc_rules<'a>(
         )?,
     ];
 
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
+    let validated_args = validate_arguments(
+        c,
+        &target_args,
+        types,
+        class_perms,
+        context,
+        file,
+        None,
+    )?;
     let mut args_iter = validated_args.iter();
     let mut ret = Vec::new();
 
@@ -572,7 +588,15 @@ pub fn call_to_portcon_rules<'a>(
         )?,
     ];
 
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
+    let validated_args = validate_arguments(
+        c,
+        &target_args,
+        types,
+        class_perms,
+        context,
+        file,
+        None,
+    )?;
     let mut args_iter = validated_args.iter();
 
     let proto = args_iter
@@ -859,7 +883,15 @@ fn call_to_fsc_rules<'a>(
             None,
         )?,
     ];
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
+    let validated_args = validate_arguments(
+        c,
+        &target_args,
+        types,
+        class_perms,
+        context,
+        file,
+        None,
+    )?;
     let mut args_iter = validated_args.iter();
     let mut ret = Vec::new();
 
@@ -1041,7 +1073,7 @@ fn call_to_sids<'a>(
             None,
         )?,
     ];
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
+    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file, None)?;
     let mut args_iter = validated_args.iter();
 
     let sid_name = args_iter
@@ -1145,7 +1177,15 @@ fn call_to_domain_transition<'a>(
         )?,
     ];
 
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
+    let validated_args = validate_arguments(
+        c,
+        &target_args,
+        types,
+        class_perms,
+        context,
+        file,
+        None,
+    )?;
     let mut args_iter = validated_args.into_iter();
 
     let source = args_iter
@@ -1281,7 +1321,15 @@ fn call_to_resource_transition<'a>(
         )?,
     ];
 
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
+    let validated_args = validate_arguments(
+        c,
+        &target_args,
+        types,
+        class_perms,
+        context,
+        file,
+        None,
+    )?;
     let mut args_iter = validated_args.into_iter();
     let mut ret = Vec::new();
 
@@ -2427,8 +2475,15 @@ impl ValidatedCall {
         let mut arg_lists = Vec::new();
         arg_lists.push(args);
 
-        for arg in validate_arguments(call, &function_info.args, types, class_perms, context, file)?
-        {
+        for arg in validate_arguments(
+            call,
+            &function_info.args,
+            types,
+            class_perms,
+            context,
+            file,
+            Some(function_info),
+        )? {
             // We don't know if these are symbols or lists.
             // If they are symbols, we save them as CilArg::Name
             // If they are lists, then we either need to explode our calls to the list count, or in
@@ -2575,6 +2630,7 @@ pub fn validate_arguments<'a>(
     class_perms: &ClassList,
     context: &BlockContext<'a>,
     file: Option<&'a SimpleFile<String, String>>,
+    func_info: Option<&FunctionInfo>,
 ) -> Result<Vec<TypeInstance<'a>>, CascadeErrors> {
     // Member functions start with an invisible"this" argument.  If it does, skip it
     let function_args_iter = function_args.iter().skip_while(|a| a.name == "this");
@@ -2654,6 +2710,7 @@ pub fn validate_arguments<'a>(
             context,
             file,
             call.is_avc(),
+            func_info,
         )?;
         decl_arg.provided_arg = Some(validated_arg);
     }
@@ -2688,6 +2745,7 @@ pub fn validate_arguments<'a>(
                     context,
                     file,
                     call.is_avc(),
+                    func_info,
                 )?;
                 args[index].provided_arg = Some(validated_arg);
             }
@@ -2719,6 +2777,7 @@ pub fn validate_arguments<'a>(
                         context,
                         file,
                         call.is_avc(),
+                        func_info,
                     )?,
                     None => {
                         return Err(ErrorItem::make_compile_or_internal_error(
@@ -2881,6 +2940,7 @@ fn validate_argument<'a>(
     context: &BlockContext<'a>,
     file: Option<&'a SimpleFile<String, String>>,
     is_avc: bool,
+    func_info: Option<&FunctionInfo>,
 ) -> Result<TypeInstance<'a>, ErrorItem> {
     // If there is a cast, we first validate that regardless of whether the actual value is a list
     if let Some(cast_name) = cast_name {
@@ -2895,6 +2955,7 @@ fn validate_argument<'a>(
             context,
             file,
             is_avc,
+            func_info,
         )?;
         arg.validate_argcast(&cast_ti, types, context, file)?;
 
@@ -2970,6 +3031,7 @@ fn validate_argument<'a>(
                         context,
                         file,
                         is_avc,
+                        func_info,
                     );
                 }
                 return Err(ErrorItem::make_compile_or_internal_error(
@@ -3002,9 +3064,13 @@ fn validate_argument<'a>(
             if arg_typeinfo.is_child_or_actual_type(target_argument.param_type, types) {
                 Ok(TypeInstance::new(&arg, arg_typeinfo, file, context))
             } else {
-                if let Some(file) = file {
-                    if file.name().is_empty() {
-                        return Err(ErrorItem::make_compile_or_internal_error(
+                // If there is no function call or the call is not an asociated one fall through and return
+                // the "standard" error.
+                // If this is the associated call we need to do some more digging to give the user a better
+                // error message.
+                if let Some(func_info) = func_info {
+                    if func_info.is_associated_call {
+                        let mut error = ErrorItem::make_compile_or_internal_error(
                             &format!(
                                 "Expected type inheriting {} for associated call",
                                 target_argument.param_type.name
@@ -3012,10 +3078,48 @@ fn validate_argument<'a>(
                             arg_typeinfo.get_file().as_ref(),
                             arg_typeinfo.name.get_range(),
                             &format!(
-                                "An associated call was made for this domain.  This type should inherit {}",
-                                target_argument.param_type.name
+                                "An associated call: '{}' was made for this domain.  That call requires this domain inherit {}",
+                                func_info.name, target_argument.param_type.name
                             ),
-                        ));
+                        );
+                        // We don't know which class the associated call came from, but that would
+                        // be nice information for the user.  So we search through all the associate class
+                        // annotations, and find the class we are looking for. Then add that to the
+                        // error message.
+                        for annotation in arg_typeinfo.get_annotations() {
+                            if let AnnotationInfo::Associate(association) = annotation {
+                                for resource in &association.resources {
+                                    if func_info
+                                        .class
+                                        .get_name()
+                                        .unwrap_or(&CascadeString::from(""))
+                                        .to_string()
+                                        .ends_with(&(".".to_owned() + resource.as_ref()))
+                                    {
+                                        let associate_type_info = types.get(resource.as_ref());
+                                        // If for some reason we cannot find the type, its file, or its range, just return the error
+                                        // as is and hope the user can figure it out.  Realistically this should never be the case.
+                                        if let Some(associate_type_info) = associate_type_info {
+                                            if let (Some(file), Some(range)) = (
+                                                associate_type_info.get_file(),
+                                                associate_type_info.get_name_range(),
+                                            ) {
+                                                if let ErrorItem::Compile(e) = error {
+                                                    error = ErrorItem::Compile(
+                                                        e.add_additional_message(
+                                                            &file,
+                                                            range,
+                                                            "Associated class found here",
+                                                        ),
+                                                    );
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        return Err(error);
                     }
                 }
                 Err(ErrorItem::make_compile_or_internal_error(
