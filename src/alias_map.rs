@@ -6,6 +6,7 @@ use std::ops::Range;
 use codespan_reporting::files::SimpleFile;
 
 use crate::error::{CascadeErrors, ErrorItem, InternalError};
+use crate::util::append_set_map;
 
 #[derive(Clone, Debug)]
 pub struct AliasMap<T> {
@@ -121,16 +122,7 @@ impl<T: Declared> AliasMap<T> {
     pub fn append(&mut self, other: &mut AliasMap<T>) {
         self.declarations.append(&mut other.declarations);
         self.aliases.append(&mut other.aliases);
-        while let Some((k, mut v)) = other.secondary_indices.pop_first() {
-            match self.secondary_indices.get_mut(&k) {
-                Some(val) => {
-                    val.append(&mut v);
-                }
-                None => {
-                    self.secondary_indices.insert(k, v);
-                }
-            }
-        }
+        append_set_map(&mut self.secondary_indices, &mut other.secondary_indices);
     }
 
     pub fn set_aliases(&mut self, aliases: BTreeMap<String, String>) {
