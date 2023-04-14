@@ -17,6 +17,7 @@ mod internal_rep;
 mod machine;
 mod obj_class;
 mod sexp_internal;
+mod util;
 pub mod warning;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -792,6 +793,8 @@ mod tests {
             match compile_combined(files) {
                 Ok((p, _)) => {
                     assert!(p.contains("(call foo-read"));
+                    assert!(p.contains("(type extend_across_files-res1)"));
+                    assert!(p.contains("(type extend_across_files-res2)"));
                     policies.push(p);
                 }
                 Err(e) => panic!("Multi file compilation failed with {}", e),
