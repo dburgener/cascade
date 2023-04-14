@@ -201,7 +201,7 @@ Symbol: CascadeString = {
 }
 
 List: Vec<CascadeString> = {
-	"[" <TypeName+> "]"
+	"[" <TypeName*> "]"
 }
 
 // TODO: Define boolean struct

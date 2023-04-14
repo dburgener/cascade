@@ -1366,6 +1366,19 @@ mod tests {
     }
 
     #[test]
+    fn empty_list() {
+        valid_policy_test(
+            "empty_list.cas",
+            &[],
+            &["(allow dom res (file",
+            "(macro child-foo ((type this) (type source)) (allow source this (lnk_file (read))))",
+            ],
+            // Although, maybe this case should warn?
+            0,
+        )
+    }
+
+    #[test]
     fn invalid_duplicate_inherit() {
         error_policy_test!("duplicate_inherit.cas", 2, ErrorItem::Compile(_));
     }

@@ -1,0 +1,15 @@
+resource res {}
+
+domain dom {
+	allow(this, res, file, []);
+	allow(this, res, dir, read);
+}
+
+virtual resource parent {
+	fn foo(domain source) {
+		allow(source, this, lnk_file, read);
+	}
+}
+
+@derive([], [])
+resource child inherits parent {}

@@ -222,6 +222,11 @@ fn call_to_av_rule<'a>(
         return Err(ErrorItem::Internal(InternalError::new()).into());
     }
 
+    if perms.is_empty() {
+        // Don't generate empty rule
+        return Ok(BTreeSet::new());
+    }
+
     for p in &perms {
         class_perms.verify_permission(&class, p, context, file)?;
     }
@@ -445,6 +450,10 @@ fn call_to_fc_rules<'a>(
             ))
         }
     };
+
+    if file_types.is_empty() {
+        return Ok(Vec::new());
+    }
 
     for file_type in file_types {
         let ft = FileType::validate(file_type, file)?;
@@ -1250,6 +1259,10 @@ fn call_to_resource_transition<'a>(
     } else {
         Some(obj_name)
     };
+
+    if file_types.is_empty() {
+        return Ok(Vec::new());
+    }
 
     for file_type in file_types {
         ret.push(ResourcetransRule {
@@ -2325,6 +2338,7 @@ impl ValidatedCall {
                 // Below is the not perm-set case
                 arg_lists = expand_arg_lists(arg_lists, list);
                 // TODO: Add support for the perm-set case
+                // TODO: What is the behavior we want if this is an empty list?
             } else {
                 // Should not be possible, since get_name_or_string() and get_list() collectively
                 // should be comprehensive returning Ok() on TypeValue
