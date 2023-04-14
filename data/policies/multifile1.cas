@@ -3,3 +3,7 @@ virtual resource foo {
 		allow(source, this, file, read);
 	}
 }
+
+virtual domain extend_across_files {
+	resource res1 {}
+}

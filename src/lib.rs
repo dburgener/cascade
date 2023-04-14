@@ -27,6 +27,7 @@ use crate::context::{BlockType, Context};
 use crate::error::{CascadeErrors, InternalError, InvalidMachineError, ParseErrorMsg};
 use crate::functions::{FunctionClass, FunctionMap};
 use crate::machine::{MachineMap, ModuleMap, ValidatedMachine, ValidatedModule};
+use crate::util::append_set_map;
 pub use crate::warning::Warnings;
 
 use codespan_reporting::files::SimpleFile;
@@ -125,7 +126,7 @@ fn compile_machine_policies_internal(
         // Collect all type declarations
         for p in &policies {
             match compile::extend_type_map(p, &mut type_map) {
-                Ok(anns) => extend_annotations.append(&mut anns.inner(&mut warnings)),
+                Ok(anns) => append_set_map(&mut extend_annotations, &mut anns.inner(&mut warnings)),
                 Err(e) => {
                     errors.append(e);
                     continue;
