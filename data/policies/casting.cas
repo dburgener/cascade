@@ -9,4 +9,7 @@ domain foo {
 
 domain bar {
 	foo.signal(this);
+
+	this<foo>.signal(this);
 }
+
