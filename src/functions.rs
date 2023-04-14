@@ -1901,18 +1901,15 @@ fn validate_cast(
         }
     }
 
-    let type_info = types.get(start_type.as_ref());
-    if type_info.is_none()
-        && !context
-            .symbol_in_context(start_type.as_ref(), types)
-            .map(|ti| ti.is_setype(types))
-            .unwrap_or(false)
-    {
+    let type_info = types
+        .get(start_type.as_ref())
+        .or_else(|| context.symbol_in_context(start_type.as_ref(), types));
+    if type_info.is_none() || !type_info.map(|ti| ti.is_setype(types)).unwrap_or(false) {
         return Err(err_ret(start_type.get_range()));
     }
     match (cast_ti, func_call, func_info) {
         (Some(cast_ti), Some(func_call), Some(func_info)) => {
-            // If we can validate the inheritance than things are castable.  If we cannot
+            // If we can validate the inheritance then things are castable.  If we cannot
             // we need to check if the function itself is castable.
             if !validate_inheritance(func_call, type_info, &cast_ti.name, file)? {
                 if func_info.is_castable {
@@ -1956,7 +1953,7 @@ fn validate_inheritance(
         }
         None => {
             return Err(ErrorItem::make_compile_or_internal_error(
-                "No such class",
+                "No such type",
                 file,
                 call.get_name_range(),
                 "",

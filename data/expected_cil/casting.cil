@@ -142,6 +142,7 @@
 (roletype object_r unlabeled_sid)
 (typeattributeset resource (unlabeled_sid))
 (macro foo-signal ((type this) (type source)) (allow source this (process (signal))))
+(call foo-signal (bar bar))
 (call foo-signal (foo bar))
 (allow foo foo (capability (dac_override)))
 (allow foo foo (capability2 (mac_override)))
