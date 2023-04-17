@@ -2630,7 +2630,8 @@ pub fn validate_arguments<'a>(
     class_perms: &ClassList,
     context: &BlockContext<'a>,
     file: Option<&'a SimpleFile<String, String>>,
-    func_info: Option<&FunctionInfo>,
+    // This will be None for built-ins
+    target_func_info: Option<&FunctionInfo>,
 ) -> Result<Vec<TypeInstance<'a>>, CascadeErrors> {
     // Member functions start with an invisible"this" argument.  If it does, skip it
     let function_args_iter = function_args.iter().skip_while(|a| a.name == "this");
@@ -2710,7 +2711,7 @@ pub fn validate_arguments<'a>(
             context,
             file,
             call.is_avc(),
-            func_info,
+            target_func_info,
         )?;
         decl_arg.provided_arg = Some(validated_arg);
     }
@@ -2745,7 +2746,7 @@ pub fn validate_arguments<'a>(
                     context,
                     file,
                     call.is_avc(),
-                    func_info,
+                    target_func_info,
                 )?;
                 args[index].provided_arg = Some(validated_arg);
             }
@@ -2777,7 +2778,7 @@ pub fn validate_arguments<'a>(
                         context,
                         file,
                         call.is_avc(),
-                        func_info,
+                        target_func_info,
                     )?,
                     None => {
                         return Err(ErrorItem::make_compile_or_internal_error(
@@ -3064,79 +3065,96 @@ fn validate_argument<'a>(
             if arg_typeinfo.is_child_or_actual_type(target_argument.param_type, types) {
                 Ok(TypeInstance::new(&arg, arg_typeinfo, file, context))
             } else {
-                // If there is no function call or the call is not an asociated one fall through and return
-                // the "standard" error.
-                // If this is the associated call we need to do some more digging to give the user a better
-                // error message.
-                if let Some(func_info) = func_info {
-                    if func_info.is_associated_call {
-                        let mut error = ErrorItem::make_compile_or_internal_error(
-                            &format!(
-                                "Expected type inheriting {} for associated call",
-                                target_argument.param_type.name
-                            ),
-                            arg_typeinfo.get_file().as_ref(),
-                            arg_typeinfo.name.get_range(),
-                            &format!(
-                                "An associated call: '{}' was made for this domain.  That call requires this domain inherit {}",
-                                func_info.name, target_argument.param_type.name
-                            ),
-                        );
-                        // We don't know which class the associated call came from, but that would
-                        // be nice information for the user.  So we search through all the associate class
-                        // annotations, and find the class we are looking for. Then add that to the
-                        // error message.
-                        for annotation in arg_typeinfo.get_annotations() {
-                            if let AnnotationInfo::Associate(association) = annotation {
-                                for resource in &association.resources {
-                                    if func_info
-                                        .class
-                                        .get_name()
-                                        .unwrap_or(&CascadeString::from(""))
-                                        .to_string()
-                                        .ends_with(&(".".to_owned() + resource.as_ref()))
-                                    {
-                                        let associate_type_info = types.get(resource.as_ref());
-                                        // If for some reason we cannot find the type, its file, or its range, just return the error
-                                        // as is and hope the user can figure it out.  Realistically this should never be the case.
-                                        if let Some(associate_type_info) = associate_type_info {
-                                            if let (Some(file), Some(range)) = (
-                                                associate_type_info.get_file(),
-                                                associate_type_info.get_name_range(),
-                                            ) {
-                                                if let ErrorItem::Compile(e) = error {
-                                                    error = ErrorItem::Compile(
-                                                        e.add_additional_message(
-                                                            &file,
-                                                            range,
-                                                            "Associated class found here",
-                                                        ),
-                                                    );
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        return Err(error);
-                    }
-                }
-                Err(ErrorItem::make_compile_or_internal_error(
-                    &format!(
-                        "Expected type inheriting {}",
-                        target_argument.param_type.name
-                    ),
+                Err(validate_argument_error_handler(
+                    arg,
+                    arg_typeinfo,
+                    target_argument,
+                    types,
                     file,
-                    arg.get_range(),
-                    &format!(
-                        "This type should inherit {}",
-                        target_argument.param_type.name
-                    ),
+                    func_info,
                 ))
             }
         }
     }
+}
+
+// Helper function for handling the error case for validate_argument.
+fn validate_argument_error_handler(
+    arg: ArgForValidation,
+    arg_typeinfo: &TypeInfo,
+    target_argument: &FunctionArgument,
+    types: &TypeMap,
+    file: Option<&SimpleFile<String, String>>,
+    func_info: Option<&FunctionInfo>,
+) -> ErrorItem {
+    // If there is no function call or the call is not an asociated one fall through and return
+    // the "standard" error.
+    // If this is the associated call we need to do some more digging to give the user a better
+    // error message.
+    if let Some(func_info) = func_info {
+        if func_info.is_associated_call {
+            let mut error = ErrorItem::make_compile_or_internal_error(
+                &format!(
+                    "Expected type inheriting {} for associated call",
+                    target_argument.param_type.name
+                ),
+                arg_typeinfo.get_file().as_ref(),
+                arg_typeinfo.name.get_range(),
+                &format!(
+                    "An associated call: '{}' was made for this domain.  That call requires this domain inherit {}",
+                    func_info.name, target_argument.param_type.name
+                ),
+            );
+            // We don't know which class the associated call came from, but that would
+            // be nice information for the user.  So we search through all the associate class
+            // annotations, and find the class we are looking for. Then add that to the
+            // error message.
+            for annotation in arg_typeinfo.get_annotations() {
+                if let AnnotationInfo::Associate(association) = annotation {
+                    for resource in &association.resources {
+                        if func_info
+                            .class
+                            .get_name()
+                            .unwrap_or(&CascadeString::from(""))
+                            .to_string()
+                            .ends_with(&(".".to_owned() + resource.as_ref()))
+                        {
+                            let associate_type_info = types.get(resource.as_ref());
+                            // If for some reason we cannot find the type, its file, or its range, just return the error
+                            // as is and hope the user can figure it out.  Realistically this should never be the case.
+                            if let Some(associate_type_info) = associate_type_info {
+                                if let (Some(file), Some(range)) = (
+                                    associate_type_info.get_file(),
+                                    associate_type_info.get_name_range(),
+                                ) {
+                                    if let ErrorItem::Compile(e) = error {
+                                        error = ErrorItem::Compile(e.add_additional_message(
+                                            &file,
+                                            range,
+                                            "Associated class found here",
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return error;
+        }
+    }
+    ErrorItem::make_compile_or_internal_error(
+        &format!(
+            "Expected type inheriting {}",
+            target_argument.param_type.name
+        ),
+        file,
+        arg.get_range(),
+        &format!(
+            "This type should inherit {}",
+            target_argument.param_type.name
+        ),
+    )
 }
 
 impl From<&ValidatedCall> for sexp::Sexp {
