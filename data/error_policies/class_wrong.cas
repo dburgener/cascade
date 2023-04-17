@@ -1,0 +1,3 @@
+domain dom {
+	allow(this, self, capability, [cap2_userns]);
+}
