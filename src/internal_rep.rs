@@ -42,6 +42,7 @@ pub enum AnnotationInfo {
     Associate(Associated),
     Alias(CascadeString),
     Derive(Vec<Argument>),
+    NoDerive,
 }
 
 impl AnnotationInfo {
@@ -53,6 +54,7 @@ impl AnnotationInfo {
         use AnnotationInfo::*;
         match (self, other) {
             (MakeList, MakeList) => Some(AnnotationInfo::MakeList),
+            (NoDerive, NoDerive) => Some(AnnotationInfo::NoDerive),
             (Associate(left), Associate(right)) => {
                 let intersect: BTreeSet<CascadeString> = left
                     .resources
@@ -78,7 +80,7 @@ impl AnnotationInfo {
             (Derive(_), Derive(_)) => None,
             // Enumerate the non-equal cases explicitly so that we get non-exhaustive match errors
             // when updating the enum
-            (MakeList, _) | (Associate(_), _) | (Alias(_), _) | (Derive(_), _) => None,
+            (MakeList, _) | (Associate(_), _) | (Alias(_), _) | (Derive(_), _) | (NoDerive, _) => None,
         }
     }
 
@@ -87,6 +89,7 @@ impl AnnotationInfo {
         use AnnotationInfo::*;
         match (self, other) {
             (MakeList, MakeList) => None,
+            (NoDerive, NoDerive) => None,
             (Associate(left), Associate(right)) => {
                 let difference: BTreeSet<CascadeString> = left
                     .resources
@@ -109,7 +112,7 @@ impl AnnotationInfo {
                 }
             }
             // No need to special handle Derive/Derive.  Derives are always considered disjoint
-            (Derive(_), _) | (MakeList, _) | (Associate(_), _) | (Alias(_), _) => {
+            (Derive(_), _) | (MakeList, _) | (Associate(_), _) | (Alias(_), _) | (NoDerive, _) => {
                 Some(self.clone())
             }
         }
@@ -569,6 +572,10 @@ pub fn get_type_annotations(
             "derive" => {
                 // Arguments are validated at function creation time
                 infos.insert(AnnotationInfo::Derive(annotation.arguments.clone()));
+            }
+            "noderive" => {
+                // Do not implicit derive for this type
+                infos.insert(AnnotationInfo::NoDerive);
             }
             "hint" => {
                 // If get_range() is none, we generated a synthetic hint.  This could be because of
