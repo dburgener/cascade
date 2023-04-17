@@ -2763,12 +2763,12 @@ fn validate_argument<'a>(
             };
             let arg_typeinfo_vec = argument_to_typeinfo_vec(v, types, class_perms, context, file)?;
 
-            for arg in arg_typeinfo_vec {
-                if !arg.is_child_or_actual_type(target_argument.param_type, types) {
+            for (arg_ti, arg) in arg_typeinfo_vec.iter().zip(v.iter()) {
+                if !arg_ti.is_child_or_actual_type(target_argument.param_type, types) {
                     return Err(ErrorItem::make_compile_or_internal_error(
                         &format!("Expected type inheriting {}", target_ti.name),
                         file,
-                        arg.name.get_range(),
+                        arg.get_range(),
                         &format!("This type should inherit {}", target_ti.name),
                     ));
                 }

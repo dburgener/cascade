@@ -1536,4 +1536,9 @@ mod tests {
     fn initial_context_error_test() {
         error_policy_test!("initial_context.cas", 1, ErrorItem::Compile(_));
     }
+
+    #[test]
+    fn validation_fails_in_list_test() {
+        error_policy_test!("class_wrong.cas", 1, ErrorItem::Compile(_));
+    }
 }
