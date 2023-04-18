@@ -545,13 +545,7 @@ pub fn validate_functions<'a>(
     // TODO: We pass the global context in here, but most function declarations are in a type
     // block, and should have bindings in that block exposed
     for function in functions.values() {
-        match function.validate_body(
-            &functions,
-            types,
-            class_perms,
-            context,
-            function.declaration_file,
-        ) {
+        match function.validate_body(&functions, types, class_perms, context) {
             Ok(ww) => {
                 new_bodies.insert(function.get_cil_name(), ww.inner(&mut warnings));
             }
