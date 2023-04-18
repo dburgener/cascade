@@ -416,7 +416,7 @@ pub fn validate_fs_context_duplicates(
                 FSContextType::XAttr | FSContextType::Task | FSContextType::Trans => {
                     error = Some(add_or_create_compile_error(error,
                         "Duplicate filesystem context.",
-                        &rule.file,
+                        rule.file.as_ref().ok_or_else(||CascadeErrors::from(InternalError::new()))?,
                         rule.fs_name.get_range().ok_or_else(||CascadeErrors::from(InternalError::new()))?,
                         &format!("Found multiple different filesystem type declarations for filesystem: {}", rule.fs_name)));
                 }
@@ -432,8 +432,8 @@ pub fn validate_fs_context_duplicates(
                                 if path == inner_path && rule.context != inner_rule.context {
                                     error = Some(new_error_helper(error,
                                         "Duplicate genfscon contexts",
-                                        &inner_rule.file,
-                                        &rule.file,
+                                        inner_rule.file.as_ref().ok_or_else(||CascadeErrors::from(InternalError::new()))?,
+                                        rule.file.as_ref().ok_or_else(||CascadeErrors::from(InternalError::new()))?,
                                         inner_rule.context_range.clone(),
                                         rule.context_range.clone(),
                                         &format!("Found duplicate genfscon rules for filesystem {} with differing contexts: {}", inner_rule.fs_name, inner_rule.context),
@@ -445,8 +445,8 @@ pub fn validate_fs_context_duplicates(
                                 {
                                     error = Some(new_error_helper(error,
                                         "Duplicate genfscon file types",
-                                        &inner_rule.file,
-                                        &rule.file,
+                                        inner_rule.file.as_ref().ok_or_else(||CascadeErrors::from(InternalError::new()))?,
+                                        rule.file.as_ref().ok_or_else(||CascadeErrors::from(InternalError::new()))?,
                                         inner_rule.file_type_range.clone(),
                                         rule.file_type_range.clone(),
                                         &format!("Found duplicate genfscon rules for filesystem {} with differing file types", inner_rule.fs_name),
@@ -671,7 +671,7 @@ fn handle_derive<'a>(
             target_type,
             &parents,
             functions,
-            target_type.declaration_file.as_ref().unwrap(),
+            target_type.declaration_file.as_ref(),
         ) {
             Ok(derived_function) => {
                 let df_cil_name = derived_function.get_cil_name();
@@ -694,9 +694,12 @@ fn handle_derive<'a>(
                         let range = explicit_function
                             .get_name_range()
                             .ok_or_else(InternalError::new)?;
+                        let file = explicit_function
+                            .declaration_file
+                            .ok_or_else(InternalError::new)?;
 
                         error = ErrorItem::Compile(e.add_additional_message(
-                            explicit_function.declaration_file,
+                            file,
                             range,
                             "...but it was explicitly defined here",
                         ));
@@ -1476,7 +1479,7 @@ fn interpret_associate(
                 *seen = if *seen {
                     errors.add_error(ErrorItem::make_compile_or_internal_error(
                         "multiple @associated_call in the same resource",
-                        Some(func_info.declaration_file),
+                        func_info.declaration_file,
                         func_info.get_declaration_range(),
                         "Only one function in the same resource can be annotated with @associated_call.",
                     ));
@@ -1994,7 +1997,7 @@ fn do_rules_pass<'a>(
                     class_perms,
                     &local_context,
                     parent_type,
-                    file,
+                    Some(file),
                 ) {
                     Ok(s) => {
                         ret.append(&mut s.inner(&mut warnings));

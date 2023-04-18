@@ -178,7 +178,7 @@ fn call_to_av_rule<'a>(
     types: &'a TypeMap,
     class_perms: &ClassList,
     context: &BlockContext<'_>,
-    file: &'a SimpleFile<String, String>,
+    file: Option<&'a SimpleFile<String, String>>,
 ) -> Result<BTreeSet<AvRule<'a>>, CascadeErrors> {
     let flavor = match c.name.as_ref() {
         constants::ALLOW_FUNCTION_NAME => AvRuleFlavor::Allow,
@@ -231,8 +231,7 @@ fn call_to_av_rule<'a>(
         )?,
     ];
 
-    let validated_args =
-        validate_arguments(c, &target_args, types, class_perms, context, Some(file))?;
+    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
     let mut args_iter = validated_args.iter();
 
     let source = args_iter
@@ -374,14 +373,14 @@ impl FromStr for FileType {
 impl FileType {
     fn validate(
         file_type: CascadeString,
-        file: &SimpleFile<String, String>,
+        file: Option<&SimpleFile<String, String>>,
     ) -> Result<Self, CascadeErrors> {
         match file_type.to_string().parse::<FileType>() {
             Ok(ft) => Ok(ft),
             Err(_) => Err(CascadeErrors::from(
                 ErrorItem::make_compile_or_internal_error(
                     "Not a valid file type",
-                    Some(file),
+                    file,
                     file_type.get_range(),
                     "",
                 ),
@@ -413,7 +412,7 @@ fn call_to_fc_rules<'a>(
     types: &'a TypeMap,
     class_perms: &ClassList,
     context: &BlockContext<'_>,
-    file: &'a SimpleFile<String, String>,
+    file: Option<&'a SimpleFile<String, String>>,
 ) -> Result<Vec<FileContextRule<'a>>, CascadeErrors> {
     let target_args = vec![
         FunctionArgument::new(
@@ -448,8 +447,7 @@ fn call_to_fc_rules<'a>(
         )?,
     ];
 
-    let validated_args =
-        validate_arguments(c, &target_args, types, class_perms, context, Some(file))?;
+    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
     let mut args_iter = validated_args.iter();
     let mut ret = Vec::new();
 
@@ -472,7 +470,7 @@ fn call_to_fc_rules<'a>(
             return Err(CascadeErrors::from(
                 ErrorItem::make_compile_or_internal_error(
                     "Invalid context",
-                    Some(file),
+                    file,
                     context_str.get_range(),
                     "Cannot parse this into a context",
                 ),
@@ -535,7 +533,7 @@ pub fn call_to_portcon_rules<'a>(
     types: &TypeMap,
     class_perms: &ClassList,
     context: &BlockContext,
-    file: &SimpleFile<String, String>,
+    file: Option<&SimpleFile<String, String>>,
 ) -> Result<BTreeSet<PortconRule<'a>>, CascadeErrors> {
     let target_args = vec![
         FunctionArgument::new(
@@ -570,8 +568,7 @@ pub fn call_to_portcon_rules<'a>(
         )?,
     ];
 
-    let validated_args =
-        validate_arguments(c, &target_args, types, class_perms, context, Some(file))?;
+    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
     let mut args_iter = validated_args.iter();
 
     let proto = args_iter
@@ -586,7 +583,7 @@ pub fn call_to_portcon_rules<'a>(
         _ => {
             return Err(ErrorItem::make_compile_or_internal_error(
                 "Not a valid protocol",
-                Some(file),
+                file,
                 proto.get_range(),
                 "Valid protocols are \"tcp\", \"udp\", \"dccp\", and \"sctp\"",
             )
@@ -599,7 +596,7 @@ pub fn call_to_portcon_rules<'a>(
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
         .get_name_or_string(context)?;
 
-    let ports = validate_port(&port, Some(file))?;
+    let ports = validate_port(&port, file)?;
 
     let context_str = args_iter
         .next()
@@ -712,7 +709,7 @@ pub struct FileSystemContextRule<'a> {
     pub file_type_range: Range<usize>,
     pub context: Context<'a>,
     pub context_range: Range<usize>,
-    pub file: SimpleFile<String, String>,
+    pub file: Option<SimpleFile<String, String>>,
 }
 impl Eq for FileSystemContextRule<'_> {}
 
@@ -804,7 +801,7 @@ fn call_to_fsc_rules<'a>(
     types: &'a TypeMap,
     class_perms: &ClassList,
     context: &BlockContext<'_>,
-    file: &'a SimpleFile<String, String>,
+    file: Option<&'a SimpleFile<String, String>>,
 ) -> Result<Vec<FileSystemContextRule<'a>>, CascadeErrors> {
     let target_args = vec![
         FunctionArgument::new(
@@ -858,8 +855,7 @@ fn call_to_fsc_rules<'a>(
             None,
         )?,
     ];
-    let validated_args =
-        validate_arguments(c, &target_args, types, class_perms, context, Some(file))?;
+    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
     let mut args_iter = validated_args.iter();
     let mut ret = Vec::new();
 
@@ -877,7 +873,7 @@ fn call_to_fsc_rules<'a>(
             return Err(CascadeErrors::from(
                 ErrorItem::make_compile_or_internal_error(
                     "Not a valid file system type",
-                    Some(file),
+                    file,
                     fscontext_str.get_range(),
                     "File system type must be 'xattr', 'task', 'trans', or 'genfscon'",
                 ),
@@ -894,7 +890,7 @@ fn call_to_fsc_rules<'a>(
             return Err(CascadeErrors::from(
                 ErrorItem::make_compile_or_internal_error(
                     "Invalid context",
-                    Some(file),
+                    file,
                     context_str.get_range(),
                     "Cannot parse this into a context",
                 ),
@@ -931,7 +927,7 @@ fn call_to_fsc_rules<'a>(
                     context_range: context_str_arg
                         .get_range()
                         .ok_or_else(|| CascadeErrors::from(InternalError::new()))?,
-                    file: file.clone(),
+                    file: file.cloned(),
                 });
             }
             let mut errors = CascadeErrors::new();
@@ -939,7 +935,7 @@ fn call_to_fsc_rules<'a>(
                 errors.append(CascadeErrors::from(
                     ErrorItem::make_compile_or_internal_error(
                         "File types can only be provided for 'genfscon'",
-                        Some(file),
+                        file,
                         file_types_arg.get_range(),
                         "",
                     ),
@@ -949,7 +945,7 @@ fn call_to_fsc_rules<'a>(
                 errors.append(CascadeErrors::from(
                     ErrorItem::make_compile_or_internal_error(
                         "File path can only be provided for 'genfscon'",
-                        Some(file),
+                        file,
                         regex_string_arg.get_range(),
                         "",
                     ),
@@ -973,7 +969,7 @@ fn call_to_fsc_rules<'a>(
                     context_range: context_str_arg
                         .get_range()
                         .ok_or_else(|| CascadeErrors::from(InternalError::new()))?,
-                    file: file.clone(),
+                    file: file.cloned(),
                 });
             } else {
                 for file_type in file_types {
@@ -991,7 +987,7 @@ fn call_to_fsc_rules<'a>(
                         context_range: context_str_arg
                             .get_range()
                             .ok_or_else(|| CascadeErrors::from(InternalError::new()))?,
-                        file: file.clone(),
+                        file: file.cloned(),
                     });
                 }
             }
@@ -1006,13 +1002,13 @@ fn call_to_sids<'a>(
     types: &TypeMap,
     class_perms: &ClassList,
     context: &BlockContext<'_>,
-    file: &SimpleFile<String, String>,
+    file: Option<&SimpleFile<String, String>>,
 ) -> Result<Vec<Sid<'a>>, CascadeErrors> {
     if context.in_function_block() {
         return Err(CascadeErrors::from(
             ErrorItem::make_compile_or_internal_error(
                 "initial_context() calls are not valid in functions",
-                Some(file),
+                file,
                 c.name.get_range(),
                 "You may want to place this call directly inside a type definition",
             ),
@@ -1041,8 +1037,7 @@ fn call_to_sids<'a>(
             None,
         )?,
     ];
-    let validated_args =
-        validate_arguments(c, &target_args, types, class_perms, context, Some(file))?;
+    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
     let mut args_iter = validated_args.iter();
 
     let sid_name = args_iter
@@ -1059,7 +1054,7 @@ fn call_to_sids<'a>(
             return Err(CascadeErrors::from(
                 ErrorItem::make_compile_or_internal_error(
                     "Invalid context",
-                    Some(file),
+                    file,
                     context_str.get_range(),
                     "Cannot parse this into a context",
                 ),
@@ -1111,7 +1106,7 @@ fn call_to_domain_transition<'a>(
     types: &'a TypeMap,
     class_perms: &ClassList,
     context: &BlockContext<'_>,
-    file: &'a SimpleFile<String, String>,
+    file: Option<&'a SimpleFile<String, String>>,
 ) -> Result<DomtransRule<'a>, CascadeErrors> {
     let target_args = vec![
         FunctionArgument::new(
@@ -1146,8 +1141,7 @@ fn call_to_domain_transition<'a>(
         )?,
     ];
 
-    let validated_args =
-        validate_arguments(c, &target_args, types, class_perms, context, Some(file))?;
+    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
     let mut args_iter = validated_args.into_iter();
 
     let source = args_iter
@@ -1228,7 +1222,7 @@ fn call_to_resource_transition<'a>(
     types: &'a TypeMap,
     class_perms: &ClassList,
     context: &BlockContext<'_>,
-    file: &'a SimpleFile<String, String>,
+    file: Option<&'a SimpleFile<String, String>>,
 ) -> Result<Vec<ResourcetransRule<'a>>, CascadeErrors> {
     let target_args = vec![
         FunctionArgument::new(
@@ -1283,8 +1277,7 @@ fn call_to_resource_transition<'a>(
         )?,
     ];
 
-    let validated_args =
-        validate_arguments(c, &target_args, types, class_perms, context, Some(file))?;
+    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
     let mut args_iter = validated_args.into_iter();
     let mut ret = Vec::new();
 
@@ -1431,7 +1424,7 @@ pub struct FunctionInfo<'a> {
     pub annotations: BTreeSet<AnnotationInfo>,
     pub original_body: Vec<Statement>,
     pub body: Option<BTreeSet<ValidatedStatement<'a>>>,
-    pub declaration_file: &'a SimpleFile<String, String>,
+    pub declaration_file: Option<&'a SimpleFile<String, String>>,
     pub is_associated_call: bool,
     pub is_derived: bool,
     // This will be initialized to true and prevalidate_functions will set this
@@ -1442,7 +1435,7 @@ pub struct FunctionInfo<'a> {
 
 impl Declared for FunctionInfo<'_> {
     fn get_file(&self) -> Option<SimpleFile<String, String>> {
-        Some(self.declaration_file.clone())
+        self.declaration_file.cloned()
     }
 
     fn get_name_range(&self) -> Option<Range<usize>> {
@@ -1589,7 +1582,7 @@ impl<'a> FunctionInfo<'a> {
             annotations,
             original_body: funcdecl.body.clone(),
             body: None,
-            declaration_file,
+            declaration_file: Some(declaration_file),
             is_associated_call,
             is_derived: false,
             is_castable: true,
@@ -1606,7 +1599,7 @@ impl<'a> FunctionInfo<'a> {
         deriving_type: &'a TypeInfo,
         derive_classes: &BTreeSet<&CascadeString>,
         functions: &FunctionMap<'a>,
-        file: &'a SimpleFile<String, String>,
+        file: Option<&'a SimpleFile<String, String>>,
     ) -> Result<FunctionInfo<'a>, CascadeErrors> {
         let mut first_parent = None;
         let mut derived_body = Vec::new();
@@ -1637,21 +1630,28 @@ impl<'a> FunctionInfo<'a> {
                 Some(first_parent) => {
                     if parent_function.args != first_parent.args {
                         match (
+                            first_parent.declaration_file,
                             first_parent.get_declaration_range(),
+                            parent_function.declaration_file,
                             parent_function.get_declaration_range(),
                         ) {
-                            (Some(first_range), Some(second_range)) => {
+                            (
+                                Some(first_file),
+                                Some(first_range),
+                                Some(second_file),
+                                Some(second_range),
+                            ) => {
                                 return Err(CompileError::new(
                                         &format!("In attempting to derive {name}, parent functions do not have matching prototypes."),
-                                        first_parent.declaration_file,
+                                        first_file,
                                         first_range,
                                         "This parent prototype...",
                                         ).add_additional_message(
-                                            parent_function.declaration_file,
+                                            second_file,
                                             second_range,
                                             "...needs to match this parent prototype").into());
                             }
-                            (_, _) => {
+                            (_, _, _, _) => {
                                 // TODO: One of the mismatched parent signatures is synthetic.
                                 // Output an appropriate error message
                                 todo!()
@@ -1660,21 +1660,28 @@ impl<'a> FunctionInfo<'a> {
                     }
                     if derived_is_associated_call != parent_function.is_associated_call {
                         match (
+                            first_parent.declaration_file,
                             first_parent.get_declaration_range(),
+                            parent_function.declaration_file,
                             parent_function.get_declaration_range(),
                         ) {
-                            (Some(first_range), Some(second_range)) => {
+                            (
+                                Some(first_file),
+                                Some(first_range),
+                                Some(second_file),
+                                Some(second_range),
+                            ) => {
                                 return Err(CompileError::new(
                                         &format!("In attempting to derive {name}, parent functions do not have matching prototypes."),
-                                        first_parent.declaration_file,
+                                        first_file,
                                         first_range,
                                         "This parent is annotated with @associated_call...",
                                         ).add_additional_message(
-                                            parent_function.declaration_file,
+                                            second_file,
                                             second_range,
                                             "...but this parent is not").into());
                             }
-                            (_, _) => {
+                            (_, _, _, _) => {
                                 // TODO: One of the mismatched parent signatures is synthetic.
                                 // Output an appropriate error message
                                 todo!()
@@ -1724,7 +1731,7 @@ impl<'a> FunctionInfo<'a> {
             None => {
                 return Err(ErrorItem::make_compile_or_internal_error(
                     &format!("Unable to derive {name}, because it has no parent implementations"),
-                    Some(file),
+                    file,
                     name.get_range(),
                     &format!("Attempted to derive an implementation of {name}, but couldn't find any derivable parent implementations")).into());
                 // TODO: A hint about the strategy might be useful
@@ -2079,7 +2086,7 @@ impl<'a> ValidatedStatement<'a> {
         class_perms: &ClassList<'a>,
         context: &BlockContext<'_>,
         parent_type: FunctionClass<'a>,
-        file: &'a SimpleFile<String, String>,
+        file: Option<&'a SimpleFile<String, String>>,
     ) -> Result<WithWarnings<BTreeSet<ValidatedStatement<'a>>>, CascadeErrors> {
         let in_resource = match parent_type {
             FunctionClass::Type(t) => t.is_resource(types),
@@ -2096,12 +2103,15 @@ impl<'a> ValidatedStatement<'a> {
                     None => return Err(InternalError::new().into()),
                 };
                 let mut ret = WithWarnings::from(BTreeSet::new());
-                ret.add_warning(Warning::new(
-                    "Drop is not yet implemented",
-                    file,
-                    range,
-                    "These permissions will be allowed",
-                ));
+                if let Some(file) = file {
+                    // No need to warn if this is synthetic
+                    ret.add_warning(Warning::new(
+                        "Drop is not yet implemented",
+                        file,
+                        range,
+                        "These permissions will be allowed",
+                    ));
+                }
                 return Ok(ret);
             }
         }
@@ -2126,7 +2136,7 @@ impl<'a> ValidatedStatement<'a> {
                         Err(CascadeErrors::from(
                             ErrorItem::make_compile_or_internal_error(
                                 "file_context() calls are only allowed in resources",
-                                Some(file),
+                                file,
                                 c.name.get_range(),
                                 "Not allowed here",
                             ),
@@ -2145,7 +2155,7 @@ impl<'a> ValidatedStatement<'a> {
                         Err(CascadeErrors::from(
                             ErrorItem::make_compile_or_internal_error(
                                 "resource_transition() calls are not allowed in domains",
-                                Some(file),
+                                file,
                                 c.name.get_range(),
                                 "Not allowed here",
                             ),
@@ -2164,7 +2174,7 @@ impl<'a> ValidatedStatement<'a> {
                         Err(CascadeErrors::from(
                             ErrorItem::make_compile_or_internal_error(
                                 "fs_context() calls are only allowed in resources",
-                                Some(file),
+                                file,
                                 c.name.get_range(),
                                 "Not allowed here",
                             ),
@@ -2185,7 +2195,7 @@ impl<'a> ValidatedStatement<'a> {
                         Err(CascadeErrors::from(
                             ErrorItem::make_compile_or_internal_error(
                                 "portcon() calls are only allowed in resources",
-                                Some(file),
+                                file,
                                 c.name.get_range(),
                                 "Not allowed here",
                             ),
@@ -2215,7 +2225,7 @@ impl<'a> ValidatedStatement<'a> {
                         Err(CascadeErrors::from(
                             ErrorItem::make_compile_or_internal_error(
                                 "domain_transition() calls are not allowed in resources",
-                                Some(file),
+                                file,
                                 c.name.get_range(),
                                 "Not allowed here",
                             ),
@@ -2246,12 +2256,15 @@ impl<'a> ValidatedStatement<'a> {
                 // The plan would be to recurse and grab the ifs, store both variants
                 // and then resolve the bools later
                 let mut ret = WithWarnings::from(BTreeSet::<ValidatedStatement>::default());
-                ret.add_warning(Warning::new(
-                    "If blocks are not yet implemented",
-                    file,
-                    i.keyword_range.clone(),
-                    "All rules in this if block will be omitted",
-                ));
+                if let Some(file) = file {
+                    // No need to warn if this is synthetic
+                    ret.add_warning(Warning::new(
+                        "If blocks are not yet implemented",
+                        file,
+                        i.keyword_range.clone(),
+                        "All rules in this if block will be omitted",
+                    ));
+                }
                 Ok(ret)
             }
             Statement::OptionalBlock(o) => {
@@ -2345,7 +2358,7 @@ impl ValidatedCall {
         class_perms: &ClassList,
         parent_type: Option<&TypeInfo>,
         context: &BlockContext,
-        file: &SimpleFile<String, String>,
+        file: Option<&SimpleFile<String, String>>,
     ) -> Result<BTreeSet<ValidatedCall>, CascadeErrors> {
         // If we have gotten into the state where the class name is none
         // but the cast_name is some, something has gone wrong.
@@ -2364,7 +2377,7 @@ impl ValidatedCall {
         if function_info.is_virtual {
             return Err(ErrorItem::make_compile_or_internal_error(
                 "Invalid call to virtual function",
-                Some(file),
+                file,
                 call.get_name_range(),
                 "This function is marked as virtual, so it can't be called.",
             )
@@ -2380,7 +2393,7 @@ impl ValidatedCall {
                     Some(function_info),
                     types,
                     context,
-                    Some(file),
+                    file,
                 )?;
             }
         }
@@ -2397,14 +2410,8 @@ impl ValidatedCall {
         let mut arg_lists = Vec::new();
         arg_lists.push(args);
 
-        for arg in validate_arguments(
-            call,
-            &function_info.args,
-            types,
-            class_perms,
-            context,
-            Some(file),
-        )? {
+        for arg in validate_arguments(call, &function_info.args, types, class_perms, context, file)?
+        {
             // We don't know if these are symbols or lists.
             // If they are symbols, we save them as CilArg::Name
             // If they are lists, then we either need to explode our calls to the list count, or in
@@ -2474,7 +2481,7 @@ impl ValidatedCall {
 }
 
 fn make_no_such_function_error(
-    file: &SimpleFile<String, String>,
+    file: Option<&SimpleFile<String, String>>,
     call: &FuncCall,
     types: &TypeMap,
     context: &BlockContext,
@@ -2495,7 +2502,7 @@ fn make_no_such_function_error(
         if types.get(&true_name).is_none() {
             return CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
                 "No such type",
-                Some(file),
+                file,
                 n.get_range(),
                 "",
             ));
@@ -2509,7 +2516,7 @@ fn make_no_such_function_error(
         };
         CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
             "No such member function",
-            Some(file),
+            file,
             call.name.get_range(),
             &format!(
                 "{} does not define a function named {}",
@@ -2519,7 +2526,7 @@ fn make_no_such_function_error(
     } else {
         CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
             "No such function",
-            Some(file),
+            file,
             call.get_name_range(),
             "",
         ))
@@ -3096,7 +3103,7 @@ pub fn initialize_terminated<'a>(
 fn resolve_true_cil_name(
     call: &FuncCall,
     context: &BlockContext,
-    file: &SimpleFile<String, String>,
+    file: Option<&SimpleFile<String, String>>,
     function_map: &FunctionMap,
 ) -> Result<String, CascadeErrors> {
     // The double as_ref() is kind of weird, but I think it's correct.  Option<T>::as_ref() does
@@ -3213,28 +3220,35 @@ pub fn search_for_recursion(
         let mut error: Option<CompileError> = None;
         for func in smallest_loop {
             if let Some(function_info) = function_map.get(func) {
-                // This is the start of the loop, so we want a slightly different message
-                if error.is_none() {
-                    error = Some(add_or_create_compile_error(
-                        error,
-                        "Recursive Function call found",
-                        function_info.declaration_file,
-                        function_info.get_declaration_range().unwrap_or_default(),
-                        "This function is the start of the loop.  There may be additional loops once this is resolved.",
-                    ));
-                    previous_function = function_info.name.clone();
+                if let (Some(file), Some(range)) = (
+                    function_info.declaration_file,
+                    function_info.get_declaration_range(),
+                ) {
+                    // This is the start of the loop, so we want a slightly different message
+                    if error.is_none() {
+                        error = Some(add_or_create_compile_error(
+                            error,
+                            "Recursive Function call found",
+                            file,
+                            range,
+                            "This function is the start of the loop.  There may be additional loops once this is resolved.",
+                        ));
+                        previous_function = function_info.name.clone();
+                    } else {
+                        error = Some(add_or_create_compile_error(
+                            error,
+                            "Recursive Function call found",
+                            file,
+                            range,
+                            &format!(
+                                "This function is called by the previous function: {}.",
+                                previous_function
+                            ),
+                        ));
+                        previous_function = function_info.name.clone();
+                    }
                 } else {
-                    error = Some(add_or_create_compile_error(
-                        error,
-                        "Recursive Function call found",
-                        function_info.declaration_file,
-                        function_info.get_declaration_range().unwrap_or_default(),
-                        &format!(
-                            "This function is called by the previous function: {}.",
-                            previous_function
-                        ),
-                    ));
-                    previous_function = function_info.name.clone();
+                    return Err(InternalError::new().into());
                 }
             }
         }
@@ -3288,7 +3302,7 @@ mod tests {
             annotations: BTreeSet::new(),
             original_body: Vec::new(),
             body: None,
-            declaration_file: &some_file,
+            declaration_file: Some(&some_file),
             is_associated_call: false,
             is_derived: false,
             is_castable: true,

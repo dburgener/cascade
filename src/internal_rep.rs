@@ -1005,7 +1005,7 @@ impl<'a> ClassList<'a> {
         class: &CascadeString,
         permission: &CascadeString,
         context: &BlockContext<'_>,
-        file: &SimpleFile<String, String>,
+        file: Option<&SimpleFile<String, String>>,
     ) -> Result<(), ErrorItem> {
         self.verify_permission_helper(class, permission, context, file, None)
     }
@@ -1019,7 +1019,7 @@ impl<'a> ClassList<'a> {
         class: &CascadeString,
         permission: &CascadeString,
         context: &BlockContext<'_>,
-        file: &SimpleFile<String, String>,
+        file: Option<&SimpleFile<String, String>>,
         original_class: Option<&CascadeString>,
     ) -> Result<(), ErrorItem> {
         let resolved_class = context.get_name_or_string(class);
@@ -1029,7 +1029,7 @@ impl<'a> ClassList<'a> {
             None => {
                 return Err(ErrorItem::make_compile_or_internal_error(
                     "No such object class",
-                    Some(file),
+                    file,
                     class.get_range(),
                     "Invalid class",
                 ));
@@ -1082,7 +1082,7 @@ impl<'a> ClassList<'a> {
                     permission.as_ref(),
                     original_class.unwrap_or(class).as_ref(),
                 ),
-                Some(file),
+                file,
                 permission.get_range(),
                 "Invalid permission",
             ))
@@ -1422,28 +1422,28 @@ mod tests {
         classlist.add_class("process2", vec!["foo"]);
 
         assert!(classlist
-            .verify_permission(&"foo".into(), &"bar".into(), &context, &fake_file)
+            .verify_permission(&"foo".into(), &"bar".into(), &context, Some(&fake_file))
             .is_ok());
         assert!(classlist
-            .verify_permission(&"foo".into(), &"baz".into(), &context, &fake_file)
+            .verify_permission(&"foo".into(), &"baz".into(), &context, Some(&fake_file))
             .is_ok());
         assert!(classlist
             .verify_permission(
                 &"capability".into(),
                 &"cap_bar".into(),
                 &context,
-                &fake_file,
+                Some(&fake_file),
             )
             .is_ok());
         assert!(classlist
-            .verify_permission(&"process".into(), &"foo".into(), &context, &fake_file)
+            .verify_permission(&"process".into(), &"foo".into(), &context, Some(&fake_file))
             .is_ok());
 
         match classlist.verify_permission(
             &CascadeString::new("bar".to_string(), 0..1),
             &CascadeString::new("baz".to_string(), 0..1),
             &context,
-            &fake_file,
+            Some(&fake_file),
         ) {
             Ok(_) => panic!("Nonexistent class verified"),
             Err(e) => {
@@ -1459,7 +1459,7 @@ mod tests {
             &CascadeString::new("foo".to_string(), 0..1),
             &CascadeString::new("cap_bar".to_string(), 0..1),
             &context,
-            &fake_file,
+            Some(&fake_file),
         ) {
             Ok(_) => panic!("Nonexistent permission verified"),
             Err(e) => {

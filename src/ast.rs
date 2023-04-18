@@ -664,7 +664,7 @@ impl FuncCall {
     pub fn get_true_call_name(
         &self,
         context: &Context,
-        file: &SimpleFile<String, String>,
+        file: Option<&SimpleFile<String, String>>,
     ) -> Result<String, CascadeErrors> {
         // The double as_ref() is kind of weird, but I think it's correct.  Option<T>::as_ref() does
         // &T, rather than T.as_ref().  Since Cascade has implemented the as_ref() trait, we need to
@@ -686,7 +686,7 @@ impl FuncCall {
                     return Err(CascadeErrors::from(
                         ErrorItem::make_compile_or_internal_error(
                             "Could not determine class for 'this.' function call",
-                            Some(file),
+                            file,
                             self.get_name_range(),
                             "Perhaps you meant to place the function in a resource or domain?",
                         ),
