@@ -1767,7 +1767,6 @@ impl<'a> FunctionInfo<'a> {
         types: &'a TypeMap,
         class_perms: &'a ClassList,
         context: &BlockContext<'_>,
-        file: &'a SimpleFile<String, String>,
     ) -> Result<WithWarnings<BTreeSet<ValidatedStatement<'a>>>, CascadeErrors> {
         let mut new_body = BTreeSet::new();
         let mut errors = CascadeErrors::new();
@@ -1783,7 +1782,7 @@ impl<'a> FunctionInfo<'a> {
                 class_perms,
                 &local_context,
                 self.class,
-                file,
+                self.declaration_file,
             ) {
                 Ok(s) => new_body.append(&mut s.inner(&mut warnings)),
                 Err(e) => errors.append(e),
