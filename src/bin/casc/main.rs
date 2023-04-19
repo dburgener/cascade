@@ -9,6 +9,7 @@ use args::{Args, ColorArg};
 use package::build_package;
 
 use clap::Parser;
+use is_terminal::IsTerminal;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Error, ErrorKind, Write};
@@ -43,7 +44,7 @@ fn main() -> std::io::Result<()> {
     let color = match args.color {
         Some(ColorArg::Always) => ColorChoice::Always,
         Some(ColorArg::Auto) | None => {
-            if atty::is(atty::Stream::Stderr) {
+            if std::io::stderr().is_terminal() {
                 ColorChoice::Auto
             } else {
                 ColorChoice::Never
