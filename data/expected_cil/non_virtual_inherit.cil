@@ -153,6 +153,7 @@
 (macro bar-read ((type this) (type source)) (allow source this (file (read open getattr))))
 (macro baz-reference_foo ((type this) (type other)) (allow other bar (file (setattr))) (allow other foo (file (setattr))))
 (macro foo-read ((type this) (type source)) (allow source this (file (read open getattr))))
+(macro qux-reference_foo ((type this) (type other)) (allow other bar (file (setattr))) (allow other foo (file (setattr))))
 (call bar-read (bar baz))
 (call bar-read (bar qux))
 (call baz-reference_foo (baz other))
