@@ -621,9 +621,9 @@ fn derive_functions<'a>(
 ) -> Result<(), CascadeErrors> {
     let mut errors = CascadeErrors::new();
     let mut internal_error_on_no_errors = false;
-    let mut saw_derive = false;
-    let mut saw_no_derive = false;
     for t in types.values() {
+        let mut saw_derive = false;
+        let mut saw_no_derive = false;
         for annotation in t.get_annotations() {
             if let AnnotationInfo::Derive(derive_args) = annotation {
                 saw_derive = true;

@@ -211,6 +211,8 @@
 (macro bar-some_associated_call ((type this) (type source)) (allow source this (dir (add_name))))
 (macro bar-write ((type this) (type source)) (allow source this (dir (write))))
 (macro custom_define-read ((type this) (type source)) (allow source this (lnk_file (read))))
+(macro custom_define-some_associated_call ((type this) (type source)) (allow source this (dir (add_name))) (allow source this (file (link))))
+(macro custom_define-write ((type this) (type source)) (allow source this (dir (write))))
 (macro defaults-read ((type this) (type source)) (allow source this (dir (read))) (allow source this (file (read))))
 (macro defaults-some_associated_call ((type this) (type source)) (allow source this (dir (add_name))) (allow source this (file (link))))
 (macro defaults-write ((type this) (type source)) (allow source this (dir (write))))
