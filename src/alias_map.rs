@@ -126,7 +126,22 @@ impl<T: Declared> AliasMap<T> {
     }
 
     pub fn set_aliases(&mut self, aliases: BTreeMap<String, String>) {
-        self.aliases = aliases
+        self.aliases = aliases;
+        for (alias, true_name) in &self.aliases {
+            if let Some(val) = self.get(true_name) {
+                for secondary in val.get_secondary_indices() {
+                    match self.secondary_indices.get_mut(&secondary) {
+                        Some(val) => {
+                            val.insert(alias.clone());
+                        }
+                        None => {
+                            self.secondary_indices
+                                .insert(secondary, BTreeSet::from([alias.clone()]));
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // fallible extend, reject duplicates
