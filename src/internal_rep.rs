@@ -380,7 +380,10 @@ impl TypeInfo {
 
     pub fn defines_function(&self, virtual_function_name: &str, functions: &FunctionMap) -> bool {
         for f in functions.values_by_index(self.name.to_string()) {
-            if f.class == FunctionClass::Type(self) && f.name == virtual_function_name {
+            if f.class == FunctionClass::Type(self)
+                && (f.name == virtual_function_name
+                    || f.name_aliases.contains(virtual_function_name))
+            {
                 return true;
             }
         }

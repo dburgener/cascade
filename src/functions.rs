@@ -1418,6 +1418,7 @@ impl<'a> FunctionClass<'a> {
 #[derive(Debug, Clone)]
 pub struct FunctionInfo<'a> {
     pub name: String,
+    pub name_aliases: BTreeSet<String>,
     pub class: FunctionClass<'a>,
     pub is_virtual: bool,
     pub args: Vec<FunctionArgument<'a>>,
@@ -1576,6 +1577,7 @@ impl<'a> FunctionInfo<'a> {
 
         errors.into_result(FunctionInfo {
             name: funcdecl.name.to_string(),
+            name_aliases: func_aliases.iter().map(|alias| alias.to_string()).collect(),
             class: parent_type,
             is_virtual: funcdecl.is_virtual,
             args,
@@ -1605,6 +1607,7 @@ impl<'a> FunctionInfo<'a> {
         let mut derived_body = Vec::new();
         let mut derived_is_associated_call = false;
         let mut derived_arg_names: Vec<BTreeSet<String>> = Vec::new();
+        let mut derived_name_aliases = BTreeSet::new();
 
         for parent in derive_classes {
             // The parent may or may not have such a function implemented.
@@ -1723,7 +1726,9 @@ impl<'a> FunctionInfo<'a> {
                     .iter()
                     .map(|s| s.get_renamed_statement(&renames))
                     .collect(),
-            )
+            );
+
+            derived_name_aliases.append(&mut parent_function.name_aliases.clone());
         }
 
         let mut derived_args = match first_parent {
@@ -1744,6 +1749,7 @@ impl<'a> FunctionInfo<'a> {
 
         Ok(FunctionInfo {
             name: name.to_string(),
+            name_aliases: derived_name_aliases,
             class: FunctionClass::Type(deriving_type),
             is_virtual: false, // TODO: Check documentation for correct behavior here
             args: derived_args,
@@ -3296,6 +3302,7 @@ mod tests {
         let some_file = SimpleFile::new("bar".to_string(), "bar".to_string());
         let mut fi = FunctionInfo {
             name: "foo".to_string(),
+            name_aliases: BTreeSet::new(),
             class: FunctionClass::Global,
             is_virtual: false,
             args: Vec::new(),
