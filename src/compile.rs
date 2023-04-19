@@ -621,7 +621,8 @@ fn derive_functions<'a>(
 ) -> Result<(), CascadeErrors> {
     let mut errors = CascadeErrors::new();
     let mut internal_error_on_no_errors = false;
-    for t in types.values() {
+    let organized_types = organize_type_map(types)?;
+    for t in organized_types {
         let mut saw_derive = false;
         let mut saw_no_derive = false;
         for annotation in t.get_annotations() {
