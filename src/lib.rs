@@ -1388,6 +1388,16 @@ mod tests {
     }
 
     #[test]
+    fn automatic_derivation_test() {
+        valid_policy_test("automatic_derive.cas",
+
+            &["(macro child-read ((type this) (type source)) (allow source this (dir (read))) (allow source this (file (read))))",
+            "(macro child-setattr ((type this) (type source)) (allow source this (lnk_file (write))))",
+            "(macro child-write ((type this) (type source)) (call child-setattr (this source)))",
+        ], &[], 0);
+    }
+
+    #[test]
     fn invalid_duplicate_inherit() {
         error_policy_test!("duplicate_inherit.cas", 2, ErrorItem::Compile(_));
     }
