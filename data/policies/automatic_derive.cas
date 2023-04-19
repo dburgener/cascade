@@ -1,0 +1,32 @@
+virtual resource foo {
+	fn read(domain source) {
+		allow(source, this, file, read);
+	}
+
+	fn write(domain source) {
+		allow(source, this, file, write);
+	}
+}
+
+resource child inherits foo, bar {
+	@alias(write)
+	fn setattr(domain source) {
+		allow(source, this, lnk_file, write);
+	}
+}
+
+domain dom {
+	child.read();
+}
+
+virtual resource bar {
+	@alias(read)
+	fn list(domain source) {
+		allow(source, this, dir, read);
+	}
+
+	@alias(write)
+	fn setattr(domain source) {
+		allow(source, this, file, write);
+	}
+}
