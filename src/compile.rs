@@ -532,7 +532,6 @@ pub fn validate_functions<'a>(
     mut functions: FunctionMap<'a>,
     types: &'a TypeMap,
     class_perms: &'a ClassList,
-    functions_copy: &'a FunctionMap<'a>,
     context: &'a BlockContext<'a>,
 ) -> Result<WithWarnings<FunctionMap<'a>>, CascadeErrors> {
     let mut errors = CascadeErrors::new();
@@ -547,7 +546,7 @@ pub fn validate_functions<'a>(
     // block, and should have bindings in that block exposed
     for function in functions.values() {
         match function.validate_body(
-            functions_copy,
+            &functions,
             types,
             class_perms,
             context,
@@ -1085,15 +1084,8 @@ pub fn get_reduced_infos(
     prevalidate_functions(&mut new_func_map, &new_type_map)?;
 
     // Validate functions, including deriving functions from annotations
-    let new_func_map_copy = new_func_map.clone(); // In order to read function info while mutating
-    let new_func_map = validate_functions(
-        new_func_map,
-        &new_type_map,
-        classlist,
-        &new_func_map_copy,
-        global_context,
-    )?
-    .inner(&mut warnings);
+    let new_func_map = validate_functions(new_func_map, &new_type_map, classlist, global_context)?
+        .inner(&mut warnings);
 
     // Get the policy rules
     let mut new_policy_rules = get_policy_rules(
