@@ -551,7 +551,7 @@ pub fn validate_functions<'a>(
             context,
             function.declaration_file,
         ) {
-            Ok(ww) => ww.inner(&mut warnings),
+            Ok(ww) => function.body = Some(ww.inner(&mut warnings)),
             Err(e) => {
                 // If the function is derived and fails to validate one of two things have
                 // happened:
