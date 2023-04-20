@@ -1768,7 +1768,7 @@ impl<'a> FunctionInfo<'a> {
         class_perms: &'a ClassList,
         context: &BlockContext<'_>,
         file: &'a SimpleFile<String, String>,
-    ) -> Result<WithWarnings<()>, CascadeErrors> {
+    ) -> Result<WithWarnings<BTreeSet<ValidatedStatement<'a>>>, CascadeErrors> {
         let mut new_body = BTreeSet::new();
         let mut errors = CascadeErrors::new();
         let mut warnings = Warnings::new();
@@ -1791,8 +1791,7 @@ impl<'a> FunctionInfo<'a> {
         }
         let mut nv_rules = create_non_virtual_child_rules(&new_body, types);
         new_body.append(&mut nv_rules);
-        self.body = Some(new_body);
-        errors.into_result(WithWarnings::new((), warnings))
+        errors.into_result(WithWarnings::new(new_body, warnings))
     }
 
     // Generate the sexp for a synthetic alias function calling the real function
