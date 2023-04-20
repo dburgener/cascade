@@ -1763,7 +1763,7 @@ impl<'a> FunctionInfo<'a> {
 
     pub fn validate_body(
         &self,
-        functions: &'a FunctionMap<'a>,
+        functions: &FunctionMap<'a>,
         types: &'a TypeMap,
         class_perms: &'a ClassList,
         context: &BlockContext<'_>,
