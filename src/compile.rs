@@ -1357,6 +1357,19 @@ fn create_synthetic_resource(
     // Creates a synthetic resource declaration.
     let mut dup_res_decl = class.decl.as_ref().ok_or_else(InternalError::new)?.clone();
     let res_name = get_synthetic_resource_name(dom_info, &class.name);
+
+    if let Some(decl) = &dom_info.decl {
+        for expression in &decl.expressions {
+            if let Expression::Decl(Declaration::Type(d)) = expression {
+                if d.is_extension && d.name == class.name {
+                    dup_res_decl
+                        .annotations
+                        .annotations
+                        .append(&mut d.annotations.annotations.clone());
+                }
+            }
+        }
+    }
     dup_res_decl.name = res_name.clone();
     // See TypeDecl::new() in parser.lalrpop for resource inheritance.
     let mut parent_names = if associated_parents.is_empty() {
@@ -1379,10 +1392,11 @@ fn create_synthetic_resource(
     // TODO: This would be cleaner if we convert to AnnotationInfos first and implent the logic as
     // a member funtion in AnnotationInfo
     // See https://github.com/dburgener/cascade/pull/39#discussion_r999510493 for fuller discussion
-    dup_res_decl
-        .annotations
-        .annotations
-        .retain(|a| a.name.as_ref() == "makelist" || a.name.as_ref() == "derive");
+    dup_res_decl.annotations.annotations.retain(|a| {
+        a.name.as_ref() == "makelist"
+            || a.name.as_ref() == "derive"
+            || a.name.as_ref() == "noderive"
+    });
 
     dup_res_decl
         .expressions
