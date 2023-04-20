@@ -541,9 +541,11 @@ pub fn validate_functions<'a>(
         BTreeMap::new();
     let mut derived_function_error = false;
 
+    let mut new_bodies = BTreeMap::new();
+
     // TODO: We pass the global context in here, but most function declarations are in a type
     // block, and should have bindings in that block exposed
-    for function in functions.values_mut() {
+    for function in functions.values() {
         match function.validate_body(
             functions_copy,
             types,
@@ -551,7 +553,9 @@ pub fn validate_functions<'a>(
             context,
             function.declaration_file,
         ) {
-            Ok(ww) => function.body = Some(ww.inner(&mut warnings)),
+            Ok(ww) => {
+                new_bodies.insert(function.get_cil_name(), ww.inner(&mut warnings));
+            }
             Err(e) => {
                 // If the function is derived and fails to validate one of two things have
                 // happened:
@@ -569,6 +573,13 @@ pub fn validate_functions<'a>(
                 }
             }
         }
+    }
+
+    for (k, v) in new_bodies {
+        functions.get_mut(&k).and_then(|f| {
+            f.body = Some(v);
+            None::<FunctionInfo>
+        });
     }
 
     if derived_function_error && errors.is_empty() {

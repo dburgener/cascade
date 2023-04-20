@@ -1762,7 +1762,7 @@ impl<'a> FunctionInfo<'a> {
     }
 
     pub fn validate_body(
-        &mut self,
+        &self,
         functions: &'a FunctionMap<'a>,
         types: &'a TypeMap,
         class_perms: &'a ClassList,
