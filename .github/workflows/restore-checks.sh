@@ -10,4 +10,5 @@ export PATH="${PATH}:${HOME}/.cargo/bin"
 echo "##vso[task.setvariable variable=PATH;]${PATH}"
 
 rustup toolchain install ${VERSION}
+rustup component add rustfmt --toolchain ${VERSION}
 
