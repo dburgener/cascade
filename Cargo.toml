@@ -31,6 +31,13 @@ tar = "0.4"
 termcolor = "1.1"
 thiserror = "1.0"
 walkdir = "2"
+# Work around https://github.com/lalrpop/lalrpop/issues/750
+# This not a dependency of us, but of lalrpop, and lalrpop has the "features"
+# option missing, which was masked by their inclusion of regex 1.7.x, but when
+# regex 1.8.x was published, that exposed the lalrpop bug.  There is a proposed
+# fix PR in lalrpop.  Once it's merged and a workaround is published, remove
+# this
+regex-syntax = { version = "0.6", default_features = false, features = ["unicode"] }
 
 [[bench]]
 name = "cascade_benchmarks"
