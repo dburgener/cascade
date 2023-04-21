@@ -8,6 +8,9 @@ license = "MIT"
 repository = "https://github.com/dburgener/cascade"
 readme = "README.md"
 keywords = [ "selinux" ]
+# Rust 1.66 is required by BTreeSet::pop_first()
+# https://doc.rust-lang.org/stable/std/collections/struct.BTreeSet.html#method.pop_first
+rust-version = "1.66"
 
 [build-dependencies]
 lalrpop = "0.20"
