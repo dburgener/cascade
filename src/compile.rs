@@ -646,7 +646,13 @@ fn derive_functions<'a>(
             }
         }
         if saw_derive && saw_no_derive {
-            // TODO: Add error
+            return Err(ErrorItem::make_compile_or_internal_error(
+                "This type is marked both @derive and @noderive",
+                t.get_file().as_ref(),
+                t.name.get_range(),
+                "@derive and @noderive are incompatible annotations. Remove one.",
+            )
+            .into());
         } else if !saw_derive && !saw_no_derive {
             // Do @derive(*,*)
             let derive_args = vec![Argument::Var("*".into()), Argument::Var("*".into())];

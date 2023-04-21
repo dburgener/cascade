@@ -1569,4 +1569,9 @@ mod tests {
     fn validation_fails_in_list_test() {
         error_policy_test!("class_wrong.cas", 1, ErrorItem::Compile(_));
     }
+
+    #[test]
+    fn derive_no_derive_test() {
+        error_policy_test!("derive_noderive.cas", 1, ErrorItem::Compile(_));
+    }
 }

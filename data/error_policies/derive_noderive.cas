@@ -1,0 +1,9 @@
+virtual resource foo {}
+
+@noderive
+@derive(*,*)
+resource bar inherits foo {}
+
+domain dom {
+	allow(this, bar, file, read);
+}
