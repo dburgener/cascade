@@ -14,8 +14,8 @@ use codespan_reporting::files::SimpleFile;
 
 use crate::alias_map::{AliasMap, Declared};
 use crate::ast::{
-    get_all_func_calls, get_cil_name, Annotation, Argument, BuiltIns, CascadeString,
-    DeclaredArgument, FuncCall, FuncDecl, IpAddr, Port, Statement,
+    get_all_func_calls, get_cil_name, Annotation, Argument, BuiltIns, CascadeString, Declaration,
+    DeclaredArgument, Expression, FuncCall, FuncDecl, IpAddr, Port, Statement,
 };
 use crate::constants;
 use crate::context::{BlockType, Context as BlockContext};
@@ -3105,35 +3105,52 @@ fn validate_argument_error_handler(
                 func_info.unwrap().name, target_argument.param_type.name
             ),
         );
-        // We don't know which class the associated call came from, but that would
-        // be nice information for the user.  So we search through all the associate class
-        // annotations, and find the class we are looking for. Then add that to the
-        // error message.
-        for annotation in arg_typeinfo.get_annotations() {
-            if let AnnotationInfo::Associate(association) = annotation {
-                for resource in &association.resources {
-                    if func_info
-                        .unwrap()
-                        .class
-                        .get_name()
-                        .unwrap_or(&CascadeString::from(""))
-                        .to_string()
-                        .ends_with(&(".".to_owned() + resource.as_ref()))
-                    {
-                        let associate_type_info = types.get(resource.as_ref());
-                        // If for some reason we cannot find the type, its file, or its range, just return the error
-                        // as is and hope the user can figure it out.  Realistically this should never be the case.
-                        if let Some(associate_type_info) = associate_type_info {
-                            if let (Some(file), Some(range)) = (
-                                associate_type_info.get_file(),
-                                associate_type_info.get_name_range(),
-                            ) {
-                                if let ErrorItem::Compile(e) = error {
-                                    error = ErrorItem::Compile(e.add_additional_message(
-                                        &file,
-                                        range,
-                                        "Associated class found here",
-                                    ));
+        if let (file, Some(range)) = (
+            func_info.unwrap().declaration_file,
+            func_info.unwrap().get_name_range(),
+        ) {
+            // We have a valid file name so we can put the associated function directly into the error
+            if !file.name().is_empty() {
+                if let ErrorItem::Compile(e) = error {
+                    error = ErrorItem::Compile(e.add_additional_message(
+                        file,
+                        range,
+                        "Associated function found here",
+                    ));
+                }
+                return error;
+            }
+        }
+
+        // The file name is not valid so we have to go looking through our parents to find out where
+        // we are called from.
+        if let Some(class) = types.get(
+            func_info
+                .unwrap()
+                .class
+                .get_name()
+                .unwrap_or(&CascadeString::from(""))
+                .as_ref(),
+        ) {
+            for parent in &class.inherits {
+                if let Some(parent) = types.get(parent.as_ref()) {
+                    if let Some(decl) = &parent.decl {
+                        for expression in &decl.expressions {
+                            if let Expression::Decl(Declaration::Func(d)) = expression {
+                                if let (Some(file), Some(range)) =
+                                    (parent.get_file(), d.name.get_range())
+                                {
+                                    if d.name == func_info.unwrap().name && !file.name().is_empty()
+                                    {
+                                        if let ErrorItem::Compile(e) = error {
+                                            error = ErrorItem::Compile(e.add_additional_message(
+                                                &file,
+                                                range,
+                                                "Associated function found here",
+                                            ));
+                                        }
+                                        return error;
+                                    }
                                 }
                             }
                         }
@@ -3141,6 +3158,7 @@ fn validate_argument_error_handler(
                 }
             }
         }
+        // We should never hit this but just in case
         return error;
     }
 
