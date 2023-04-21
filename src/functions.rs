@@ -3087,8 +3087,8 @@ fn validate_argument_error_handler(
     file: Option<&SimpleFile<String, String>>,
     func_info: Option<&FunctionInfo>,
 ) -> ErrorItem {
-    // If there is no function call or the call is not an asociated one fall through and return
-    // the "standard" error.
+    // If func_info is none, which means we are validating a built in and cannot be an associated call,
+    // or the call is not an asociated one fall through and return the "standard" error.
     // If this is the associated call we need to do some more digging to give the user a better
     // error message.
     // Unwraps of func_info are safe in this block because of the false return on map_or

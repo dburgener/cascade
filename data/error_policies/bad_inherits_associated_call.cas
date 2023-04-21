@@ -12,3 +12,12 @@ domain bad_userdomain {
 	// Errors because bad_userdomain does not inherit userdomain, which
     // the associated call above requires
 }
+
+domain dom {
+    resource res {
+        @associated_call
+        fn call(userdomain source) {
+            allow(source, this, file, read);
+        }
+    }
+}
