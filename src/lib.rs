@@ -26,6 +26,7 @@ use crate::ast::{Argument, CascadeString, Declaration, Expression, Policy, Polic
 use crate::context::{BlockType, Context};
 use crate::error::{CascadeErrors, InternalError, InvalidMachineError, ParseErrorMsg};
 use crate::functions::{FunctionClass, FunctionMap};
+use crate::internal_rep::InsertExtendTiming;
 use crate::machine::{MachineMap, ModuleMap, ValidatedMachine, ValidatedModule};
 use crate::util::append_set_map;
 pub use crate::warning::Warnings;
@@ -120,9 +121,9 @@ fn compile_machine_policies_internal(
     let mut type_map = compile::get_built_in_types_map()?;
     let mut module_map = ModuleMap::new();
     let mut machine_map = MachineMap::new();
+    let mut extend_annotations = BTreeMap::new();
 
     {
-        let mut extend_annotations = BTreeMap::new();
         // Collect all type declarations
         for p in &policies {
             match compile::extend_type_map(p, &mut type_map) {
@@ -134,7 +135,11 @@ fn compile_machine_policies_internal(
             }
         }
 
-        compile::insert_extend_annotations(&mut type_map, extend_annotations);
+        compile::insert_extend_annotations(
+            &mut type_map,
+            extend_annotations.clone(),
+            InsertExtendTiming::Early,
+        );
 
         // Stops if something went wrong for this major step.
         errors = errors.into_result_self()?;
@@ -191,6 +196,11 @@ fn compile_machine_policies_internal(
             }
             Err(e) => errors.append(e),
         }
+        compile::insert_extend_annotations(
+            &mut type_map,
+            extend_annotations,
+            InsertExtendTiming::Late,
+        );
     }
     // Stops if something went wrong for this major step.
     errors = errors.into_result_self()?;
@@ -1181,14 +1191,12 @@ mod tests {
 
     #[test]
     fn virtual_function_associate_error() {
-        // TODO: This is broken because we miss annotations on nested extensions.  Reenable once
-        // that is fixed
         // TODO: This should be a compile error.  See comment in validate_functions()
-        //error_policy_test!(
-        //    "virtual_function_association.cas",
-        //    1,
-        //    ErrorItem::Internal(_)
-        //);
+        error_policy_test!(
+            "virtual_function_association.cas",
+            1,
+            ErrorItem::Internal(_)
+        );
         //error_policy_test!("virtual_function_association.cas", 1, ErrorItem::Compile(_));
     }
 

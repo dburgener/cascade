@@ -10,7 +10,7 @@ use std::ops::Range;
 use crate::alias_map::Declared;
 use crate::ast::{
     Argument, CascadeString, Declaration, Expression, FuncCall, LetBinding, Machine, Module,
-    PolicyFile, Statement,
+    PolicyFile, Statement, TypeDecl,
 };
 use crate::constants;
 use crate::context::{BindableObject, BlockType, Context as BlockContext};
@@ -24,7 +24,8 @@ use crate::functions::{
 };
 use crate::internal_rep::{
     generate_sid_rules, get_type_annotations, validate_derive_args, Annotated, AnnotationInfo,
-    Associated, ClassList, Context, Sid, TypeInfo, TypeInstance, TypeMap, TypeVar,
+    Associated, ClassList, Context, InsertExtendTiming, Sid, TypeInfo, TypeInstance, TypeMap,
+    TypeVar,
 };
 use crate::machine::{MachineMap, ModuleMap, ValidatedMachine, ValidatedModule};
 use crate::warning::{Warnings, WithWarnings};
@@ -116,6 +117,31 @@ fn generate_cil_headers(
     ret
 }
 
+// Helper function for getting annotations from a typeDecl and adding them to a map
+// of annotations
+// Returns a bool as an error flag
+fn map_annotation_info(
+    file: &SimpleFile<String, String>,
+    key: CascadeString,
+    type_decl: &TypeDecl,
+    warnings: &mut Warnings,
+    errors: &mut CascadeErrors,
+    annotation_map: &mut BTreeMap<CascadeString, BTreeSet<AnnotationInfo>>,
+) -> bool {
+    let mut annotation_infos = match get_type_annotations(file, &type_decl.annotations) {
+        Ok(ai) => ai.inner(warnings),
+        Err(e) => {
+            errors.append(e.into());
+            return false;
+        }
+    };
+    if !annotation_infos.is_empty() {
+        let annotations = annotation_map.entry(key).or_insert_with(BTreeSet::new);
+        annotations.append(&mut annotation_infos);
+    }
+    true
+}
+
 // Extend the type map by inserting new types found in a given policy file
 // Returns a map of annotations on extend {} blocks, so that the real types can be augmented with
 // them after all types have been inserted
@@ -154,7 +180,21 @@ pub fn extend_type_map(
                         });
                         let annotations = ret.entry(t.name.clone()).or_insert_with(BTreeSet::new);
                         annotations.insert(ann_to_insert);
-                    };
+                    } else {
+                        // Insert its annotations
+                        if !map_annotation_info(
+                            &p.file,
+                            CascadeString::from(
+                                t.name.to_string() + "." + associated_type.name.as_ref(),
+                            ),
+                            associated_type,
+                            &mut warnings,
+                            &mut errors,
+                            &mut ret,
+                        ) {
+                            continue;
+                        }
+                    }
                 }
             }
 
@@ -168,16 +208,15 @@ pub fn extend_type_map(
                 }
             } else {
                 // Insert its annotations
-                let mut annotation_infos = match get_type_annotations(&p.file, &t.annotations) {
-                    Ok(ai) => ai.inner(&mut warnings),
-                    Err(e) => {
-                        errors.append(e.into());
-                        continue;
-                    }
-                };
-                if !annotation_infos.is_empty() {
-                    let annotations = ret.entry(t.name.clone()).or_insert_with(BTreeSet::new);
-                    annotations.append(&mut annotation_infos);
+                if !map_annotation_info(
+                    &p.file,
+                    t.name.clone(),
+                    t,
+                    &mut warnings,
+                    &mut errors,
+                    &mut ret,
+                ) {
+                    continue;
                 }
             }
         }
@@ -205,6 +244,7 @@ pub fn verify_extends(p: &PolicyFile, type_map: &TypeMap) -> Result<(), CascadeE
 pub fn insert_extend_annotations(
     type_map: &mut TypeMap,
     extend_annotations: BTreeMap<CascadeString, BTreeSet<AnnotationInfo>>,
+    timing: InsertExtendTiming,
 ) {
     for (annotated_type, annotations) in extend_annotations {
         // If get_mut() returns None, that means we added an annotation on an extend for a type
@@ -212,7 +252,9 @@ pub fn insert_extend_annotations(
         // whether we added an annotation, so we can just skip silently for now
         if let Some(t) = type_map.get_mut(annotated_type.as_ref()) {
             for a in annotations {
-                t.annotations.insert(a);
+                if a.insert_timing() == timing {
+                    t.annotations.insert(a);
+                }
             }
         }
     }
