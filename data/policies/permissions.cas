@@ -4,4 +4,6 @@ domain foo {
 	allow(foo, foo<resource>, capability, mac_override);
 	allow(foo, foo<resource>, capability, [fowner wake_alarm]);
 	allow(foo, bar, file, *);
+
+	allow(foo, self, nscd, [ getpwd getgrp gethost ]);
 }

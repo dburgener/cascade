@@ -716,6 +716,22 @@ pub fn make_classlist() -> ClassList<'static> {
     );
     classlist.add_class("x_synthetic_event", vec!["send", "receive"]);
 
+    classlist.add_class(
+        "nscd",
+        vec![
+            "getpwd",
+            "getgrp",
+            "gethost",
+            "getstat",
+            "admin",
+            "shmempwd",
+            "shmemgrp",
+            "shmemhost",
+            "getserv",
+            "shmemsrv",
+        ],
+    );
+
     classlist
 }
 
