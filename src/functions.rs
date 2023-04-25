@@ -1467,12 +1467,9 @@ impl<'a> FunctionInfo<'a> {
         let mut annotations = BTreeSet::new();
 
         // All member functions automatically have "this" available as a reference to their type
-        let parent_type_name = if let FunctionClass::Type(parent_type) = parent_type {
+        if let FunctionClass::Type(parent_type) = parent_type {
             args.push(FunctionArgument::new_this_argument(parent_type));
-            Some(&parent_type.name)
-        } else {
-            None
-        };
+        }
 
         let class_aliases = match parent_type {
             FunctionClass::Type(ti) => {
@@ -1484,7 +1481,7 @@ impl<'a> FunctionInfo<'a> {
                 }
                 type_aliases
             }
-            FunctionClass::Collection(_) => vec![None], // TODO
+            FunctionClass::Collection(c) => vec![Some(c)], // TODO: aliases on the collection itself
             FunctionClass::Global => vec![None],
         };
 
@@ -1566,7 +1563,7 @@ impl<'a> FunctionInfo<'a> {
         for class_alias in &class_aliases {
             for func_alias in &func_aliases {
                 // No alias for real class and func combo
-                if *class_alias == parent_type_name && *func_alias == &funcdecl.name {
+                if *class_alias == parent_type.get_name() && *func_alias == &funcdecl.name {
                     continue;
                 }
                 annotations.insert(AnnotationInfo::Alias(
@@ -2505,6 +2502,7 @@ fn make_no_such_function_error(
                 return ErrorItem::Internal(InternalError::new()).into();
             }
         };
+        // The below only works if it's a member function of a type
         if types.get(&true_name).is_none() {
             return CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
                 "No such type",

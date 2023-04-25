@@ -11,6 +11,7 @@ resource bar {
 }
 
 collection foobar_reader {
+	@alias(collection_alias)
 	fn read_foo_and_bar(domain source) {
 		foo.read_foo(source);
 		bar.read_bar(source);
@@ -19,4 +20,5 @@ collection foobar_reader {
 
 domain baz {
 	foobar_reader.read_foo_and_bar(this);
+	foobar_reader.collection_alias(this);
 }
