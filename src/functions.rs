@@ -54,6 +54,7 @@ pub fn argument_to_typeinfo<'a>(
     a: &ArgForValidation<'_>,
     types: &'a TypeMap,
     class_perms: &ClassList,
+    expected_type: Option<&TypeInfo>,
     context: &BlockContext<'a>,
     file: Option<&'a SimpleFile<String, String>>,
 ) -> Result<&'a TypeInfo, ErrorItem> {
@@ -68,6 +69,7 @@ pub fn argument_to_typeinfo<'a>(
                 context.in_annotation(),
                 types,
                 class_perms,
+                expected_type,
                 context,
             ),
         },
@@ -86,6 +88,7 @@ pub fn argument_to_typeinfo_vec<'a>(
     arg: &[&CascadeString],
     types: &'a TypeMap,
     class_perms: &ClassList,
+    expected_type: Option<&TypeInfo>,
     context: &BlockContext<'a>,
     file: Option<&'a SimpleFile<String, String>>,
 ) -> Result<Vec<&'a TypeInfo>, ErrorItem> {
@@ -95,6 +98,7 @@ pub fn argument_to_typeinfo_vec<'a>(
             &ArgForValidation::Var(s),
             types,
             class_perms,
+            expected_type,
             context,
             file,
         )?);
@@ -2886,7 +2890,14 @@ fn validate_argument<'a>(
 
         return Ok(TypeInstance::new_cast_instance(
             &arg,
-            argument_to_typeinfo(&arg, types, class_perms, context, file)?,
+            argument_to_typeinfo(
+                &arg,
+                types,
+                class_perms,
+                Some(target_argument.param_type),
+                context,
+                file,
+            )?,
             file,
         ));
     }
@@ -2904,7 +2915,14 @@ fn validate_argument<'a>(
                 Some(t) => t,
                 None => return Err(InternalError::new().into()),
             };
-            let arg_typeinfo_vec = argument_to_typeinfo_vec(v, types, class_perms, context, file)?;
+            let arg_typeinfo_vec = argument_to_typeinfo_vec(
+                v,
+                types,
+                class_perms,
+                Some(target_argument.param_type),
+                context,
+                file,
+            )?;
 
             for (arg_ti, arg) in arg_typeinfo_vec.iter().zip(v.iter()) {
                 if !arg_ti.is_child_or_actual_type(target_argument.param_type, types) {
@@ -2919,7 +2937,14 @@ fn validate_argument<'a>(
             Ok(TypeInstance::new(&arg, target_ti, file, context))
         }
         _ => {
-            let arg_typeinfo = argument_to_typeinfo(&arg, types, class_perms, context, file)?;
+            let arg_typeinfo = argument_to_typeinfo(
+                &arg,
+                types,
+                class_perms,
+                Some(target_argument.param_type),
+                context,
+                file,
+            )?;
             if target_argument.is_list_param {
                 if arg_typeinfo.list_coercion
                     || arg.is_list_symbol(context)

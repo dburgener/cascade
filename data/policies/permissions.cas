@@ -6,4 +6,11 @@ domain foo {
 	allow(foo, bar, file, *);
 
 	allow(foo, self, nscd, [ getpwd getgrp gethost ]);
+
+	// bpf is both a class and permission
+	allow(this, self, capability, bpf);
+	allow(this, self, bpf, map_create);
+	allow(this, read, file, read);
 }
+
+resource read {}

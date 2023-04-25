@@ -730,24 +730,46 @@ pub fn typeinfo_from_string<'a>(
     coerce_strings: bool,
     types: &'a TypeMap,
     class_perms: &ClassList,
+    // We take what we're looking for and prefer that in our search, that way if we have eg a class
+    // and a permission with the same name, we try to validate that first
+    expected_type: Option<&TypeInfo>,
     context: &BlockContext<'a>,
 ) -> Option<&'a TypeInfo> {
+    // If we were passed in a ti of class or perm, we privilege matching those checks in case of
+    // conflicts.  Otherwise, we deprivilege those checks
+    let (expect_class, expect_perm) = if let Some(ti) = expected_type {
+        (ti.is_class(types), ti.is_perm(types))
+    } else {
+        (false, false)
+    };
     if s == "*" {
         // Don't coerce to string
         types.get("*")
     } else if coerce_strings {
         types.get("string")
+    } else if expect_class && class_perms.is_class(s) {
+        // If we expect a class, check that first
+        types.get(constants::CLASS)
+    } else if expect_perm && class_perms.is_perm(s, context) {
+        // Same for perm
+        types.get("perm")
     } else if s == "true" || s == "false" {
         types.get(constants::BOOLEAN)
     } else if s.contains(':') && Context::try_from(s).is_ok() {
         // a bare string could parse as a context, but should fall through
         types.get("context")
-    } else if class_perms.is_class(s) {
-        types.get(constants::CLASS)
-    } else if class_perms.is_perm(s, context) {
-        types.get("perm")
     } else {
-        types.get(&context.convert_arg_this(s))
+        types.get(&context.convert_arg_this(s)).or_else(|| {
+            // If we skipped class and perm checks earlier, do them now
+            if !expect_class && class_perms.is_class(s) {
+                types.get(constants::CLASS)
+            } else if !expect_perm && class_perms.is_perm(s, context) {
+                types.get("perm")
+            } else {
+                // all checks failed, we don't know this string
+                None
+            }
+        })
     }
 }
 
