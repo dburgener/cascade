@@ -245,7 +245,7 @@ impl<'a> Context<'a> {
         let obj = match &arg {
             ArgForValidation::List(v) => {
                 let arg_typeinfo_vec =
-                    argument_to_typeinfo_vec(v, type_map, class_perms, &*self, Some(file))?;
+                    argument_to_typeinfo_vec(v, type_map, class_perms, None, &*self, Some(file))?;
                 // TODO: classes
                 let variant = type_slice_to_variant(&arg_typeinfo_vec, type_map)?;
                 let arg_typeinstance = TypeInstance::new(&arg, variant, Some(file), &*self);
@@ -259,7 +259,7 @@ impl<'a> Context<'a> {
             }
             _ => {
                 let arg_typeinfo =
-                    argument_to_typeinfo(&arg, type_map, class_perms, &*self, Some(file))?;
+                    argument_to_typeinfo(&arg, type_map, class_perms, None, &*self, Some(file))?;
                 let arg_typeinstance = TypeInstance::new(&arg, arg_typeinfo, Some(file), &*self);
                 // TODO: classes
                 if arg_typeinfo.is_perm(type_map) {
