@@ -661,7 +661,7 @@ impl FuncCall {
     }
 
     // Handle this and casting to return the resolved class name
-    pub fn get_true_call_name(
+    pub fn get_true_class_name(
         &self,
         context: &Context,
         file: Option<&SimpleFile<String, String>>,
