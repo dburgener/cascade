@@ -2497,7 +2497,7 @@ fn make_no_such_function_error(
         .copied()
         .flatten()
     {
-        let true_name = match call.get_true_call_name(context, file) {
+        let true_name = match call.get_true_class_name(context, file) {
             Ok(n) => n,
             Err(_) => {
                 // We just called this from resolve_true_cil_name() and should have already errored
@@ -3117,7 +3117,7 @@ fn resolve_true_cil_name(
     // call it explicitly
     // convert_arg_this() handles this.*, then we handle a bare "this", since we'll be combining it
     // with a function name ourselves
-    let true_call_class = call.get_true_call_name(context, file)?;
+    let true_call_class = call.get_true_class_name(context, file)?;
     let original_cil_name = get_cil_name(Some(&CascadeString::from(true_call_class)), &call.name);
 
     // Deal with aliases
