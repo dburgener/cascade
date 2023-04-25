@@ -137,7 +137,7 @@ fn compile_machine_policies_internal(
 
         compile::insert_extend_annotations(
             &mut type_map,
-            extend_annotations.clone(),
+            &extend_annotations,
             InsertExtendTiming::Early,
         );
 
@@ -198,7 +198,7 @@ fn compile_machine_policies_internal(
         }
         compile::insert_extend_annotations(
             &mut type_map,
-            extend_annotations,
+            &extend_annotations,
             InsertExtendTiming::Late,
         );
     }

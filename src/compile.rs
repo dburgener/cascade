@@ -243,7 +243,7 @@ pub fn verify_extends(p: &PolicyFile, type_map: &TypeMap) -> Result<(), CascadeE
 
 pub fn insert_extend_annotations(
     type_map: &mut TypeMap,
-    extend_annotations: BTreeMap<CascadeString, BTreeSet<AnnotationInfo>>,
+    extend_annotations: &BTreeMap<CascadeString, BTreeSet<AnnotationInfo>>,
     timing: InsertExtendTiming,
 ) {
     for (annotated_type, annotations) in extend_annotations {
@@ -253,7 +253,9 @@ pub fn insert_extend_annotations(
         if let Some(t) = type_map.get_mut(annotated_type.as_ref()) {
             for a in annotations {
                 if a.insert_timing() == timing {
-                    t.annotations.insert(a);
+                    // Ideally we would use drain_filter but that is currently unstable.
+                    // TODO once drain_filter is stable convert to using that.
+                    t.annotations.insert(a.clone());
                 }
             }
         }
