@@ -147,6 +147,7 @@
 (macro bar-read_bar ((type this) (type source)) (allow source this (file (read))))
 (macro foo-read_foo ((type this) (type source)) (allow source this (file (read))))
 (macro foobar_reader-read_foo_and_bar ((type source)) (call bar-read_bar (bar source)) (call foo-read_foo (foo source)))
+(macro foobar_reader-collection_alias ((type source)) (call foobar_reader-read_foo_and_bar (source)))
 (call foobar_reader-read_foo_and_bar (baz))
 (sid kernel)
 (sidcontext kernel (system_u system_r kernel_sid ((s0) (s0))))
