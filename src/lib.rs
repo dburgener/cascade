@@ -1599,4 +1599,19 @@ mod tests {
     fn derive_no_derive_test() {
         error_policy_test!("derive_noderive.cas", 1, ErrorItem::Compile(_));
     }
+
+    #[test]
+    fn valid_nested_alias() {
+        valid_policy_test(
+            "nested_alias.cas",
+            &[
+                "(typealias zap)",
+                "(typealiasactual zap bar-tmp)",
+                "(typealias bob)",
+                "(typealiasactual bob abc-xyz)",
+            ],
+            &[],
+            0,
+        );
+    }
 }
