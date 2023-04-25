@@ -14,8 +14,8 @@ use codespan_reporting::files::SimpleFile;
 
 use crate::alias_map::{AliasMap, Declared};
 use crate::ast::{
-    get_all_func_calls, get_cil_name, Annotation, Argument, BuiltIns, CascadeString, Declaration,
-    DeclaredArgument, Expression, FuncCall, FuncDecl, IpAddr, Port, Statement,
+    get_all_func_calls, get_cil_name, Annotation, Argument, BuiltIns, CascadeString,
+    DeclaredArgument, FuncCall, FuncDecl, IpAddr, Port, Statement,
 };
 use crate::constants;
 use crate::context::{BlockType, Context as BlockContext};
@@ -243,6 +243,7 @@ fn call_to_av_rule<'a>(
         context,
         file,
         None,
+        None,
     )?;
     let mut args_iter = validated_args.iter();
 
@@ -467,6 +468,7 @@ fn call_to_fc_rules<'a>(
         context,
         file,
         None,
+        None,
     )?;
     let mut args_iter = validated_args.iter();
     let mut ret = Vec::new();
@@ -595,6 +597,7 @@ pub fn call_to_portcon_rules<'a>(
         class_perms,
         context,
         file,
+        None,
         None,
     )?;
     let mut args_iter = validated_args.iter();
@@ -891,6 +894,7 @@ fn call_to_fsc_rules<'a>(
         context,
         file,
         None,
+        None,
     )?;
     let mut args_iter = validated_args.iter();
     let mut ret = Vec::new();
@@ -1073,7 +1077,16 @@ fn call_to_sids<'a>(
             None,
         )?,
     ];
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file, None)?;
+    let validated_args = validate_arguments(
+        c,
+        &target_args,
+        types,
+        class_perms,
+        context,
+        file,
+        None,
+        None,
+    )?;
     let mut args_iter = validated_args.iter();
 
     let sid_name = args_iter
@@ -1184,6 +1197,7 @@ fn call_to_domain_transition<'a>(
         class_perms,
         context,
         file,
+        None,
         None,
     )?;
     let mut args_iter = validated_args.into_iter();
@@ -1328,6 +1342,7 @@ fn call_to_resource_transition<'a>(
         class_perms,
         context,
         file,
+        None,
         None,
     )?;
     let mut args_iter = validated_args.into_iter();
@@ -2483,6 +2498,7 @@ impl ValidatedCall {
             context,
             file,
             Some(function_info),
+            Some(functions),
         )? {
             // We don't know if these are symbols or lists.
             // If they are symbols, we save them as CilArg::Name
@@ -2623,6 +2639,7 @@ fn expand_arg_lists(
     new_arg_lists
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn validate_arguments<'a>(
     call: &'a FuncCall,
     function_args: &[FunctionArgument],
@@ -2630,8 +2647,9 @@ pub fn validate_arguments<'a>(
     class_perms: &ClassList,
     context: &BlockContext<'a>,
     file: Option<&'a SimpleFile<String, String>>,
-    // This will be None for built-ins
+    // target_func_info and func_map will be None for built-ins
     target_func_info: Option<&FunctionInfo>,
+    func_map: Option<&FunctionMap>,
 ) -> Result<Vec<TypeInstance<'a>>, CascadeErrors> {
     // Member functions start with an invisible"this" argument.  If it does, skip it
     let function_args_iter = function_args.iter().skip_while(|a| a.name == "this");
@@ -2712,6 +2730,7 @@ pub fn validate_arguments<'a>(
             file,
             call.is_avc(),
             target_func_info,
+            func_map,
         )?;
         decl_arg.provided_arg = Some(validated_arg);
     }
@@ -2747,6 +2766,7 @@ pub fn validate_arguments<'a>(
                     file,
                     call.is_avc(),
                     target_func_info,
+                    func_map,
                 )?;
                 args[index].provided_arg = Some(validated_arg);
             }
@@ -2779,6 +2799,7 @@ pub fn validate_arguments<'a>(
                         file,
                         call.is_avc(),
                         target_func_info,
+                        func_map,
                     )?,
                     None => {
                         return Err(ErrorItem::make_compile_or_internal_error(
@@ -2942,6 +2963,7 @@ fn validate_argument<'a>(
     file: Option<&'a SimpleFile<String, String>>,
     is_avc: bool,
     func_info: Option<&FunctionInfo>,
+    func_map: Option<&FunctionMap>,
 ) -> Result<TypeInstance<'a>, ErrorItem> {
     // If there is a cast, we first validate that regardless of whether the actual value is a list
     if let Some(cast_name) = cast_name {
@@ -2957,6 +2979,7 @@ fn validate_argument<'a>(
             file,
             is_avc,
             func_info,
+            func_map,
         )?;
         arg.validate_argcast(&cast_ti, types, context, file)?;
 
@@ -3033,6 +3056,7 @@ fn validate_argument<'a>(
                         file,
                         is_avc,
                         func_info,
+                        func_map,
                     );
                 }
                 return Err(ErrorItem::make_compile_or_internal_error(
@@ -3072,6 +3096,7 @@ fn validate_argument<'a>(
                     types,
                     file,
                     func_info,
+                    func_map,
                 ))
             }
         }
@@ -3086,6 +3111,7 @@ fn validate_argument_error_handler(
     types: &TypeMap,
     file: Option<&SimpleFile<String, String>>,
     func_info: Option<&FunctionInfo>,
+    func_map: Option<&FunctionMap>,
 ) -> ErrorItem {
     // If func_info is none, which means we are validating a built in and cannot be an associated call,
     // or the call is not an asociated one fall through and return the "standard" error.
@@ -3105,7 +3131,7 @@ fn validate_argument_error_handler(
                 func_info.unwrap().name, target_argument.param_type.name
             ),
         );
-        if let (file, Some(range)) = (
+        if let (Some(file), Some(range)) = (
             func_info.unwrap().declaration_file,
             func_info.unwrap().get_name_range(),
         ) {
@@ -3133,25 +3159,16 @@ fn validate_argument_error_handler(
                 .as_ref(),
         ) {
             for parent in &class.inherits {
-                if let Some(parent) = types.get(parent.as_ref()) {
-                    if let Some(decl) = &parent.decl {
-                        for expression in &decl.expressions {
-                            if let Expression::Decl(Declaration::Func(d)) = expression {
-                                if let (Some(file), Some(range)) =
-                                    (parent.get_file(), d.name.get_range())
-                                {
-                                    if d.name == func_info.unwrap().name && !file.name().is_empty()
-                                    {
-                                        if let ErrorItem::Compile(e) = error {
-                                            error = ErrorItem::Compile(e.add_additional_message(
-                                                &file,
-                                                range,
-                                                "Associated function found here",
-                                            ));
-                                        }
-                                        return error;
-                                    }
-                                }
+                if let (Some(parent), Some(func_map)) = (types.get(parent.as_ref()), func_map) {
+                    for f in func_map.values_by_index(parent.name.to_string()) {
+                        if f.name == func_info.unwrap().name {
+                            if let ErrorItem::Compile(e) = error {
+                                error = ErrorItem::Compile(e.add_additional_message(
+                                    // TODO MJS FIX
+                                    f.declaration_file.unwrap(),
+                                    f.get_declaration_range().unwrap_or_default(),
+                                    "Associated function found here",
+                                ));
                             }
                         }
                     }
