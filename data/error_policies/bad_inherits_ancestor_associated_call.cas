@@ -1,0 +1,18 @@
+virtual domain userdomain {}
+
+virtual resource ancestor_user_tmp {
+    @associated_call
+    fn associated_call_from_user_tmp(userdomain source) {
+        allow(source, user_tmp, file, [read]);
+    }
+}
+
+virtual resource user_tmp inherits ancestor_user_tmp {}
+
+resource real_user_tmp inherits user_tmp {}
+
+@associate([real_user_tmp])
+domain bad_userdomain {
+	// Errors because bad_userdomain does not inherit userdomain, which
+    // the associated call above requires
+}

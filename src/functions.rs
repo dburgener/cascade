@@ -3160,16 +3160,20 @@ fn validate_argument_error_handler(
         ) {
             for parent in &class.inherits {
                 if let (Some(parent), Some(func_map)) = (types.get(parent.as_ref()), func_map) {
-                    for f in func_map.values_by_index(parent.name.to_string()) {
-                        if f.name == func_info.unwrap().name {
+                    if let Some(f) =
+                        find_func_in_ancestor(parent, types, &func_info.unwrap().name, func_map)
+                    {
+                        if let (Some(file), Some(range)) =
+                            (f.declaration_file, f.get_declaration_range())
+                        {
                             if let ErrorItem::Compile(e) = error {
                                 error = ErrorItem::Compile(e.add_additional_message(
-                                    // TODO MJS FIX
-                                    f.declaration_file.unwrap(),
-                                    f.get_declaration_range().unwrap_or_default(),
+                                    file,
+                                    range,
                                     "Associated function found here",
                                 ));
                             }
+                            return error;
                         }
                     }
                 }
@@ -3191,6 +3195,31 @@ fn validate_argument_error_handler(
             target_argument.param_type.name
         ),
     )
+}
+
+fn find_func_in_ancestor<'a>(
+    type_info: &'a TypeInfo,
+    types: &'a TypeMap,
+    func_name: &String,
+    func_map: &'a FunctionMap<'a>,
+) -> Option<&'a FunctionInfo<'a>> {
+    // First look at the type passed in
+    for f in func_map.values_by_index(type_info.name.to_string()) {
+        // If our range is None that means we are looking at the synthetic function not the "real" one
+        if f.name == func_name.as_ref() && f.get_declaration_range().is_some() {
+            return Some(f);
+        }
+    }
+
+    // If we dont find it there start looking at our parents
+    for parent in &type_info.inherits {
+        if let Some(parent) = types.get(parent.as_ref()) {
+            return find_func_in_ancestor(parent, types, func_name, func_map);
+        }
+    }
+
+    // If we have fallen through return None
+    None
 }
 
 impl From<&ValidatedCall> for sexp::Sexp {
