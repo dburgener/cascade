@@ -1,0 +1,18 @@
+virtual resource virt_resource {
+	fn read (domain source) {
+		allow(source, this, file, [read]);
+	}
+}
+
+virtual domain daemon {
+	resource runtime inherits virt_resource {}
+
+	fn daemon_read(domain source) {
+		this.runtime<virt_resource>.read(source);
+	}
+}
+
+domain foo inherits daemon {
+	// Policies must contain at least one AV rule
+	allow(foo, resource, file, [read]);
+}

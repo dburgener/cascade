@@ -918,6 +918,17 @@ mod tests {
     #[test]
     fn casting_test() {
         valid_policy_test(
+            "this_casting.cas",
+            &["(macro daemon-runtime-read ((type this) (type source)) (allow source this (file (read))))",
+            "(macro virt_resource-read ((type this) (type source)) (allow source this (file (read))))"],
+            &[],
+            0,
+        )
+    }
+
+    #[test]
+    fn this_casting_test() {
+        valid_policy_test(
             "casting.cas",
             &["(allow foo foo (capability",
             "(allow foo foo (capability2",

@@ -1963,12 +1963,12 @@ fn validate_cast(
     // File used for error output
     file: Option<&SimpleFile<String, String>>,
 ) -> Result<(), ErrorItem> {
-    let err_ret = |r: Option<Range<usize>>| {
+    let err_ret = |msg: &str, r: Option<Range<usize>>| {
         ErrorItem::make_compile_or_internal_error(
             "Cannot typecast",
             file,
             r,
-            "This is not something that can be typecast",
+            format!("This is not something that can be typecast. {}", msg).as_ref(),
         )
     };
 
@@ -1983,11 +1983,19 @@ fn validate_cast(
         }
     }
 
+    // If we are validating a function cast and it is a this.* function call
+    // we need to get the real name first than look in the type map.
+    let true_start_type = if func_call.is_some() && start_type.as_ref().starts_with("this.") {
+        context.convert_arg_this(start_type.as_ref())
+    } else {
+        start_type.to_string()
+    };
+
     let type_info = types
-        .get(start_type.as_ref())
-        .or_else(|| context.symbol_in_context(start_type.as_ref(), types));
+        .get(&true_start_type)
+        .or_else(|| context.symbol_in_context(&true_start_type, types));
     if type_info.is_none() || !type_info.map(|ti| ti.is_setype(types)).unwrap_or(false) {
-        return Err(err_ret(start_type.get_range()));
+        return Err(err_ret("Could not resolve type", start_type.get_range()));
     }
     match (cast_ti, func_call, func_info) {
         (Some(cast_ti), Some(func_call), Some(func_info)) => {
@@ -2010,7 +2018,10 @@ fn validate_cast(
         }
         (Some(_), Some(_), None) => Err(ErrorItem::Internal(InternalError::new())),
         (Some(_), None, Some(_)) => Err(ErrorItem::Internal(InternalError::new())),
-        (None, _, _) => Err(err_ret(start_type.get_range())),
+        (None, _, _) => Err(err_ret(
+            "Could not resolve cast type",
+            start_type.get_range(),
+        )),
         (_, _, _) => Ok(()),
     }
 }
@@ -2802,9 +2813,9 @@ impl<'a> ArgForValidation<'a> {
         context: &BlockContext<'a>,
         file: Option<&SimpleFile<String, String>>,
     ) -> Result<(), ErrorItem> {
-        let err_ret = |r: Option<Range<usize>>| {
+        let err_ret = |msg: &str, r: Option<Range<usize>>| {
             ErrorItem::make_compile_or_internal_error(
-                "Cannot typecast",
+                format!("Cannot typecast {}", msg).as_ref(),
                 file,
                 r,
                 "This is not something that can be typecast",
@@ -2838,13 +2849,13 @@ impl<'a> ArgForValidation<'a> {
                 }
             }
             ArgForValidation::Quote(inner) => {
-                return Err(err_ret(inner.get_range()));
+                return Err(err_ret("Quote", inner.get_range()));
             }
             ArgForValidation::Port(inner) => {
-                return Err(err_ret(inner.get_range()));
+                return Err(err_ret("Port", inner.get_range()));
             }
             ArgForValidation::IpAddr(inner) => {
-                return Err(err_ret(inner.get_range()));
+                return Err(err_ret("Ip Address", inner.get_range()));
             }
         }
 
