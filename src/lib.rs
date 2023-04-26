@@ -1406,7 +1406,11 @@ mod tests {
 
     #[test]
     fn invalid_inherit_ancestor_associated_call() {
-        error_policy_test!("bad_inherits_ancestor_associated_call.cas", 1, ErrorItem::Compile(_));
+        error_policy_test!(
+            "bad_inherits_ancestor_associated_call.cas",
+            1,
+            ErrorItem::Compile(_)
+        );
     }
 
     #[test]
