@@ -19,8 +19,8 @@ use crate::error::{
 };
 use crate::functions::{
     create_non_virtual_child_rules, determine_castable, initialize_castable, initialize_terminated,
-    search_for_recursion, ArgForValidation, FSContextType, FileSystemContextRule, FunctionArgument,
-    FunctionClass, FunctionInfo, FunctionMap, ValidatedCall, ValidatedStatement,
+    search_for_recursion, ArgForValidation, CallerInfo, FSContextType, FileSystemContextRule,
+    FunctionArgument, FunctionClass, FunctionInfo, FunctionMap, ValidatedCall, ValidatedStatement,
 };
 use crate::internal_rep::{
     generate_sid_rules, get_type_annotations, validate_derive_args, Annotated, AnnotationInfo,
@@ -569,6 +569,16 @@ pub fn validate_functions<'a>(
     }
 
     for (k, v) in new_bodies {
+        for statement in &v {
+            if let ValidatedStatement::Call(c) = statement {
+                if let Some(f) = functions.get_mut(&c.cil_name) {
+                    f.callers.insert(CallerInfo::new(
+                        CascadeString::from(k.clone()),
+                        c.args.clone(),
+                    ));
+                }
+            }
+        }
         functions.get_mut(&k).and_then(|f| {
             f.body = Some(v);
             None::<FunctionInfo>

@@ -1459,6 +1459,25 @@ fn check_associated_call(
     Ok(true)
 }
 
+// Information about a caller of a given function
+// Note that deriving PartialEq and Eq means that all elements must be equal (including
+// passed_args) for CallerInfo to be equal.  This is important, because we need exactly one copy of
+// each set of args a given parent calls a function with
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct CallerInfo {
+    caller_name: CascadeString,
+    passed_args: Vec<CilArg>,
+}
+
+impl CallerInfo {
+    pub fn new(caller_name: CascadeString, passed_args: Vec<CilArg>) -> CallerInfo {
+        CallerInfo {
+            caller_name,
+            passed_args,
+        }
+    }
+}
+
 pub type FunctionMap<'a> = AliasMap<FunctionInfo<'a>>;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1509,6 +1528,7 @@ pub struct FunctionInfo<'a> {
     // This will be initialized to true and prevalidate_functions will set this
     // to false if needed.
     pub is_castable: bool,
+    pub callers: BTreeSet<CallerInfo>,
     decl: Option<&'a FuncDecl>,
 }
 
@@ -1663,6 +1683,7 @@ impl<'a> FunctionInfo<'a> {
             is_associated_call,
             is_derived: false,
             is_castable: true,
+            callers: BTreeSet::new(),
             decl: Some(funcdecl),
         })
     }
@@ -1835,6 +1856,7 @@ impl<'a> FunctionInfo<'a> {
             is_associated_call: derived_is_associated_call,
             is_derived: true,
             is_castable: true,
+            callers: BTreeSet::new(),
             decl: None,
         })
     }
@@ -2433,8 +2455,8 @@ impl From<&CilArg> for sexp::Sexp {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ValidatedCall {
-    cil_name: String,
-    args: Vec<CilArg>,
+    pub cil_name: String,
+    pub args: Vec<CilArg>,
 }
 
 impl ValidatedCall {
@@ -3556,6 +3578,7 @@ mod tests {
             is_associated_call: false,
             is_derived: false,
             is_castable: true,
+            callers: BTreeSet::new(),
             decl: None,
         };
 
