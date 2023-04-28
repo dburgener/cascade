@@ -3431,11 +3431,6 @@ fn resolve_true_cil_name(
     file: Option<&SimpleFile<String, String>>,
     function_map: &FunctionMap,
 ) -> Result<String, CascadeErrors> {
-    // The double as_ref() is kind of weird, but I think it's correct.  Option<T>::as_ref() does
-    // &T, rather than T.as_ref().  Since Cascade has implemented the as_ref() trait, we need to
-    // call it explicitly
-    // convert_arg_this() handles this.*, then we handle a bare "this", since we'll be combining it
-    // with a function name ourselves
     let true_call_class = call.get_true_class_name(context, file)?;
     let original_cil_name = get_cil_name(Some(&CascadeString::from(true_call_class)), &call.name);
 
