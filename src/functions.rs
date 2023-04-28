@@ -1962,6 +1962,7 @@ impl TryFrom<&FunctionInfo<'_>> for sexp::Sexp {
                         ValidatedStatement::ResourcetransRule(r) => macro_cil.push(Sexp::from(r)),
                         ValidatedStatement::FscRule(fs) => macro_cil.push(Sexp::try_from(fs)?),
                         ValidatedStatement::DomtransRule(d) => macro_cil.push(Sexp::from(d)),
+                        ValidatedStatement::Deferred(d) => macro_cil.push(Sexp::from(d)),
                         ValidatedStatement::Sid(_) => {
                             return Err(InternalError::new().into());
                         }
@@ -2180,6 +2181,7 @@ pub fn create_non_virtual_child_rules<'a>(
             ValidatedStatement::FcRule(_)
             | ValidatedStatement::PortconRule(_)
             | ValidatedStatement::FscRule(_)
+            | ValidatedStatement::Deferred(_)
             | ValidatedStatement::Sid(_) => BTreeSet::new(),
         };
         ret.append(&mut rules);
@@ -2197,6 +2199,7 @@ pub enum ValidatedStatement<'a> {
     ResourcetransRule(ResourcetransRule<'a>),
     FscRule(FileSystemContextRule<'a>),
     DomtransRule(DomtransRule<'a>),
+    Deferred(DeferredStatement),
     Sid(Sid<'a>),
 }
 
@@ -2411,11 +2414,62 @@ impl TryFrom<&ValidatedStatement<'_>> for sexp::Sexp {
             ValidatedStatement::ResourcetransRule(r) => Ok(Sexp::from(r)),
             ValidatedStatement::FscRule(fs) => Sexp::try_from(fs),
             ValidatedStatement::DomtransRule(d) => Ok(Sexp::from(d)),
+            ValidatedStatement::Deferred(d) => Ok(Sexp::from(d)),
             // Sids in functions should error during validation.  Global SIDs are filtered out
             // before sexp generation
             ValidatedStatement::Sid(_) => Err(InternalError::new().into()),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum DeferredStatement {
+    Call(DeferredCall),
+    Validation, // TODO
+}
+
+impl From<&DeferredStatement> for sexp::Sexp {
+    fn from(d: &DeferredStatement) -> sexp::Sexp {
+        // These push their contents up the call tree to have effects elsewhere.  Here, we put a
+        // note in the output for human reference and debugging
+        match d {
+            DeferredStatement::Call(c) => atom_s(&format!(
+                ";Pushed to callers: ({} {})",
+                c.call_func_name,
+                c.args
+                    .iter()
+                    .map(Sexp::from)
+                    .map(|s| crate::sexp_internal::display_cil(&s))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            )),
+            DeferredStatement::Validation => todo!(),
+        }
+    }
+}
+
+// A call that can't be resolved inside a function, because it depends on knowledge about the
+// callers.
+// These are statements, but generate no sexp.
+// Instead, they push a call up the call stack to all callers to the point where it is
+// unambiguously resolvable
+//
+// A DeferredCall inside a function, generates a DeferredCall in the parent, which may propagate up
+// until the symbol we are deferring on is unambigously resolvable.
+// Functions calls are resolvable if we can unambiguously assign one function name to them.  A
+// function call using an argument (eg "source.read()", where "source" is an argument name) can't
+// be unambiguously resolved (even if the function has only one caller, there may be
+// cross-compiling callers).  Once we propagate up to the actual symbol, we insert the call at that
+// level.
+//
+// In the below struct, the fields correspond to a call of arg_name.call_func_name()
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct DeferredCall {
+    call_func_name: CascadeString,
+    arg_name: CascadeString,
+    // We know the parent function signature, so argument validation can be done before deferring
+    // TODO: We may need to propagate up args as well
+    args: Vec<CilArg>,
 }
 
 // There are two cases we pass through to CIL:
