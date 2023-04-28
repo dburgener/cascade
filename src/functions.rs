@@ -235,7 +235,16 @@ fn call_to_av_rule<'a>(
         )?,
     ];
 
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
+    let validated_args = validate_arguments(
+        c,
+        &target_args,
+        types,
+        class_perms,
+        context,
+        file,
+        None,
+        None,
+    )?;
     let mut args_iter = validated_args.iter();
 
     let source = args_iter
@@ -451,7 +460,16 @@ fn call_to_fc_rules<'a>(
         )?,
     ];
 
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
+    let validated_args = validate_arguments(
+        c,
+        &target_args,
+        types,
+        class_perms,
+        context,
+        file,
+        None,
+        None,
+    )?;
     let mut args_iter = validated_args.iter();
     let mut ret = Vec::new();
 
@@ -572,7 +590,16 @@ pub fn call_to_portcon_rules<'a>(
         )?,
     ];
 
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
+    let validated_args = validate_arguments(
+        c,
+        &target_args,
+        types,
+        class_perms,
+        context,
+        file,
+        None,
+        None,
+    )?;
     let mut args_iter = validated_args.iter();
 
     let proto = args_iter
@@ -859,7 +886,16 @@ fn call_to_fsc_rules<'a>(
             None,
         )?,
     ];
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
+    let validated_args = validate_arguments(
+        c,
+        &target_args,
+        types,
+        class_perms,
+        context,
+        file,
+        None,
+        None,
+    )?;
     let mut args_iter = validated_args.iter();
     let mut ret = Vec::new();
 
@@ -1041,7 +1077,16 @@ fn call_to_sids<'a>(
             None,
         )?,
     ];
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
+    let validated_args = validate_arguments(
+        c,
+        &target_args,
+        types,
+        class_perms,
+        context,
+        file,
+        None,
+        None,
+    )?;
     let mut args_iter = validated_args.iter();
 
     let sid_name = args_iter
@@ -1145,7 +1190,16 @@ fn call_to_domain_transition<'a>(
         )?,
     ];
 
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
+    let validated_args = validate_arguments(
+        c,
+        &target_args,
+        types,
+        class_perms,
+        context,
+        file,
+        None,
+        None,
+    )?;
     let mut args_iter = validated_args.into_iter();
 
     let source = args_iter
@@ -1281,7 +1335,16 @@ fn call_to_resource_transition<'a>(
         )?,
     ];
 
-    let validated_args = validate_arguments(c, &target_args, types, class_perms, context, file)?;
+    let validated_args = validate_arguments(
+        c,
+        &target_args,
+        types,
+        class_perms,
+        context,
+        file,
+        None,
+        None,
+    )?;
     let mut args_iter = validated_args.into_iter();
     let mut ret = Vec::new();
 
@@ -1333,6 +1396,7 @@ fn check_associated_call(
     annotation: &Annotation,
     funcdecl: &FuncDecl,
     file: &SimpleFile<String, String>,
+    types: &TypeMap,
 ) -> Result<bool, ErrorItem> {
     // Checks that annotation arguments match the expected signature.
     let mut annotation_args = annotation.arguments.iter();
@@ -1363,12 +1427,21 @@ fn check_associated_call(
             name: _,
             default: _,
         }) => {
-            if param_type.as_ref() != constants::DOMAIN || *is_list_param {
+            if let Some(type_info) = types.get(param_type.as_ref()) {
+                if !type_info.is_domain(types) || *is_list_param {
+                    return Err(ErrorItem::make_compile_or_internal_error(
+                        "Invalid method signature for @associated_call annotation: invalid first argument",
+                        Some(file),
+                        param_type.get_range(),
+                        "The type of the first method argument must be a domain.",
+                    ));
+                }
+            } else {
                 return Err(ErrorItem::make_compile_or_internal_error(
-                    "Invalid method signature for @associated_call annotation: invalid first argument",
+                    "Invalid method signature for @associated_call annotation: could not resolve first argument type",
                     Some(file),
                     param_type.get_range(),
-                    "The type of the first method argument must be 'domain'.",
+                    "Is the first argument type properly defined?",
                 ));
             }
         }
@@ -1526,7 +1599,7 @@ impl<'a> FunctionInfo<'a> {
                         .into());
                     }
                     is_associated_call =
-                        check_associated_call(annotation, funcdecl, declaration_file)?;
+                        check_associated_call(annotation, funcdecl, declaration_file, types)?;
                     // We're done with these, so no need to save them in the annotations
                 }
                 "alias" => {
@@ -2428,8 +2501,16 @@ impl ValidatedCall {
         let mut arg_lists = Vec::new();
         arg_lists.push(args);
 
-        for arg in validate_arguments(call, &function_info.args, types, class_perms, context, file)?
-        {
+        for arg in validate_arguments(
+            call,
+            &function_info.args,
+            types,
+            class_perms,
+            context,
+            file,
+            Some(function_info),
+            Some(functions),
+        )? {
             // We don't know if these are symbols or lists.
             // If they are symbols, we save them as CilArg::Name
             // If they are lists, then we either need to explode our calls to the list count, or in
@@ -2569,6 +2650,7 @@ fn expand_arg_lists(
     new_arg_lists
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn validate_arguments<'a>(
     call: &'a FuncCall,
     function_args: &[FunctionArgument],
@@ -2576,6 +2658,9 @@ pub fn validate_arguments<'a>(
     class_perms: &ClassList,
     context: &BlockContext<'a>,
     file: Option<&'a SimpleFile<String, String>>,
+    // target_func_info and func_map will be None for built-ins
+    target_func_info: Option<&FunctionInfo>,
+    func_map: Option<&FunctionMap>,
 ) -> Result<Vec<TypeInstance<'a>>, CascadeErrors> {
     // Member functions start with an invisible"this" argument.  If it does, skip it
     let function_args_iter = function_args.iter().skip_while(|a| a.name == "this");
@@ -2655,6 +2740,8 @@ pub fn validate_arguments<'a>(
             context,
             file,
             call.is_avc(),
+            target_func_info,
+            func_map,
         )?;
         decl_arg.provided_arg = Some(validated_arg);
     }
@@ -2689,6 +2776,8 @@ pub fn validate_arguments<'a>(
                     context,
                     file,
                     call.is_avc(),
+                    target_func_info,
+                    func_map,
                 )?;
                 args[index].provided_arg = Some(validated_arg);
             }
@@ -2720,6 +2809,8 @@ pub fn validate_arguments<'a>(
                         context,
                         file,
                         call.is_avc(),
+                        target_func_info,
+                        func_map,
                     )?,
                     None => {
                         return Err(ErrorItem::make_compile_or_internal_error(
@@ -2882,6 +2973,8 @@ fn validate_argument<'a>(
     context: &BlockContext<'a>,
     file: Option<&'a SimpleFile<String, String>>,
     is_avc: bool,
+    func_info: Option<&FunctionInfo>,
+    func_map: Option<&FunctionMap>,
 ) -> Result<TypeInstance<'a>, ErrorItem> {
     // If there is a cast, we first validate that regardless of whether the actual value is a list
     if let Some(cast_name) = cast_name {
@@ -2896,6 +2989,8 @@ fn validate_argument<'a>(
             context,
             file,
             is_avc,
+            func_info,
+            func_map,
         )?;
         arg.validate_argcast(&cast_ti, types, context, file)?;
 
@@ -2971,6 +3066,8 @@ fn validate_argument<'a>(
                         context,
                         file,
                         is_avc,
+                        func_info,
+                        func_map,
                     );
                 }
                 return Err(ErrorItem::make_compile_or_internal_error(
@@ -3003,21 +3100,137 @@ fn validate_argument<'a>(
             if arg_typeinfo.is_child_or_actual_type(target_argument.param_type, types) {
                 Ok(TypeInstance::new(&arg, arg_typeinfo, file, context))
             } else {
-                Err(ErrorItem::make_compile_or_internal_error(
-                    &format!(
-                        "Expected type inheriting {}",
-                        target_argument.param_type.name
-                    ),
+                Err(validate_argument_error_handler(
+                    arg,
+                    arg_typeinfo,
+                    target_argument,
+                    types,
                     file,
-                    arg.get_range(),
-                    &format!(
-                        "This type should inherit {}",
-                        target_argument.param_type.name
-                    ),
+                    func_info,
+                    func_map,
                 ))
             }
         }
     }
+}
+
+// Helper function for handling the error case for validate_argument.
+fn validate_argument_error_handler(
+    arg: ArgForValidation,
+    arg_typeinfo: &TypeInfo,
+    target_argument: &FunctionArgument,
+    types: &TypeMap,
+    file: Option<&SimpleFile<String, String>>,
+    func_info: Option<&FunctionInfo>,
+    func_map: Option<&FunctionMap>,
+) -> ErrorItem {
+    // If func_info is none, which means we are validating a built in and cannot be an associated call,
+    // or the call is not an asociated one fall through and return the "standard" error.
+    // If this is the associated call we need to do some more digging to give the user a better
+    // error message.
+    // Unwraps of func_info are safe in this block because of the false return on map_or
+    if func_info.map_or(false, |f| f.is_associated_call) {
+        let mut error = ErrorItem::make_compile_or_internal_error(
+            &format!(
+                "Expected type inheriting {} for associated call",
+                target_argument.param_type.name
+            ),
+            arg_typeinfo.get_file().as_ref(),
+            arg_typeinfo.name.get_range(),
+            &format!(
+                "An associated call: '{}' was made for this domain.  That call requires this domain inherit {}",
+                func_info.unwrap().name, target_argument.param_type.name
+            ),
+        );
+        if let (Some(file), Some(range)) = (
+            func_info.unwrap().declaration_file,
+            func_info.unwrap().get_name_range(),
+        ) {
+            // We have a valid file name so we can put the associated function directly into the error
+            if !file.name().is_empty() {
+                if let ErrorItem::Compile(e) = error {
+                    error = ErrorItem::Compile(e.add_additional_message(
+                        file,
+                        range,
+                        "Associated function found here",
+                    ));
+                }
+                return error;
+            }
+        }
+
+        // The file name is not valid so we have to go looking through our parents to find out where
+        // we are called from.
+        if let Some(class) = types.get(
+            func_info
+                .unwrap()
+                .class
+                .get_name()
+                .unwrap_or(&CascadeString::from(""))
+                .as_ref(),
+        ) {
+            for parent in &class.inherits {
+                if let (Some(parent), Some(func_map)) = (types.get(parent.as_ref()), func_map) {
+                    if let Some(f) =
+                        find_func_in_ancestor(parent, types, &func_info.unwrap().name, func_map)
+                    {
+                        if let (Some(file), Some(range)) =
+                            (f.declaration_file, f.get_declaration_range())
+                        {
+                            if let ErrorItem::Compile(e) = error {
+                                error = ErrorItem::Compile(e.add_additional_message(
+                                    file,
+                                    range,
+                                    "Associated function found here",
+                                ));
+                            }
+                            return error;
+                        }
+                    }
+                }
+            }
+        }
+        // We should never hit this but just in case
+        return error;
+    }
+
+    ErrorItem::make_compile_or_internal_error(
+        &format!(
+            "Expected type inheriting {}",
+            target_argument.param_type.name
+        ),
+        file,
+        arg.get_range(),
+        &format!(
+            "This type should inherit {}",
+            target_argument.param_type.name
+        ),
+    )
+}
+
+fn find_func_in_ancestor<'a>(
+    type_info: &'a TypeInfo,
+    types: &'a TypeMap,
+    func_name: &String,
+    func_map: &'a FunctionMap<'a>,
+) -> Option<&'a FunctionInfo<'a>> {
+    // First look at the type passed in
+    for f in func_map.values_by_index(type_info.name.to_string()) {
+        // If our range is None that means we are looking at the synthetic function not the "real" one
+        if f.name == func_name.as_ref() && f.get_declaration_range().is_some() {
+            return Some(f);
+        }
+    }
+
+    // If we dont find it there start looking at our parents
+    for parent in &type_info.inherits {
+        if let Some(parent) = types.get(parent.as_ref()) {
+            return find_func_in_ancestor(parent, types, func_name, func_map);
+        }
+    }
+
+    // If we have fallen through return None
+    None
 }
 
 impl From<&ValidatedCall> for sexp::Sexp {

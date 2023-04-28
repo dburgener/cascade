@@ -1382,6 +1382,8 @@ mod tests {
                 "(typeattributeset diamond1-tmp (diamond3-tmp))",
                 "(typeattributeset diamond2-tmp (diamond3-tmp))",
                 "call foo-tmp-not_an_associated_call (foo-tmp nest_child))",
+                "type foo_userdomain-user_tmp",
+                "call foo_userdomain-user_tmp-associated_call_from_user_tmp (foo_userdomain-user_tmp foo_userdomain)",
             ],
             &["(allow nest_parent nest_resource (file (write)))"],
             0,
@@ -1406,6 +1408,20 @@ mod tests {
             "(macro child-setattr ((type this) (type source)) (allow source this (lnk_file (write))))",
             "(macro child-write ((type this) (type source)) (call child-setattr (this source)))",
         ], &[], 0);
+    }
+
+    #[test]
+    fn invalid_inherit_associated_call() {
+        error_policy_test!("bad_inherits_associated_call.cas", 2, ErrorItem::Compile(_));
+    }
+
+    #[test]
+    fn invalid_inherit_ancestor_associated_call() {
+        error_policy_test!(
+            "bad_inherits_ancestor_associated_call.cas",
+            1,
+            ErrorItem::Compile(_)
+        );
     }
 
     #[test]

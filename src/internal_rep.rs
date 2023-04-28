@@ -656,6 +656,8 @@ pub fn validate_derive_args<'a>(
         class_perms,
         &local_context,
         file,
+        None,
+        None,
     )?;
 
     let mut args_iter = valid_args.iter();
