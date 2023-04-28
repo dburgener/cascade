@@ -2347,7 +2347,6 @@ impl<'a> ValidatedStatement<'a> {
                 None => Ok(WithWarnings::from(
                     ValidatedCall::new(c, functions, types, class_perms, context, file)?
                         .into_iter()
-                        .map(|c| ValidatedStatement::Call(Box::new(c)))
                         .collect::<BTreeSet<ValidatedStatement>>(),
                 )),
             },
@@ -2464,6 +2463,20 @@ pub struct DeferredCall {
     args: Vec<CilArg>,
 }
 
+impl DeferredCall {
+    pub fn new(
+        call_func_name: CascadeString,
+        arg_name: CascadeString,
+        args: Vec<CilArg>,
+    ) -> DeferredCall {
+        DeferredCall {
+            call_func_name,
+            arg_name,
+            args,
+        }
+    }
+}
+
 // There are two cases we pass through to CIL:
 // 1. A single identifier (type, class or name)
 // 3. A classpermissionset
@@ -2506,14 +2519,18 @@ pub struct ValidatedCall {
 }
 
 impl ValidatedCall {
-    pub fn new(
+    // Might return a DeferredCall instead
+    // Probably the "correct" thing to do here is make ValidatedCall an enum, with a deferred
+    // variant, but that can be future work
+    #[allow(clippy::new_ret_no_self)]
+    pub fn new<'nothing>(
         call: &FuncCall,
         functions: &FunctionMap<'_>,
         types: &TypeMap,
         class_perms: &ClassList,
         context: &BlockContext,
         file: Option<&SimpleFile<String, String>>,
-    ) -> Result<BTreeSet<ValidatedCall>, CascadeErrors> {
+    ) -> Result<BTreeSet<ValidatedStatement<'nothing>>, CascadeErrors> {
         // If we have gotten into the state where the class name is none
         // but the cast_name is some, something has gone wrong.
         if call.class_name.is_none() && call.cast_name.is_some() {
@@ -2521,6 +2538,7 @@ impl ValidatedCall {
         }
 
         let cil_name = resolve_true_cil_name(call, context, types, file, functions)?;
+
         let function_info = match functions.get(&cil_name) {
             Some(function_info) => function_info,
             None => {
@@ -2549,6 +2567,19 @@ impl ValidatedCall {
                     context,
                     file,
                 )?;
+            }
+        }
+
+        let mut defer = None;
+
+        // If the resolved name is an argument, we should defer instead of trying to find a
+        // function
+        // Note that we need to have validated the function exists first.  The above lookup is
+        // being done against the argument type, which may be a parent function.
+        if let Some(orig_name) = call.cast_name.as_ref().or(call.class_name.as_ref()) {
+            // 'this' is technically an argument, but it locally resolvable
+            if orig_name.as_ref() != "this" && context.symbol_is_arg(orig_name.as_ref()) {
+                defer = Some((&call.name, orig_name));
             }
         }
 
@@ -2599,9 +2630,18 @@ impl ValidatedCall {
 
         let mut ret = BTreeSet::new();
         for args in arg_lists {
-            ret.insert(ValidatedCall {
-                cil_name: cil_name.clone(),
-                args,
+            ret.insert(match defer {
+                None => ValidatedStatement::Call(Box::new(ValidatedCall {
+                    cil_name: cil_name.clone(),
+                    args,
+                })),
+                Some((call_name, arg_name)) => {
+                    ValidatedStatement::Deferred(DeferredStatement::Call(DeferredCall::new(
+                        call_name.clone(),
+                        arg_name.clone(),
+                        args,
+                    )))
+                }
             });
         }
 

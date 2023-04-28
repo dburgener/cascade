@@ -1966,8 +1966,10 @@ pub fn call_derived_associated_calls<'a>(
                                 }
                             };
 
+                            // These are definitely ValidatedCalls, but ValidatedCall::new()
+                            // returns ValidatedStatements, so they can be inserted directly
                             for c in validated_calls {
-                                ret.insert(ValidatedStatement::Call(Box::new(c)));
+                                ret.insert(c);
                             }
                         }
                     }
