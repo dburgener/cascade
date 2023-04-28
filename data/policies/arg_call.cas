@@ -1,0 +1,41 @@
+virtual resource foo {
+	fn read(domain source) {
+		allow(source, this, file, read);
+	}
+}
+
+resource bar1 inherits foo {
+	fn read(domain source) {
+		allow(source, this, dir, read);
+	}
+}
+resource bar2 inherits foo {
+	fn read(domain source) {
+		allow(source, this, lnk_file, read);
+	}
+}
+resource bar3 inherits foo {
+	fn read(domain source) {
+		allow(source, this, chr_file, read);
+	}
+}
+
+resource baz {
+	fn call_source_read(foo source, domain arg) {
+		source.read(arg);
+	}
+}
+
+domain dom1 {
+	baz.call_source_read(bar1, this);
+}
+
+domain dom2 {
+	baz.call_source_read(bar2, this);
+}
+
+domain dom3 {
+	fn call_in_function(domain something) {
+		baz.call_source_read(bar3, this);
+	}
+}
