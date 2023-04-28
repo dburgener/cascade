@@ -19,8 +19,9 @@ use crate::error::{
 };
 use crate::functions::{
     create_non_virtual_child_rules, determine_castable, initialize_castable, initialize_terminated,
-    search_for_recursion, ArgForValidation, CallerInfo, FSContextType, FileSystemContextRule,
-    FunctionArgument, FunctionClass, FunctionInfo, FunctionMap, ValidatedCall, ValidatedStatement,
+    propagate, search_for_recursion, ArgForValidation, CallerInfo, DeferredStatement,
+    FSContextType, FileSystemContextRule, FunctionArgument, FunctionClass, FunctionInfo,
+    FunctionMap, ValidatedCall, ValidatedStatement,
 };
 use crate::internal_rep::{
     generate_sid_rules, get_type_annotations, validate_derive_args, Annotated, AnnotationInfo,
@@ -629,6 +630,27 @@ pub fn validate_functions<'a>(
     errors.into_result(WithWarnings::new(functions, warnings))
 }
 
+fn postvalidate_functions(
+    functions: &mut FunctionMap,
+    types: &TypeMap,
+) -> Result<(), CascadeErrors> {
+    let mut deferrals = BTreeSet::new();
+
+    for (name, fi) in functions.iter() {
+        for statement in fi.body.as_ref().unwrap_or(&BTreeSet::new()) {
+            if let ValidatedStatement::Deferred(defer) = statement {
+                deferrals.insert((name.clone(), defer.clone()));
+            }
+        }
+    }
+
+    for deferral in deferrals {
+        propagate(deferral.0, deferral.1, functions, types);
+    }
+
+    Ok(())
+}
+
 fn derive_functions<'a>(
     functions: &mut FunctionMap<'a>,
     types: &'a TypeMap,
@@ -1122,8 +1144,11 @@ pub fn get_reduced_infos(
     prevalidate_functions(&mut new_func_map, &new_type_map)?;
 
     // Validate functions, including deriving functions from annotations
-    let new_func_map = validate_functions(new_func_map, &new_type_map, classlist, global_context)?
-        .inner(&mut warnings);
+    let mut new_func_map =
+        validate_functions(new_func_map, &new_type_map, classlist, global_context)?
+            .inner(&mut warnings);
+
+    postvalidate_functions(&mut new_func_map, &new_type_map)?;
 
     // Get the policy rules
     let mut new_policy_rules = get_policy_rules(
@@ -2042,7 +2067,54 @@ fn do_rules_pass<'a>(
                     Some(file),
                 ) {
                     Ok(s) => {
-                        ret.append(&mut s.inner(&mut warnings));
+                        let mut statement_set = s.inner(&mut warnings);
+                        for s in &statement_set {
+                            if let ValidatedStatement::Call(c) = s {
+                                let call_fi = match funcs.get(&c.cil_name) {
+                                    Some(fi) => fi,
+                                    None => {
+                                        // We're ready to write this out to CIL as though its a
+                                        // real call.  Something has gone very wrong if we can't
+                                        // find it
+                                        errors.append(
+                                            ErrorItem::Internal(InternalError::new()).into(),
+                                        );
+                                        continue;
+                                    }
+                                };
+                                // Below unwrap is safe, because the functions have all been
+                                // previously validated
+                                for call_statement in call_fi.body.as_ref().unwrap() {
+                                    if let ValidatedStatement::Deferred(DeferredStatement::Call(
+                                        dc,
+                                    )) = call_statement
+                                    {
+                                        // It's okay to use a fake caller name, because
+                                        // make_parent_statment only uses the caller name if
+                                        // deferring further
+                                        let caller_info =
+                                            CallerInfo::new("global".into(), c.args.clone());
+                                        let parent_dc =
+                                            dc.parent_copy(&caller_info.passed_args, call_fi);
+                                        let to_insert = parent_dc.make_parent_statement(
+                                            types,
+                                            call_fi,
+                                            &caller_info,
+                                        );
+                                        if matches!(to_insert, ValidatedStatement::Call(_)) {
+                                            ret.insert(to_insert);
+                                        } else {
+                                            // We can't defer anymore, something has gone wrong
+                                            errors.append(
+                                                ErrorItem::Internal(InternalError::new()).into(),
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        ret.append(&mut statement_set);
                     }
                     Err(e) => errors.append(e),
                 }

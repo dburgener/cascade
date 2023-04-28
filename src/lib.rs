@@ -1024,6 +1024,23 @@ mod tests {
         )
     }
 
+    #[test]
+    fn arg_call_test() {
+        valid_policy_test(
+            "arg_call.cas",
+            &[
+            "(macro dom3-call_in_function ((type this) (type something)) (call bar3-read (foo this)) (call baz-call_source_read (baz bar3 this)))",
+            "(call bar1-read (foo dom1))",
+            "(call bar2-read (foo dom2))",
+            ";Pushed to callers: (source-read foo arg)"
+            ],
+            &[
+            "call source-read"
+            ],
+            0,
+            )
+    }
+
     // This is just a quick compile test.  The true purpose of these files is to actually boot in
     // enforcing mode on a VM.  That is outside the scope of this test, but compile testing is a
     // minimum first step and reasonable to do here.

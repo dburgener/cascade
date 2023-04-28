@@ -1466,7 +1466,7 @@ fn check_associated_call(
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CallerInfo {
     caller_name: CascadeString,
-    passed_args: Vec<CilArg>,
+    pub passed_args: Vec<CilArg>,
 }
 
 impl CallerInfo {
@@ -1932,6 +1932,25 @@ impl<'a> FunctionInfo<'a> {
             Some(name) => format!("{}.{}", name, self.name),
             None => self.name.clone(),
         }
+    }
+
+    // Convert a symbol defined by the arguments of this function into the symbol a given caller
+    // passed into it.  If the symbol is not the name of a function argument, return None
+    pub fn symbol_to_caller_symbol(
+        &self,
+        symbol: &str,
+        caller_args: &Vec<CilArg>,
+    ) -> Option<String> {
+        for (func_arg, caller_arg) in self.args.iter().zip(caller_args) {
+            if func_arg.name == symbol {
+                // We ignore perm lists, for no good reason.  This should probably return a CilArg
+                // and let the parent unpack it
+                if let CilArg::Name(caller_symbol) = caller_arg {
+                    return Some(caller_symbol.clone());
+                }
+            }
+        }
+        None
     }
 }
 
@@ -2419,13 +2438,26 @@ pub enum DeferredStatement {
     Validation, // TODO
 }
 
+impl DeferredStatement {
+    // Copy into the parent context, converting argument names
+    fn parent_copy(&self, caller_args: &Vec<CilArg>, orig_function: &FunctionInfo) -> Self {
+        match self {
+            DeferredStatement::Call(dc) => {
+                DeferredStatement::Call(dc.parent_copy(caller_args, orig_function))
+            }
+            DeferredStatement::Validation => self.clone(),
+        }
+    }
+}
+
 impl From<&DeferredStatement> for sexp::Sexp {
     fn from(d: &DeferredStatement) -> sexp::Sexp {
         // These push their contents up the call tree to have effects elsewhere.  Here, we put a
         // note in the output for human reference and debugging
         match d {
             DeferredStatement::Call(c) => atom_s(&format!(
-                ";Pushed to callers: ({} {})",
+                ";Pushed to callers: ({}-{} {})",
+                c.call_class_name,
                 c.call_func_name,
                 c.args
                     .iter()
@@ -2457,23 +2489,137 @@ impl From<&DeferredStatement> for sexp::Sexp {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DeferredCall {
     call_func_name: CascadeString,
-    arg_name: CascadeString,
+    call_class_name: CascadeString,
     // We know the parent function signature, so argument validation can be done before deferring
-    // TODO: We may need to propagate up args as well
     args: Vec<CilArg>,
+    // If this is true, this is the function that originally created this call.  If false, it's
+    // propagated up from a child.  This is important because if it is false, then we already
+    // propagated to our parents when working on the child
+    original: bool,
 }
 
 impl DeferredCall {
     pub fn new(
         call_func_name: CascadeString,
-        arg_name: CascadeString,
+        call_class_name: CascadeString,
         args: Vec<CilArg>,
     ) -> DeferredCall {
         DeferredCall {
             call_func_name,
-            arg_name,
+            call_class_name,
             args,
+            original: true,
         }
+    }
+
+    pub fn parent_copy(&self, caller_args: &Vec<CilArg>, orig_function: &FunctionInfo) -> Self {
+        DeferredCall {
+            call_func_name: self.call_func_name.clone(),
+            call_class_name: orig_function
+                .symbol_to_caller_symbol(self.call_class_name.as_ref(), caller_args)
+                .unwrap_or(self.call_class_name.to_string())
+                .into(),
+            args: self
+                .args
+                .iter()
+                .cloned()
+                .map(|a| {
+                    if let CilArg::Name(n) = a {
+                        CilArg::Name(
+                            orig_function
+                                .symbol_to_caller_symbol(&n, caller_args)
+                                .unwrap_or(n),
+                        )
+                    } else {
+                        a
+                    }
+                })
+                .collect(),
+            original: false,
+        }
+    }
+
+    pub fn call_class_name(&self) -> &CascadeString {
+        &self.call_class_name
+    }
+
+    pub fn args(&self) -> &Vec<CilArg> {
+        &self.args
+    }
+
+    // Make either a real or deferred call for the parent level
+    pub fn make_parent_statement<'a>(
+        &self,
+        types: &TypeMap,
+        current_function: &FunctionInfo,
+        caller_info: &CallerInfo,
+    ) -> ValidatedStatement<'a> {
+        if types.get(self.call_class_name().as_ref()).is_some() {
+            // We can resolve correctly at this level
+            ValidatedStatement::Call(Box::new(ValidatedCall::from(self)))
+        } else {
+            ValidatedStatement::Deferred(DeferredStatement::Call(
+                self.parent_copy(&caller_info.passed_args, current_function),
+            ))
+        }
+    }
+}
+
+// Make a validated call from the DeferredCall.  In order for this to be valid, all the symbols
+// must be valid where it applies.  Importantly, cil_name must refer to a real function.
+impl From<&DeferredCall> for ValidatedCall {
+    fn from(dc: &DeferredCall) -> Self {
+        ValidatedCall {
+            cil_name: get_cil_name(Some(&dc.call_class_name), &dc.call_func_name),
+            args: dc.args.clone(),
+        }
+    }
+}
+
+// TODO: Clean up unwraps.
+// They should all be safe, since everything is validated at this point, but we should error
+// instead of panicing if we got something wrong
+pub fn propagate(
+    func_name: String,
+    deferral: DeferredStatement,
+    functions: &mut FunctionMap,
+    types: &TypeMap,
+) {
+    let this_fi = functions.get(&func_name).unwrap();
+    // Clone so that we can keep the callers without keeping a reference to functions
+    let callers = this_fi.callers.clone();
+
+    for c in callers {
+        // We have to shadow this in the loop so that we won't hold the immutable borrow over the
+        // mutation below
+        let this_fi = functions.get(&func_name).unwrap();
+        let caller_dc_copy =
+            deferral.parent_copy(&c.passed_args, functions.get(&func_name).unwrap());
+        match &caller_dc_copy {
+            DeferredStatement::Call(dc) => {
+                let mut done = false;
+                let to_insert = dc.make_parent_statement(types, this_fi, &c);
+                if matches!(to_insert, ValidatedStatement::Call(_)) {
+                    done = true;
+                }
+                {
+                    let caller_fi = functions.get_mut(c.caller_name.as_ref()).unwrap();
+                    caller_fi.body.as_mut().unwrap().insert(to_insert);
+                    if done {
+                        return;
+                    }
+                }
+            }
+            DeferredStatement::Validation => {
+                // For future use
+            }
+        }
+        propagate(
+            c.caller_name.to_string(),
+            deferral.parent_copy(&c.passed_args, functions.get(&func_name).unwrap()),
+            functions,
+            types,
+        );
     }
 }
 
@@ -3790,5 +3936,66 @@ mod tests {
                 ],
             ]
         )
+    }
+
+    #[test]
+    fn symbol_to_caller_symbol_test() {
+        let ti = TypeInfo::make_built_in("foo".to_string(), false);
+        let fi = FunctionInfo {
+            name: "foo".to_string(),
+            name_aliases: BTreeSet::new(),
+            class: FunctionClass::Global,
+            is_virtual: false,
+            args: vec![
+                FunctionArgument {
+                    param_type: &ti,
+                    name: "a".to_string(),
+                    is_list_param: false,
+                    default_value: None,
+                },
+                FunctionArgument {
+                    param_type: &ti,
+                    name: "b".to_string(),
+                    is_list_param: false,
+                    default_value: None,
+                },
+                FunctionArgument {
+                    param_type: &ti,
+                    name: "c".to_string(),
+                    is_list_param: false,
+                    default_value: None,
+                },
+            ],
+            annotations: BTreeSet::new(),
+            // doesn't matter here
+            original_body: Vec::new(),
+            body: None,
+            declaration_file: None,
+            is_associated_call: false,
+            is_derived: false,
+            is_castable: false,
+            callers: BTreeSet::new(),
+            decl: None,
+        };
+
+        let caller_args = vec![
+            CilArg::Name("c1".to_string()),
+            CilArg::Name("c2".to_string()),
+            CilArg::Name("c3".to_string()),
+        ];
+
+        assert_eq!(
+            fi.symbol_to_caller_symbol("a", &caller_args),
+            Some("c1".to_string())
+        );
+        assert_eq!(
+            fi.symbol_to_caller_symbol("b", &caller_args),
+            Some("c2".to_string())
+        );
+        assert_eq!(
+            fi.symbol_to_caller_symbol("c", &caller_args),
+            Some("c3".to_string())
+        );
+        assert_eq!(fi.symbol_to_caller_symbol("d", &caller_args), None);
     }
 }
