@@ -522,7 +522,12 @@ pub fn prevalidate_functions(
 
     let (mut terminated_functions, mut nonterm_functions) = initialize_terminated(functions);
 
-    search_for_recursion(&mut terminated_functions, &mut nonterm_functions, functions)?;
+    search_for_recursion(
+        &mut terminated_functions,
+        &mut nonterm_functions,
+        types,
+        functions,
+    )?;
 
     Ok(())
 }
@@ -1951,7 +1956,6 @@ pub fn call_derived_associated_calls<'a>(
                                 funcs,
                                 types,
                                 class_perms,
-                                None,
                                 &local_context,
                                 f.declaration_file,
                             ) {

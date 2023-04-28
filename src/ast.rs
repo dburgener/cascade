@@ -13,6 +13,7 @@ use codespan_reporting::files::SimpleFile;
 use crate::constants;
 use crate::context::Context;
 use crate::error::{CascadeErrors, ErrorItem, ParseErrorMsg};
+use crate::internal_rep::TypeMap;
 
 #[derive(Clone, Debug, Eq)]
 pub struct CascadeString {
@@ -664,6 +665,7 @@ impl FuncCall {
     pub fn get_true_class_name(
         &self,
         context: &Context,
+        types: &TypeMap,
         file: Option<&SimpleFile<String, String>>,
     ) -> Result<String, CascadeErrors> {
         // The double as_ref() is kind of weird, but I think it's correct.  Option<T>::as_ref() does
@@ -671,15 +673,19 @@ impl FuncCall {
         // call it explicitly
         // convert_arg_this() handles this.*, then we handle a bare "this", since we'll be combining it
         // with a function name ourselves
-        let mut true_call_class = context.convert_arg_this(
-            self.cast_name.as_ref().map(|s| s.as_ref()).unwrap_or(
-                self.class_name
-                    .as_ref()
-                    .map(|s| s.as_ref())
-                    .unwrap_or("this"),
-            ),
+        let name_to_resolve = self.cast_name.as_ref().map(|s| s.as_ref()).unwrap_or(
+            self.class_name
+                .as_ref()
+                .map(|s| s.as_ref())
+                .unwrap_or("this"),
         );
-        if &true_call_class == "this" {
+
+        let mut true_call_class = context
+            .symbol_in_context(name_to_resolve, types)
+            .map(|ti| ti.name.to_string())
+            .unwrap_or_else(|| context.convert_arg_this(name_to_resolve));
+
+        if true_call_class == "this" {
             true_call_class = match context.get_parent_type_name() {
                 Some(type_name) => type_name.to_string(),
                 None => {

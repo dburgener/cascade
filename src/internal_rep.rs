@@ -1185,22 +1185,6 @@ impl<'a> ClassList<'a> {
     }
 }
 
-// If the class_name is "this", return the parent type name,
-// else return the class name.  If the class_name is "this", and the parent type is None, that is
-// an internal error
-pub fn convert_class_name_if_this<'a>(
-    class_name: &'a CascadeString,
-    parent_type: Option<&'a TypeInfo>,
-) -> Result<&'a CascadeString, ErrorItem> {
-    if class_name != "this" {
-        return Ok(class_name);
-    }
-    match parent_type {
-        Some(t) => Ok(&t.name),
-        None => Err(InternalError::new().into()),
-    }
-}
-
 // Some TypeInfos have a string associated with a particular instance.  Most are just the TypeInfo
 // These strings might have been generated locally rather than in the source, so we need to own the
 // values so they live long enough
