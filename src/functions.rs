@@ -23,8 +23,8 @@ use crate::error::{
     add_or_create_compile_error, CascadeErrors, CompileError, ErrorItem, InternalError,
 };
 use crate::internal_rep::{
-    convert_class_name_if_this, type_name_from_string, typeinfo_from_string, Annotated,
-    AnnotationInfo, ClassList, Context, Sid, TypeInfo, TypeInstance, TypeMap,
+    type_name_from_string, typeinfo_from_string, Annotated, AnnotationInfo, ClassList, Context,
+    Sid, TypeInfo, TypeInstance, TypeMap,
 };
 use crate::obj_class::perm_list_to_sexp;
 use crate::warning::{Warning, Warnings, WithWarnings};
@@ -2345,18 +2345,10 @@ impl<'a> ValidatedStatement<'a> {
                     }
                 }
                 None => Ok(WithWarnings::from(
-                    ValidatedCall::new(
-                        c,
-                        functions,
-                        types,
-                        class_perms,
-                        parent_type.into(),
-                        context,
-                        file,
-                    )?
-                    .into_iter()
-                    .map(|c| ValidatedStatement::Call(Box::new(c)))
-                    .collect::<BTreeSet<ValidatedStatement>>(),
+                    ValidatedCall::new(c, functions, types, class_perms, context, file)?
+                        .into_iter()
+                        .map(|c| ValidatedStatement::Call(Box::new(c)))
+                        .collect::<BTreeSet<ValidatedStatement>>(),
                 )),
             },
             Statement::LetBinding(_) => {
@@ -2519,7 +2511,6 @@ impl ValidatedCall {
         functions: &FunctionMap<'_>,
         types: &TypeMap,
         class_perms: &ClassList,
-        parent_type: Option<&TypeInfo>,
         context: &BlockContext,
         file: Option<&SimpleFile<String, String>>,
     ) -> Result<BTreeSet<ValidatedCall>, CascadeErrors> {
@@ -2529,7 +2520,7 @@ impl ValidatedCall {
             return Err(ErrorItem::Internal(InternalError::new()).into());
         }
 
-        let cil_name = resolve_true_cil_name(call, context, file, functions)?;
+        let cil_name = resolve_true_cil_name(call, context, types, file, functions)?;
         let function_info = match functions.get(&cil_name) {
             Some(function_info) => function_info,
             None => {
@@ -2564,7 +2555,11 @@ impl ValidatedCall {
         let args = match (&call.class_name, function_info.class) {
             (Some(class_name), FunctionClass::Type(_)) => {
                 vec![CilArg::Name(
-                    convert_class_name_if_this(class_name, parent_type)?.get_cil_name(),
+                    context
+                        .symbol_in_context(class_name.as_ref(), types)
+                        .map(|ti| &ti.name)
+                        .unwrap_or(class_name)
+                        .get_cil_name(),
                 )]
             }
             _ => Vec::new(),
@@ -2662,7 +2657,7 @@ fn make_no_such_function_error(
         .copied()
         .flatten()
     {
-        let true_name = match call.get_true_class_name(context, file) {
+        let true_name = match call.get_true_class_name(context, types, file) {
             Ok(n) => n,
             Err(_) => {
                 // We just called this from resolve_true_cil_name() and should have already errored
@@ -3428,10 +3423,11 @@ pub fn initialize_terminated<'a>(
 fn resolve_true_cil_name(
     call: &FuncCall,
     context: &BlockContext,
+    types: &TypeMap,
     file: Option<&SimpleFile<String, String>>,
     function_map: &FunctionMap,
 ) -> Result<String, CascadeErrors> {
-    let true_call_class = call.get_true_class_name(context, file)?;
+    let true_call_class = call.get_true_class_name(context, types, file)?;
     let original_cil_name = get_cil_name(Some(&CascadeString::from(true_call_class)), &call.name);
 
     // Deal with aliases
@@ -3448,6 +3444,7 @@ fn find_recursion_loop(
     function_map: &FunctionMap,
     terminated_list: &BTreeSet<String>,
     visited: &mut BTreeSet<String>,
+    types: &TypeMap,
 ) -> Result<BTreeSet<String>, CascadeErrors> {
     visited.insert(func.to_string());
     if let Some(function_info) = function_map.get(func) {
@@ -3460,6 +3457,7 @@ fn find_recursion_loop(
             let call_cil_name = resolve_true_cil_name(
                 call,
                 &func_context,
+                types,
                 function_info.declaration_file,
                 function_map,
             )?;
@@ -3473,7 +3471,13 @@ fn find_recursion_loop(
             } else if function_map.get(&call_cil_name).is_none() {
                 continue;
             } else {
-                return find_recursion_loop(&call_cil_name, function_map, terminated_list, visited);
+                return find_recursion_loop(
+                    &call_cil_name,
+                    function_map,
+                    terminated_list,
+                    visited,
+                    types,
+                );
             }
         }
     }
@@ -3483,6 +3487,7 @@ fn find_recursion_loop(
 pub fn search_for_recursion(
     terminated_list: &mut BTreeSet<String>,
     functions: &mut BTreeSet<String>,
+    types: &TypeMap,
     function_map: &FunctionMap,
 ) -> Result<(), CascadeErrors> {
     let mut removed: u64 = 1;
@@ -3501,6 +3506,7 @@ pub fn search_for_recursion(
                     let call_cil_name = resolve_true_cil_name(
                         call,
                         &func_context,
+                        types,
                         function_info.declaration_file,
                         function_map,
                     )?;
@@ -3529,6 +3535,7 @@ pub fn search_for_recursion(
                 function_map,
                 terminated_list,
                 &mut BTreeSet::new(),
+                types,
             )?);
         }
 

@@ -142,6 +142,8 @@
 (type unlabeled_sid)
 (roletype object_r unlabeled_sid)
 (typeattributeset resource (unlabeled_sid))
+(macro bar-read ((type this) (type source)) (allow source this (lnk_file (read))))
+(call bar-read (bar foo))
 (allow foo bar (file (entrypoint)))
 (allow foo bar (file (entrypoint setattr)))
 (allow foo bar (file (read)))

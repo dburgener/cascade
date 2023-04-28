@@ -6,7 +6,11 @@ let binding_with_annotation = read;
 // TODO: We could use some array concatenation syntactic sugar like '+'
 let rw_file_perms = [ read_file_perms write ];
 
-resource bar {}
+resource bar {
+	fn read(domain source) {
+		allow(source, this, lnk_file, read);
+	}
+}
 
 let baz = bar;
 
@@ -21,6 +25,8 @@ domain foo {
 	allow(this, bar, file, internal_binding);
 	allow(this, bar, file, nested_binding);
 	allow(foo, baz, file, write);
+
+	baz.read();
 }
 
 let class_list = [ file dir ];
