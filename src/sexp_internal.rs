@@ -17,7 +17,13 @@ pub fn display_cil(expr: &sexp::Sexp) -> String {
             )
         }
         Sexp::Atom(a) => match a {
-            Atom::S(s) => s.to_string(),
+            Atom::S(s) => {
+                if s.starts_with(';') {
+                    format!("\n{s}\n")
+                } else {
+                    s.to_string()
+                }
+            }
             _ => a.to_string(),
         },
     }
@@ -43,5 +49,11 @@ mod tests {
 
         let cil = atom_s("\"/bin\"");
         assert_eq!(display_cil(&cil), "\"/bin\"".to_string());
+
+        let cil = atom_s(";comment");
+        assert_eq!(display_cil(&cil), "\n;comment\n".to_string());
+
+        let cil = list(&[atom_s("a"), atom_s(";b"), atom_s("c"), atom_s("d")]);
+        assert_eq!(display_cil(&cil), "(a \n;b\n c d)".to_string());
     }
 }
