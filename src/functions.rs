@@ -2576,25 +2576,30 @@ impl From<&DeferredCall> for ValidatedCall {
     }
 }
 
-// TODO: Clean up unwraps.
-// They should all be safe, since everything is validated at this point, but we should error
-// instead of panicing if we got something wrong
 pub fn propagate(
     func_name: String,
     deferral: DeferredStatement,
     functions: &mut FunctionMap,
     types: &TypeMap,
-) {
-    let this_fi = functions.get(&func_name).unwrap();
+) -> Result<(), CascadeErrors> {
+    let this_fi = functions
+        .get(&func_name)
+        .ok_or_else(|| CascadeErrors::from(ErrorItem::Internal(InternalError::new())))?;
     // Clone so that we can keep the callers without keeping a reference to functions
     let callers = this_fi.callers.clone();
 
     for c in callers {
         // We have to shadow this in the loop so that we won't hold the immutable borrow over the
         // mutation below
-        let this_fi = functions.get(&func_name).unwrap();
-        let caller_dc_copy =
-            deferral.parent_copy(&c.passed_args, functions.get(&func_name).unwrap());
+        let this_fi = functions
+            .get(&func_name)
+            .ok_or_else(|| CascadeErrors::from(ErrorItem::Internal(InternalError::new())))?;
+        let caller_dc_copy = deferral.parent_copy(
+            &c.passed_args,
+            functions
+                .get(&func_name)
+                .ok_or_else(|| CascadeErrors::from(ErrorItem::Internal(InternalError::new())))?,
+        );
         match &caller_dc_copy {
             DeferredStatement::Call(dc) => {
                 let mut done = false;
@@ -2603,10 +2608,18 @@ pub fn propagate(
                     done = true;
                 }
                 {
-                    let caller_fi = functions.get_mut(c.caller_name.as_ref()).unwrap();
-                    caller_fi.body.as_mut().unwrap().insert(to_insert);
+                    let caller_fi = functions.get_mut(c.caller_name.as_ref()).ok_or_else(|| {
+                        CascadeErrors::from(ErrorItem::Internal(InternalError::new()))
+                    })?;
+                    caller_fi
+                        .body
+                        .as_mut()
+                        .ok_or_else(|| {
+                            CascadeErrors::from(ErrorItem::Internal(InternalError::new()))
+                        })?
+                        .insert(to_insert);
                     if done {
-                        return;
+                        continue;
                     }
                 }
             }
@@ -2616,11 +2629,17 @@ pub fn propagate(
         }
         propagate(
             c.caller_name.to_string(),
-            deferral.parent_copy(&c.passed_args, functions.get(&func_name).unwrap()),
+            deferral.parent_copy(
+                &c.passed_args,
+                functions.get(&func_name).ok_or_else(|| {
+                    CascadeErrors::from(ErrorItem::Internal(InternalError::new()))
+                })?,
+            ),
             functions,
             types,
-        );
+        )?;
     }
+    Ok(())
 }
 
 // There are two cases we pass through to CIL:
