@@ -1,9 +1,9 @@
 resource foo {
-    resource_transition(this, domain, bar, [quack]);
+    resource_transition(domain, bar, [quack], this);
     
-    resource_transition(aaa, zap, bar, [file]);
-    resource_transition(foo, bbb, bar, [file]);
-    resource_transition(foo, zap, ccc, [file]);
+    resource_transition(zap, bar, [file], aaa);
+    resource_transition(bbb, bar, [file], foo);
+    resource_transition(zap, ccc, [file], foo);
 
     // Policies must include at least one av rule
     allow(domain, foo, file, [read]);
@@ -12,5 +12,5 @@ resource foo {
 resource bar {}
 
 domain zap {
-    resource_transition(foo, this, bar, [file dir]);
+    resource_transition(this, bar, [file dir], foo);
 }

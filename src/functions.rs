@@ -1285,16 +1285,6 @@ fn call_to_resource_transition<'a>(
     let target_args = vec![
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: CascadeString::from(constants::RESOURCE),
-                is_list_param: false,
-                name: CascadeString::from("default"),
-                default: None,
-            },
-            types,
-            None,
-        )?,
-        FunctionArgument::new(
-            &DeclaredArgument {
                 param_type: CascadeString::from(constants::DOMAIN),
                 is_list_param: false,
                 name: CascadeString::from("domain"),
@@ -1315,10 +1305,20 @@ fn call_to_resource_transition<'a>(
         )?,
         FunctionArgument::new(
             &DeclaredArgument {
-                param_type: CascadeString::from(constants::CLASS), //TODO: not really
+                param_type: CascadeString::from(constants::CLASS),
                 is_list_param: true,
-                name: CascadeString::from("file_type"),
-                default: Some(Argument::List(vec![])),
+                name: CascadeString::from("classes"),
+                default: None,
+            },
+            types,
+            None,
+        )?,
+        FunctionArgument::new(
+            &DeclaredArgument {
+                param_type: CascadeString::from(constants::RESOURCE),
+                is_list_param: false,
+                name: CascadeString::from("default"),
+                default: None,
             },
             types,
             None,
@@ -1348,10 +1348,6 @@ fn call_to_resource_transition<'a>(
     let mut args_iter = validated_args.into_iter();
     let mut ret = Vec::new();
 
-    let default = args_iter
-        .next()
-        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
-        .get_name_or_string(context)?;
     let domain = args_iter
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
@@ -1364,6 +1360,11 @@ fn call_to_resource_transition<'a>(
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
         .get_list(context)?;
+    let default = args_iter
+        .next()
+        .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
+        .get_name_or_string(context)?;
+
     let obj_name = args_iter
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
