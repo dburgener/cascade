@@ -3,10 +3,12 @@
 use std::borrow::Borrow;
 use std::collections::BTreeMap;
 use std::iter;
+use std::ops::Range;
 
 use codespan_reporting::files::SimpleFile;
 
 use crate::ast::{Argument, CascadeString};
+use crate::error::ErrorItem;
 use crate::functions::{
     argument_to_typeinfo, argument_to_typeinfo_vec, ArgForValidation, FunctionArgument,
 };
@@ -247,8 +249,26 @@ impl<'a> Context<'a> {
                 let arg_typeinfo_vec =
                     argument_to_typeinfo_vec(v, type_map, class_perms, None, &*self, Some(file))?;
                 // TODO: classes
-                let variant =
-                    type_slice_to_variant(&arg_typeinfo_vec, arg.get_range(), file, type_map)?;
+                let variant = match type_slice_to_variant(&arg_typeinfo_vec, type_map) {
+                    Ok(variant) => variant,
+                    Err(Err(e)) => {
+                        // A non-recoverable error
+                        return Err(e);
+                    }
+                    Err(Ok(types)) => {
+                        // We matched multiple types, try expecting them and see if we can validate
+                        // the whole list
+                        try_arg_to_ti_vec_on_options(
+                            types,
+                            v,
+                            arg.get_range(),
+                            type_map,
+                            class_perms,
+                            &*self,
+                            Some(file),
+                        )?
+                    }
+                };
                 let arg_typeinstance = TypeInstance::new(&arg, variant, Some(file), &*self);
                 if variant.is_perm(type_map) {
                     BindableObject::PermList(v.iter().map(|s| s.to_string()).collect())
@@ -293,6 +313,48 @@ impl<'a> Context<'a> {
     pub fn get_parent_type_name(&self) -> Option<CascadeString> {
         self.parent_type.map(|t| t.name.clone())
     }
+}
+
+// If a list of types could match multiple TIs, try them all, and see which (if any) is consistent
+fn try_arg_to_ti_vec_on_options<'a>(
+    types_to_try: Vec<&str>,
+    args: &[&CascadeString],
+    range: Option<Range<usize>>,
+    types: &'a TypeMap,
+    class_perms: &ClassList,
+    context: &Context<'a>,
+    file: Option<&'a SimpleFile<String, String>>,
+) -> Result<&'a TypeInfo, CascadeErrors> {
+    for type_variant in types_to_try {
+        let arg_typeinfo_vec = match argument_to_typeinfo_vec(
+            args,
+            types,
+            class_perms,
+            types.get(type_variant),
+            context,
+            file,
+        ) {
+            Ok(vec) => vec,
+            Err(_) => continue,
+        };
+        let variant = type_slice_to_variant(&arg_typeinfo_vec, types);
+        match variant {
+            Ok(ti) => {
+                // TODO: See if multiple matched.  If so, this is ambiguous, and we need
+                // the developer to annotate the binding
+                return Ok(ti);
+            }
+            Err(_) => continue,
+        }
+    }
+    // We didn't find an expected type that works
+    Err(ErrorItem::make_compile_or_internal_error(
+        "Could not find a consistent type for list",
+        file,
+        range,
+        "Everything in this list should be the same sort of object",
+    )
+    .into())
 }
 
 #[cfg(test)]

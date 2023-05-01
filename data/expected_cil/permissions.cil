@@ -150,6 +150,8 @@
 (allow foo foo (capability2 (mac_override)))
 (allow foo foo (capability2 (wake_alarm)))
 (allow foo read (file (read)))
+(allow foo read (file (read write setattr)))
+(allow foo read (file (write read getattr)))
 (allow foo self (bpf (map_create)))
 (allow foo self (capability2 (bpf)))
 (allow foo self (nscd (getpwd getgrp gethost)))
