@@ -728,7 +728,7 @@ pub fn make_classlist() -> ClassList<'static> {
             "shmemgrp",
             "shmemhost",
             "getserv",
-            "shmemsrv",
+            "shmemserv",
         ],
     );
 
