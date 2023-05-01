@@ -1817,7 +1817,7 @@ impl<'a> FunctionInfo<'a> {
             }
         };
 
-        for (mut arg, name) in derived_args.iter_mut().zip(derived_arg_names.iter()) {
+        for (arg, name) in derived_args.iter_mut().zip(derived_arg_names.iter()) {
             arg.name = name.iter().cloned().collect::<Vec<String>>().join("_");
         }
 
@@ -2726,7 +2726,7 @@ pub fn validate_arguments<'a>(
     for fa in function_args_iter {
         args.push(ExpectedArgInfo::from(fa));
     }
-    for (call_arg, mut decl_arg) in call_args
+    for (call_arg, decl_arg) in call_args
         .iter()
         .take_while(|a| !matches!(a.0, Argument::Named(_, _)))
         .zip(args.iter_mut())
