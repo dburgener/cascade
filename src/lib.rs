@@ -1495,7 +1495,7 @@ mod tests {
 
     #[test]
     fn invalid_resourcetrans() {
-        error_policy_test!("resource_trans.cas", 5, ErrorItem::Compile(_));
+        error_policy_test!("resource_trans.cas", 4, ErrorItem::Compile(_));
     }
 
     #[test]
