@@ -1,5 +1,5 @@
 resource foo {
-    resource_transition(this, domain, bar, [file dir], "something/test.txt");
+    resource_transition(domain, bar, [file dir], this, "something/test.txt");
 
     // Policies must include at least one av rule
     allow(domain, foo, file, [read]);
