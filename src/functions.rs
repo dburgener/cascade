@@ -2235,25 +2235,12 @@ impl<'a> ValidatedStatement<'a> {
                         ))
                     }
                 }
-                Some(BuiltIns::ResourceTransition) => {
-                    if in_resource {
-                        Ok(WithWarnings::from(
-                            call_to_resource_transition(c, types, class_perms, context, file)?
-                                .into_iter()
-                                .map(ValidatedStatement::ResourcetransRule)
-                                .collect::<BTreeSet<ValidatedStatement>>(),
-                        ))
-                    } else {
-                        Err(CascadeErrors::from(
-                            ErrorItem::make_compile_or_internal_error(
-                                "resource_transition() calls are not allowed in domains",
-                                file,
-                                c.name.get_range(),
-                                "Not allowed here",
-                            ),
-                        ))
-                    }
-                }
+                Some(BuiltIns::ResourceTransition) => Ok(WithWarnings::from(
+                    call_to_resource_transition(c, types, class_perms, context, file)?
+                        .into_iter()
+                        .map(ValidatedStatement::ResourcetransRule)
+                        .collect::<BTreeSet<ValidatedStatement>>(),
+                )),
                 Some(BuiltIns::FileSystemContext) => {
                     if in_resource {
                         Ok(WithWarnings::from(
