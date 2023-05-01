@@ -6,9 +6,5 @@ resource foo {
 }
 
 domain foo_dom {
-	// TODO: Reenable this
-	// The makelist portion of this works.  Unfortunately the part of compilation that translates lists into function arguments is broken.
-	// The current function implementation uses CIL macros under the hood, but it's not clear to me that they can take list arguments.
-	// This will need revisiting to clean up and ensure that lists are supported appropriately
-	//foo.foo_func(foo);
+	foo.foo_func(foo);
 }

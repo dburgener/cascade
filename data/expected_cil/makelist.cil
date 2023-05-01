@@ -143,6 +143,7 @@
 (roletype object_r unlabeled_sid)
 (typeattributeset resource (unlabeled_sid))
 (macro foo-foo_func ((type this) (type types)) (allow foo_dom foo (file (read))))
+(call foo-foo_func (foo foo))
 (sid kernel)
 (sidcontext kernel (system_u system_r kernel_sid ((s0) (s0))))
 (sid security)
