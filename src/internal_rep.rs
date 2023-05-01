@@ -1021,7 +1021,7 @@ impl<'a> ClassList<'a> {
 
     // If main_class exists, set collapsed class.  If it doesn't, noop
     pub fn set_collapsed(&mut self, main_class: &str, collapsed_class: &'a str) {
-        if let Some(mut c) = self.classes.get_mut(main_class) {
+        if let Some(c) = self.classes.get_mut(main_class) {
             c.collapsed_name = Some(collapsed_class);
         }
     }
