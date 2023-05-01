@@ -223,7 +223,7 @@ pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
     let mut built_in_types = TypeMap::new();
     let list_coercions = constants::BUILT_IN_TYPES
         .iter()
-        .map(|t| *t == "perm" || *t == "*");
+        .map(|t| *t == "perm" || *t == "*" || *t == "class");
 
     for (built_in, list_coercion) in constants::BUILT_IN_TYPES.iter().zip(list_coercions) {
         let built_in = built_in.to_string();
