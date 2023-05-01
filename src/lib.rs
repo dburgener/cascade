@@ -763,17 +763,7 @@ mod tests {
 
     #[test]
     fn makelist_test() {
-        let policy_file = [POLICIES_DIR, "makelist.cas"].concat();
-
-        match compile_combined(vec![&policy_file]) {
-            Ok(_p) => {
-                // TODO: reenable.  See note in data/policies/makelist.cas
-                //assert!(p.contains(
-                //    "(call foo.foo_func"
-                //));
-            }
-            Err(e) => panic!("Makelist compilation failed with {}", e),
-        }
+        valid_policy_test("makelist.cas", &["(call foo-foo_func"], &[], 0);
     }
 
     #[test]
