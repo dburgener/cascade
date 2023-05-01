@@ -247,7 +247,8 @@ impl<'a> Context<'a> {
                 let arg_typeinfo_vec =
                     argument_to_typeinfo_vec(v, type_map, class_perms, None, &*self, Some(file))?;
                 // TODO: classes
-                let variant = type_slice_to_variant(&arg_typeinfo_vec, type_map)?;
+                let variant =
+                    type_slice_to_variant(&arg_typeinfo_vec, arg.get_range(), file, type_map)?;
                 let arg_typeinstance = TypeInstance::new(&arg, variant, Some(file), &*self);
                 if variant.is_perm(type_map) {
                     BindableObject::PermList(v.iter().map(|s| s.to_string()).collect())
