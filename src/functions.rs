@@ -1903,6 +1903,14 @@ impl<'a> FunctionInfo<'a> {
     pub fn get_declaration_range(&self) -> Option<Range<usize>> {
         self.decl.and_then(|d| d.name.get_range())
     }
+
+    // Get the name of a call to this function for displaying to the user
+    pub fn get_full_display_name(&self) -> String {
+        match self.class.get_name() {
+            Some(name) => format!("{}.{}", name, self.name),
+            None => self.name.clone(),
+        }
+    }
 }
 
 impl Annotated for &FunctionInfo<'_> {
@@ -3474,7 +3482,7 @@ pub fn search_for_recursion(
                             range,
                             "This function is the start of the loop.  There may be additional loops once this is resolved.",
                         ));
-                        previous_function = function_info.name.clone();
+                        previous_function = function_info.get_full_display_name();
                     } else {
                         error = Some(add_or_create_compile_error(
                             error,
@@ -3482,11 +3490,11 @@ pub fn search_for_recursion(
                             file,
                             range,
                             &format!(
-                                "This function is called by the previous function: {}.",
+                                "This function calls the next function: {}.",
                                 previous_function
                             ),
                         ));
-                        previous_function = function_info.name.clone();
+                        previous_function = function_info.get_full_display_name();
                     }
                 } else {
                     return Err(InternalError::new().into());
