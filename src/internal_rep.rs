@@ -444,6 +444,8 @@ impl From<&TypeInfo> for Option<sexp::Sexp> {
 // Returns an error if no common parent exists.
 pub fn type_slice_to_variant<'a>(
     type_slice: &[&TypeInfo],
+    slice_range: Option<Range<usize>>,
+    file: &SimpleFile<String, String>,
     types: &'a TypeMap,
 ) -> Result<&'a TypeInfo, CascadeErrors> {
     let first_type_variant = match type_slice.first() {
@@ -451,7 +453,11 @@ pub fn type_slice_to_variant<'a>(
             Some(v) => v,
             None => return Err(ErrorItem::Internal(InternalError::new()).into()),
         },
-        None => todo!(), // TODO: Return error
+        None => {
+            // We were passed an empty slice.  This should theoretically be impossible because
+            // Cascade doesn't support empty lists at the parser level
+            return Err(ErrorItem::Internal(InternalError::new()).into());
+        }
     };
 
     for ti in type_slice {
@@ -460,7 +466,16 @@ pub fn type_slice_to_variant<'a>(
             None => return Err(ErrorItem::Internal(InternalError::new()).into()),
         };
         if ti_variant != first_type_variant {
-            todo!() // TODO: Return error
+            return Err(ErrorItem::make_compile_or_internal_error(
+                "This list is not all the same type",
+                Some(file),
+                slice_range,
+                &format!(
+                    "The first item is of type {}, but a subsequent item is of type {}",
+                    first_type_variant, ti_variant
+                ),
+            )
+            .into());
         }
     }
     match types.get(first_type_variant) {

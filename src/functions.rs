@@ -2884,7 +2884,7 @@ impl<'a> ArgForValidation<'a> {
         ArgForValidation::List(vec)
     }
 
-    fn get_range(&self) -> Option<Range<usize>> {
+    pub fn get_range(&self) -> Option<Range<usize>> {
         match self {
             ArgForValidation::Var(s) => s.get_range(),
             ArgForValidation::List(v) => CascadeString::slice_to_range(v),
