@@ -442,45 +442,40 @@ impl From<&TypeInfo> for Option<sexp::Sexp> {
 // It may be possible in some situations to infer the type more specifically, and we may also want
 // to allow the user to specify a type for the bound type in the declaration.
 // Returns an error if no common parent exists.
-pub fn type_slice_to_variant<'a>(
-    type_slice: &[&TypeInfo],
-    slice_range: Option<Range<usize>>,
-    file: &SimpleFile<String, String>,
+// If no common parent exists, return a list of the variants found if possible, else InternalError
+pub fn type_slice_to_variant<'a, 'b>(
+    type_slice: &[&'b TypeInfo],
     types: &'a TypeMap,
-) -> Result<&'a TypeInfo, CascadeErrors> {
+) -> Result<&'a TypeInfo, Result<Vec<&'b str>, CascadeErrors>> {
     let first_type_variant = match type_slice.first() {
         Some(t) => match t.get_built_in_variant(types) {
             Some(v) => v,
-            None => return Err(ErrorItem::Internal(InternalError::new()).into()),
+            None => return Err(Err(ErrorItem::Internal(InternalError::new()).into())),
         },
         None => {
             // We were passed an empty slice.  This should theoretically be impossible because
             // Cascade doesn't support empty lists at the parser level
-            return Err(ErrorItem::Internal(InternalError::new()).into());
+            return Err(Err(ErrorItem::Internal(InternalError::new()).into()));
         }
     };
 
+    let mut extra_types = Vec::new();
     for ti in type_slice {
         let ti_variant = match ti.get_built_in_variant(types) {
             Some(v) => v,
-            None => return Err(ErrorItem::Internal(InternalError::new()).into()),
+            None => return Err(Err(ErrorItem::Internal(InternalError::new()).into())),
         };
         if ti_variant != first_type_variant {
-            return Err(ErrorItem::make_compile_or_internal_error(
-                "This list is not all the same type",
-                Some(file),
-                slice_range,
-                &format!(
-                    "The first item is of type {}, but a subsequent item is of type {}",
-                    first_type_variant, ti_variant
-                ),
-            )
-            .into());
+            extra_types.push(ti_variant);
         }
+    }
+    if !extra_types.is_empty() {
+        extra_types.push(first_type_variant);
+        return Err(Ok(extra_types));
     }
     match types.get(first_type_variant) {
         Some(t) => Ok(t),
-        None => Err(ErrorItem::Internal(InternalError::new()).into()),
+        None => Err(Err(ErrorItem::Internal(InternalError::new()).into())),
     }
 }
 

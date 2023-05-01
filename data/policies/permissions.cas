@@ -11,6 +11,13 @@ domain foo {
 	allow(this, self, capability, bpf);
 	allow(this, self, bpf, map_create);
 	allow(this, read, file, read);
+
+	allow(this, read, file, some_perms);
+	allow(this, read, file, some_perms_other_order);
 }
 
 resource read {}
+
+let some_perms = [ write read getattr ];
+
+let some_perms_other_order = [ read write setattr ];
