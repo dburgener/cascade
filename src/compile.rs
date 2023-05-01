@@ -635,6 +635,7 @@ fn postvalidate_functions(
     types: &TypeMap,
 ) -> Result<(), CascadeErrors> {
     let mut deferrals = BTreeSet::new();
+    let mut errors = CascadeErrors::new();
 
     for (name, fi) in functions.iter() {
         for statement in fi.body.as_ref().unwrap_or(&BTreeSet::new()) {
@@ -645,10 +646,12 @@ fn postvalidate_functions(
     }
 
     for deferral in deferrals {
-        propagate(deferral.0, deferral.1, functions, types);
+        if let Err(e) = propagate(deferral.0, deferral.1, functions, types) {
+            errors.append(e);
+        }
     }
 
-    Ok(())
+    errors.into_result(())
 }
 
 fn derive_functions<'a>(
