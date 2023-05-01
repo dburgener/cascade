@@ -65,7 +65,7 @@
 (class nfc_socket (ioctl read write create getattr setattr lock relabelfrom relabelto append map bind connect listen accept getopt setopt shutdown recvfrom sendto name_bind))
 (class node (recvfrom sendto))
 (class node_socket (ioctl read write create getattr setattr lock relabelfrom relabelto append map bind connect listen accept getopt setopt shutdown recvfrom sendto name_bind node_bind))
-(class nscd (getpwd getgrp gethost getstat admin shmempwd shmemgrp shmemhost getserv shmemsrv))
+(class nscd (getpwd getgrp gethost getstat admin shmempwd shmemgrp shmemhost getserv shmemserv))
 (class packet (send recv relabelto forward_in forward_out))
 (class packet_socket (ioctl read write create getattr setattr lock relabelfrom relabelto append map bind connect listen accept getopt setopt shutdown recvfrom sendto name_bind))
 (class peer (recv))
