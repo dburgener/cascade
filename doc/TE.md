@@ -278,7 +278,7 @@ access.
 These functions have identical signatures except for the function name:
 
 ```
-fn allow(domain source, type target, class obj_class, [permission] perm);
+fn allow(domain source, type target, [class] obj_class, [permission] perm);
 ```
 
 And likewise for audit(), dontaudit(), and neverallow().  Lists of sources and

@@ -216,7 +216,7 @@ fn call_to_av_rule<'a>(
         FunctionArgument::new(
             &DeclaredArgument {
                 param_type: CascadeString::from(constants::CLASS),
-                is_list_param: false,
+                is_list_param: true,
                 name: CascadeString::from("class"),
                 default: None,
             },
@@ -255,10 +255,10 @@ fn call_to_av_rule<'a>(
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
         .get_name_or_string(context)?;
-    let class = args_iter
+    let classes = args_iter
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
-        .get_name_or_string(context)?;
+        .get_list(context)?;
     let perms = args_iter
         .next()
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
@@ -268,58 +268,64 @@ fn call_to_av_rule<'a>(
         return Err(ErrorItem::Internal(InternalError::new()).into());
     }
 
-    for p in &perms {
-        class_perms.verify_permission(&class, p, context, file)?;
+    for class in &classes {
+        for p in &perms {
+            class_perms.verify_permission(class, p, context, file)?;
+        }
     }
 
     let perms = ClassList::expand_perm_list(perms.iter().collect(), context);
 
-    let av_rules = if is_collapsed_class(class.as_ref()) {
-        let mut split_perms = (Vec::new(), Vec::new());
-        if let Some(class_struct) = class_perms.classes.get(class.as_ref()) {
-            for p in perms {
-                if p == "*" {
-                    // '*' is the one special case that matches both
-                    split_perms.0.push(p.clone());
-                    split_perms.1.push(p);
-                } else if class_struct.contains_perm(p.as_ref()) {
-                    split_perms.0.push(p);
-                } else {
-                    split_perms.1.push(p);
+    let mut av_rules = Vec::new();
+
+    for class in classes {
+        if is_collapsed_class(class.as_ref()) {
+            let mut split_perms = (Vec::new(), Vec::new());
+            if let Some(class_struct) = class_perms.classes.get(class.as_ref()) {
+                for p in perms.clone() {
+                    if p == "*" {
+                        // '*' is the one special case that matches both
+                        split_perms.0.push(p.clone());
+                        split_perms.1.push(p);
+                    } else if class_struct.contains_perm(p.as_ref()) {
+                        split_perms.0.push(p);
+                    } else {
+                        split_perms.1.push(p);
+                    }
                 }
+                if !split_perms.0.is_empty() {
+                    av_rules.push(AvRule {
+                        av_rule_flavor: flavor,
+                        source: Cow::Owned(source.clone()),
+                        target: Cow::Owned(target.clone()),
+                        class: Cow::Owned(class),
+                        perms: split_perms.0,
+                    });
+                }
+                if !split_perms.1.is_empty() {
+                    av_rules.push(AvRule {
+                        av_rule_flavor: flavor,
+                        source: Cow::Owned(source.clone()),
+                        target: Cow::Owned(target.clone()),
+                        class: Cow::Owned(CascadeString::from(
+                            class_struct.collapsed_name.unwrap(),
+                        )),
+                        perms: split_perms.1,
+                    });
+                }
+            } else {
+                return Err(ErrorItem::Internal(InternalError::new()).into());
             }
-            let mut av_rules = Vec::new();
-            if !split_perms.0.is_empty() {
-                av_rules.push(AvRule {
-                    av_rule_flavor: flavor,
-                    source: Cow::Owned(source.clone()),
-                    target: Cow::Owned(target.clone()),
-                    class: Cow::Owned(class),
-                    perms: split_perms.0,
-                });
-            }
-            if !split_perms.1.is_empty() {
-                av_rules.push(AvRule {
-                    av_rule_flavor: flavor,
-                    source: Cow::Owned(source),
-                    target: Cow::Owned(target),
-                    class: Cow::Owned(CascadeString::from(class_struct.collapsed_name.unwrap())),
-                    perms: split_perms.1,
-                });
-            }
-            av_rules
         } else {
-            return Err(ErrorItem::Internal(InternalError::new()).into());
-        }
-    } else {
-        vec![AvRule {
-            av_rule_flavor: flavor,
-            source: Cow::Owned(source),
-            target: Cow::Owned(target),
-            class: Cow::Owned(class),
-            perms,
-        }]
-    };
+            av_rules.push(AvRule {
+                av_rule_flavor: flavor,
+                source: Cow::Owned(source.clone()),
+                target: Cow::Owned(target.clone()),
+                class: Cow::Owned(class.clone()),
+                perms: perms.clone(),
+            })
+        };
+    }
 
     Ok(av_rules.into_iter().collect())
 }
