@@ -188,6 +188,10 @@ fn compile_machine_policies_internal(
                 );
                 match compile::extend_type_map(&pf, &mut type_map) {
                     Ok(ww) => {
+                        // Currently we are going to drop "Late" annotations (see insert_timing()) if we do not
+                        // call append_set_map here like we do above.  As of writing this comment we do not
+                        // encounter any Late annotations, so functionality is not effected, but performance is.
+                        // We take around 100ms hit on our benchmarking which we do not want to take at this time.
                         ww.inner(&mut warnings);
                         policies.push(pf);
                     }
