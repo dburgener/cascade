@@ -2935,9 +2935,11 @@ pub fn validate_arguments<'a>(
     types: &'a TypeMap,
     class_perms: &ClassList,
     context: &BlockContext<'a>,
+    // The file we're validating in
+    // *NOT* the function definition file
     file: Option<&'a SimpleFile<String, String>>,
     // target_func_info and func_map will be None for built-ins
-    target_func_info: Option<&FunctionInfo>,
+    target_func_info: Option<&'a FunctionInfo>,
     func_map: Option<&FunctionMap>,
 ) -> Result<Vec<TypeInstance<'a>>, CascadeErrors> {
     // Member functions start with an invisible"this" argument.  If it does, skip it
@@ -3076,8 +3078,8 @@ pub fn validate_arguments<'a>(
             Some(arg) => arg,
             None => {
                 match &a.function_arg.default_value {
-                    // TODO: A compile error here may be confusing.  This should really
-                    // be validated earlier and then return an internal error here on failure
+                    // Note that `file` here is the *callers* file, but we're validating against a
+                    // value in the *declarers* file, so we use that instead
                     Some(v) => validate_argument(
                         ArgForValidation::from(v),
                         &None,
@@ -3085,7 +3087,7 @@ pub fn validate_arguments<'a>(
                         types,
                         class_perms,
                         context,
-                        file,
+                        target_func_info.and_then(|f| f.declaration_file),
                         call.is_avc(),
                         target_func_info,
                         func_map,
@@ -3285,6 +3287,7 @@ fn validate_argument<'a>(
             file,
         ));
     }
+
     match &arg {
         ArgForValidation::List(v) => {
             if !target_argument.is_list_param {

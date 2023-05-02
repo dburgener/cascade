@@ -1638,4 +1638,33 @@ mod tests {
             0,
         );
     }
+
+    #[test]
+    fn invalid_default_test() {
+        let policy_files = vec![
+            [ERROR_POLICIES_DIR, "invalid_default1.cas"].concat(),
+            [ERROR_POLICIES_DIR, "invalid_default2.cas"].concat(),
+        ];
+        let policy_files = policy_files.iter().map(|s| s as &str).collect();
+        match compile_combined(policy_files) {
+            Ok(_) => panic!("Invalid default compiled successfully"),
+            Err(mut e) => {
+                let error = e.next().unwrap();
+                // A bug putting this at the call site instead of the declaration site, could
+                // wrongly put this in file 2
+                assert!(matches!(error,
+                ErrorItem::Compile(CompileError {
+                    files,
+                            diagnostic: Diag {
+                                inner: Diagnostic {
+                                    labels: lbls,
+                                    ..
+                                }
+                            },
+                            ..
+                        }) if files.get(lbls[0].file_id).unwrap().name() == "data/error_policies/invalid_default1.cas"
+                ));
+            }
+        }
+    }
 }
