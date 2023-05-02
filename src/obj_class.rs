@@ -582,7 +582,7 @@ pub fn make_classlist() -> ClassList<'static> {
         [COMMON_FILE_SOCK_PERMS, COMMON_SOCK_PERMS].concat(),
     );
     classlist.add_class("infiniband_pkey", vec!["access"]);
-    classlist.add_class("infiniband_endpoint", vec!["manage_subnet"]);
+    classlist.add_class("infiniband_endport", vec!["manage_subnet"]);
     classlist.add_class(
         "bpf",
         vec![
