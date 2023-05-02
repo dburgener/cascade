@@ -165,6 +165,7 @@
 (typealias zap)
 (typealiasactual zap bar-tmp)
 (macro bar-tmp-read ((type this) (type source)))
+(macro zap-read ((type this) (type source)) (call bar-tmp-read (this source)))
 (allow abc bob (file (read)))
 (allow abc zap (file (read)))
 (allow bar bob (file (read)))

@@ -108,3 +108,6 @@ resource overwrite_two inherits bar {
 		allow(source, this, lnk_file, write);
 	}
 }
+
+@alias(an_alias)
+resource aliased_child inherits bar {}
