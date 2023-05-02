@@ -167,6 +167,7 @@ fn compile_machine_policies_internal(
             let mut m = match compile::build_func_map(
                 &p.policy.exprs,
                 &type_map,
+                &classlist,
                 FunctionClass::Global,
                 &p.file,
             ) {

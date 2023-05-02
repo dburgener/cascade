@@ -370,6 +370,7 @@ pub fn get_global_bindings<'a>(
 pub fn build_func_map<'a>(
     exprs: &'a [Expression],
     types: &'a TypeMap,
+    classlist: &'a ClassList,
     parent_type: FunctionClass<'a>,
     file: &'a SimpleFile<String, String>,
 ) -> Result<FunctionMap<'a>, CascadeErrors> {
@@ -391,6 +392,7 @@ pub fn build_func_map<'a>(
                 decl_map.try_extend(build_func_map(
                     &t.expressions,
                     types,
+                    classlist,
                     FunctionClass::Type(type_being_parsed),
                     file,
                 )?)?;
@@ -399,14 +401,20 @@ pub fn build_func_map<'a>(
                 for f in &a.functions {
                     decl_map.insert(
                         f.get_cil_name(),
-                        FunctionInfo::new(f, types, FunctionClass::Collection(&a.name), file)?,
+                        FunctionInfo::new(
+                            f,
+                            types,
+                            classlist,
+                            FunctionClass::Collection(&a.name),
+                            file,
+                        )?,
                     )?;
                 }
             }
             Declaration::Func(f) => {
                 decl_map.insert(
                     f.get_cil_name(),
-                    FunctionInfo::new(f, types, parent_type, file)?,
+                    FunctionInfo::new(f, types, classlist, parent_type, file)?,
                 )?;
             }
             _ => continue,
@@ -1184,7 +1192,7 @@ pub fn get_reduced_infos(
     new_type_map.set_aliases(new_t_aliases);
 
     // Get the function infos
-    let mut new_func_map = get_funcs(policies, &new_type_map)?;
+    let mut new_func_map = get_funcs(policies, &new_type_map, classlist)?;
 
     derive_functions(&mut new_func_map, &new_type_map, classlist)?;
 
@@ -1298,6 +1306,7 @@ pub fn mark_non_virtual_children(type_map: &mut TypeMap) {
 pub fn get_funcs<'a>(
     policies: &'a [PolicyFile],
     reduced_type_map: &'a TypeMap,
+    classlist: &'a ClassList,
 ) -> Result<FunctionMap<'a>, CascadeErrors> {
     let mut ret = CascadeErrors::new();
     let mut reduced_func_map = FunctionMap::new();
@@ -1306,6 +1315,7 @@ pub fn get_funcs<'a>(
         let mut m = match build_func_map(
             &p.policy.exprs,
             reduced_type_map,
+            classlist,
             FunctionClass::Global,
             &p.file,
         ) {
