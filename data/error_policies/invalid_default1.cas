@@ -1,0 +1,7 @@
+resource foo {
+	fn some_func(domain source, resource other=invalid_symbol) {
+		allow(source, other, file, read);
+	}
+}
+
+

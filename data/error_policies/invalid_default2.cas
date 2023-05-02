@@ -1,0 +1,4 @@
+domain dom {
+	foo.some_func(this);
+	allow(this, foo, file, write);
+}
