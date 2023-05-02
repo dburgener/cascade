@@ -37,6 +37,12 @@ pub struct Associated {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum InsertExtendTiming {
+    Early,
+    Late,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AnnotationInfo {
     MakeList,
     Associate(Associated),
@@ -117,6 +123,16 @@ impl AnnotationInfo {
             (Derive(_), _) | (MakeList, _) | (Associate(_), _) | (Alias(_), _) | (NoDerive, _) => {
                 Some(self.clone())
             }
+        }
+    }
+
+    pub fn insert_timing(&self) -> InsertExtendTiming {
+        match self {
+            AnnotationInfo::Associate(_) => InsertExtendTiming::Early,
+            AnnotationInfo::Derive(_) => InsertExtendTiming::Late,
+            AnnotationInfo::NoDerive => InsertExtendTiming::Late,
+            AnnotationInfo::MakeList => InsertExtendTiming::Late,
+            AnnotationInfo::Alias(_) => InsertExtendTiming::Late,
         }
     }
 }

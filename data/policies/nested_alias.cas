@@ -1,0 +1,23 @@
+virtual resource tmp {
+    // All children must implement read
+    virtual fn read(domain source) {}
+}
+
+@associate([tmp])
+virtual domain foo {}
+
+domain bar inherits foo {
+    allow(this, bob, file, [read]);
+
+    @alias(zap)
+    extend tmp {}
+}
+
+domain abc {
+    allow(this, bob, file, [read]);
+    allow(this, zap, file, [read]);
+    resource xyz {}
+
+    @alias(bob)
+    extend xyz {}
+}

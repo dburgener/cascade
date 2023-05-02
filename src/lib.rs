@@ -26,6 +26,7 @@ use crate::ast::{Argument, CascadeString, Declaration, Expression, Policy, Polic
 use crate::context::{BlockType, Context};
 use crate::error::{CascadeErrors, InternalError, InvalidMachineError, ParseErrorMsg};
 use crate::functions::{FunctionClass, FunctionMap};
+use crate::internal_rep::InsertExtendTiming;
 use crate::machine::{MachineMap, ModuleMap, ValidatedMachine, ValidatedModule};
 use crate::util::append_set_map;
 pub use crate::warning::Warnings;
@@ -120,9 +121,9 @@ fn compile_machine_policies_internal(
     let mut type_map = compile::get_built_in_types_map()?;
     let mut module_map = ModuleMap::new();
     let mut machine_map = MachineMap::new();
+    let mut extend_annotations = BTreeMap::new();
 
     {
-        let mut extend_annotations = BTreeMap::new();
         // Collect all type declarations
         for p in &policies {
             match compile::extend_type_map(p, &mut type_map) {
@@ -134,7 +135,11 @@ fn compile_machine_policies_internal(
             }
         }
 
-        compile::insert_extend_annotations(&mut type_map, extend_annotations);
+        compile::insert_extend_annotations(
+            &mut type_map,
+            &extend_annotations,
+            InsertExtendTiming::Early,
+        );
 
         // Stops if something went wrong for this major step.
         errors = errors.into_result_self()?;
@@ -183,6 +188,10 @@ fn compile_machine_policies_internal(
                 );
                 match compile::extend_type_map(&pf, &mut type_map) {
                     Ok(ww) => {
+                        // Currently we are going to drop "Late" annotations (see insert_timing()) if we do not
+                        // call append_set_map here like we do above.  As of writing this comment we do not
+                        // encounter any Late annotations, so functionality is not effected, but performance is.
+                        // We take around 100ms hit on our benchmarking which we do not want to take at this time.
                         ww.inner(&mut warnings);
                         policies.push(pf);
                     }
@@ -191,6 +200,11 @@ fn compile_machine_policies_internal(
             }
             Err(e) => errors.append(e),
         }
+        compile::insert_extend_annotations(
+            &mut type_map,
+            &extend_annotations,
+            InsertExtendTiming::Late,
+        );
     }
     // Stops if something went wrong for this major step.
     errors = errors.into_result_self()?;
@@ -1198,14 +1212,12 @@ mod tests {
 
     #[test]
     fn virtual_function_associate_error() {
-        // TODO: This is broken because we miss annotations on nested extensions.  Reenable once
-        // that is fixed
         // TODO: This should be a compile error.  See comment in validate_functions()
-        //error_policy_test!(
-        //    "virtual_function_association.cas",
-        //    1,
-        //    ErrorItem::Internal(_)
-        //);
+        error_policy_test!(
+            "virtual_function_association.cas",
+            1,
+            ErrorItem::Internal(_)
+        );
         //error_policy_test!("virtual_function_association.cas", 1, ErrorItem::Compile(_));
     }
 
@@ -1607,5 +1619,23 @@ mod tests {
     #[test]
     fn derive_no_derive_test() {
         error_policy_test!("derive_noderive.cas", 1, ErrorItem::Compile(_));
+    }
+
+    #[test]
+    fn valid_nested_alias() {
+        valid_policy_test(
+            "nested_alias.cas",
+            &[
+                "(typealias zap)",
+                "(typealiasactual zap bar-tmp)",
+                "(typealias bob)",
+                "(typealiasactual bob abc-xyz)",
+                "(allow abc bob (file (read)))",
+                "(allow bar bob (file (read)))",
+                "(allow abc zap (file (read)))",
+            ],
+            &[],
+            0,
+        );
     }
 }
