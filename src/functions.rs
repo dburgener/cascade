@@ -2754,7 +2754,9 @@ impl ValidatedCall {
                     context
                         .symbol_in_context(class_name.as_ref(), types)
                         .map(|ti| &ti.name)
-                        .unwrap_or(class_name)
+                        .unwrap_or(&CascadeString::from(
+                            context.convert_arg_this(class_name.as_ref()),
+                        ))
                         .get_cil_name(),
                 )]
             }

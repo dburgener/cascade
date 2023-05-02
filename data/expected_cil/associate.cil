@@ -284,6 +284,7 @@
 (call diamond3-var-associated_call_from_var (diamond3-var diamond3))
 (call foo-tmp-associated_call_from_tmp (foo-tmp foo))
 (call foo-tmp-associated_call_from_tmp (foo-tmp qux))
+(call foo-tmp-not_an_associated_call (foo-tmp foo))
 (call foo-tmp-not_an_associated_call (foo-tmp nest_child))
 (call foo-var-associated_call_from_var (foo-var foo))
 (call foo_userdomain-user_tmp-associated_call_from_user_tmp (foo_userdomain-user_tmp foo_userdomain))
