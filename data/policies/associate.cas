@@ -39,6 +39,7 @@ virtual domain foo {
 	// foo.var inherits var
 
 	tmp.associated_call_from_tmp(this);
+	tmp.not_an_associated_call(this);
 	this.tmp.not_an_associated_call(this);
 }
 
