@@ -201,6 +201,8 @@ fn call_to_av_rule<'a>(
                 default: None,
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
         FunctionArgument::new(
@@ -211,6 +213,8 @@ fn call_to_av_rule<'a>(
                 default: None,
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
         FunctionArgument::new(
@@ -221,6 +225,8 @@ fn call_to_av_rule<'a>(
                 default: None,
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
         FunctionArgument::new(
@@ -231,6 +237,8 @@ fn call_to_av_rule<'a>(
                 default: None,
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
     ];
@@ -442,6 +450,8 @@ fn call_to_fc_rules<'a>(
                 default: None,
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
         FunctionArgument::new(
@@ -452,6 +462,8 @@ fn call_to_fc_rules<'a>(
                 default: None,
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
         FunctionArgument::new(
@@ -462,6 +474,8 @@ fn call_to_fc_rules<'a>(
                 default: None,
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
     ];
@@ -572,6 +586,8 @@ pub fn call_to_portcon_rules<'a>(
                 default: None,
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
         FunctionArgument::new(
@@ -582,6 +598,8 @@ pub fn call_to_portcon_rules<'a>(
                 default: None,
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
         FunctionArgument::new(
@@ -592,6 +610,8 @@ pub fn call_to_portcon_rules<'a>(
                 default: None,
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
     ];
@@ -849,6 +869,8 @@ fn call_to_fsc_rules<'a>(
                 default: None,
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
         FunctionArgument::new(
@@ -859,6 +881,8 @@ fn call_to_fsc_rules<'a>(
                 default: None,
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
         FunctionArgument::new(
@@ -869,6 +893,8 @@ fn call_to_fsc_rules<'a>(
                 default: None,
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
         FunctionArgument::new(
@@ -879,6 +905,8 @@ fn call_to_fsc_rules<'a>(
                 default: Some(Argument::Quote(CascadeString::from("\"/\""))),
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
         FunctionArgument::new(
@@ -889,6 +917,8 @@ fn call_to_fsc_rules<'a>(
                 default: Some(Argument::List(vec![])),
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
     ];
@@ -1070,6 +1100,8 @@ fn call_to_sids<'a>(
                 default: None,
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
         FunctionArgument::new(
@@ -1080,6 +1112,8 @@ fn call_to_sids<'a>(
                 default: None,
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
     ];
@@ -1172,6 +1206,8 @@ fn call_to_domain_transition<'a>(
                 default: None,
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
         FunctionArgument::new(
@@ -1182,6 +1218,8 @@ fn call_to_domain_transition<'a>(
                 default: None,
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
         FunctionArgument::new(
@@ -1192,6 +1230,8 @@ fn call_to_domain_transition<'a>(
                 default: None,
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
     ];
@@ -1297,6 +1337,8 @@ fn call_to_resource_transition<'a>(
                 default: None,
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
         FunctionArgument::new(
@@ -1307,6 +1349,8 @@ fn call_to_resource_transition<'a>(
                 default: None,
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
         FunctionArgument::new(
@@ -1317,6 +1361,8 @@ fn call_to_resource_transition<'a>(
                 default: None,
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
         FunctionArgument::new(
@@ -1327,6 +1373,8 @@ fn call_to_resource_transition<'a>(
                 default: None,
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
         FunctionArgument::new(
@@ -1337,6 +1385,8 @@ fn call_to_resource_transition<'a>(
                 default: Some(Argument::Quote(CascadeString::from(""))),
             },
             types,
+            class_perms,
+            context,
             None,
         )?,
     ];
@@ -1563,6 +1613,7 @@ impl<'a> FunctionInfo<'a> {
     pub fn new(
         funcdecl: &'a FuncDecl,
         types: &'a TypeMap,
+        classlist: &ClassList,
         parent_type: FunctionClass<'a>,
         declaration_file: &'a SimpleFile<String, String>,
     ) -> Result<FunctionInfo<'a>, CascadeErrors> {
@@ -1601,8 +1652,12 @@ impl<'a> FunctionInfo<'a> {
             .into());
         }
 
+        // We don't currently track a context through the function mapping
+        let fake_context = BlockContext::new(BlockType::Global, None, None);
+
         for a in &funcdecl.args {
-            match FunctionArgument::new(a, types, Some(declaration_file)) {
+            match FunctionArgument::new(a, types, classlist, &fake_context, Some(declaration_file))
+            {
                 Ok(a) => args.push(a),
                 Err(e) => errors.add_error(e),
             }
@@ -2025,6 +2080,8 @@ impl<'a> FunctionArgument<'a> {
     pub fn new(
         declared_arg: &DeclaredArgument,
         types: &'a TypeMap,
+        class_perms: &ClassList,
+        context: &BlockContext<'a>,
         file: Option<&SimpleFile<String, String>>,
     ) -> Result<Self, ErrorItem> {
         let param_type = match types.get(declared_arg.param_type.as_ref()) {
@@ -2039,14 +2096,31 @@ impl<'a> FunctionArgument<'a> {
             }
         };
 
-        // TODO list parameters
-
-        Ok(FunctionArgument {
+        // Build a partial argument first, use it to validate the default, then complete it
+        let mut ret = FunctionArgument {
             param_type,
             name: declared_arg.name.to_string(),
             is_list_param: declared_arg.is_list_param,
-            default_value: declared_arg.default.clone(),
-        })
+            default_value: None,
+        };
+
+        if let Some(default_arg) = &declared_arg.default {
+            validate_argument(
+                ArgForValidation::from(default_arg),
+                &None,
+                &ret,
+                types,
+                class_perms,
+                context,
+                file,
+                false,
+                None,
+                None,
+            )?;
+
+            ret.default_value = declared_arg.default.clone();
+        }
+        Ok(ret)
     }
 
     pub fn new_this_argument(parent_type: &'a TypeInfo) -> Self {

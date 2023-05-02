@@ -669,6 +669,8 @@ pub fn validate_derive_args<'a>(
                 default: Some(Argument::Var("*".into())),
             },
             types,
+            class_perms,
+            &local_context,
             None,
         )?,
         FunctionArgument::new(
@@ -679,6 +681,8 @@ pub fn validate_derive_args<'a>(
                 default: Some(Argument::Var("*".into())),
             },
             types,
+            class_perms,
+            &local_context,
             None,
         )?,
     ];
