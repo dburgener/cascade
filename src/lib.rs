@@ -1060,7 +1060,7 @@ mod tests {
 
     #[test]
     fn bad_allow_rules_test() {
-        error_policy_test!("bad_allow.cas", 5, ErrorItem::Compile(_));
+        error_policy_test!("bad_allow.cas", 4, ErrorItem::Compile(_));
     }
 
     #[test]
