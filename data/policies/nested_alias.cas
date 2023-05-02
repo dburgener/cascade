@@ -1,20 +1,21 @@
 virtual resource tmp {
-	// All children must implement read
-	virtual fn read(domain source) {}
+    // All children must implement read
+    virtual fn read(domain source) {}
 }
 
 @associate([tmp])
 virtual domain foo {}
 
 domain bar inherits foo {
-    // Policies must contain at least one AV rule
-	allow(this, resource, file, [read]);
+    allow(this, bob, file, [read]);
 
     @alias(zap)
-	extend tmp {}
+    extend tmp {}
 }
 
 domain abc {
+    allow(this, bob, file, [read]);
+    allow(this, zap, file, [read]);
     resource xyz {}
 
     @alias(bob)
