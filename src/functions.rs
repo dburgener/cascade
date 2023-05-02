@@ -2865,28 +2865,26 @@ fn make_no_such_function_error(
     types: &TypeMap,
     context: &BlockContext,
 ) -> CascadeErrors {
-    for n in [&call.class_name, &call.cast_name]
-        .iter()
-        .copied()
-        .flatten()
-    {
-        let true_name = match call.get_true_class_name(context, types, file) {
-            Ok(n) => n,
-            Err(_) => {
-                // We just called this from resolve_true_cil_name() and should have already errored
-                // out
-                return ErrorItem::Internal(InternalError::new()).into();
-            }
-        };
-        // The below only works if it's a member function of a type
-        if types.get(&true_name).is_none() {
-            return CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
-                "No such type",
-                file,
-                n.get_range(),
-                "",
-            ));
+    let true_name = match call.get_true_class_name(context, types, file) {
+        Ok(n) => n,
+        Err(_) => {
+            // We just called this from resolve_true_cil_name() and should have already errored
+            // out
+            return ErrorItem::Internal(InternalError::new()).into();
         }
+    };
+    // The below only works if it's a member function of a type
+    if types.get(&true_name).is_none() {
+        let range = match &call.cast_name {
+            Some(cast_name) => cast_name.get_range(),
+            None => call.get_name_range(),
+        };
+        return CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
+            "No such type",
+            file,
+            range,
+            "",
+        ));
     }
     if let Some(class_name) = &call.class_name {
         let func_definer = if let Some(cast_name) = &call.cast_name {
