@@ -6,6 +6,7 @@ domain foo {
 	allow(foo, bar, file, *);
 
 	allow(foo, self, nscd, [ getpwd getgrp gethost ]);
+	allow(foo, self, infiniband_endport, manage_subnet);
 
 	// bpf is both a class and permission
 	allow(this, self, capability, bpf);
