@@ -436,6 +436,16 @@ impl TypeInfo {
         }
         None
     }
+
+    pub fn get_aliases(&self) -> BTreeSet<&CascadeString> {
+        let mut ret = BTreeSet::new();
+        for ann in &self.annotations {
+            if let AnnotationInfo::Alias(alias) = ann {
+                ret.insert(alias);
+            }
+        }
+        ret
+    }
 }
 
 // This is the sexp for *declaring* the type

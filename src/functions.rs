@@ -1849,13 +1849,27 @@ impl<'a> FunctionInfo<'a> {
             arg.name = name.iter().cloned().collect::<Vec<String>>().join("_");
         }
 
+        let mut annotations = BTreeSet::new();
+        for class_alias in &deriving_type.get_aliases() {
+            for func_alias in &derived_name_aliases {
+                // No alias for real class and func combo
+                if *class_alias == &deriving_type.name && name == func_alias {
+                    continue;
+                }
+                annotations.insert(AnnotationInfo::Alias(
+                    get_cil_name(Some(*class_alias), &CascadeString::from(func_alias as &str))
+                        .into(),
+                ));
+            }
+        }
+
         Ok(FunctionInfo {
             name: name.to_string(),
             name_aliases: derived_name_aliases,
             class: FunctionClass::Type(deriving_type),
             is_virtual: false, // TODO: Check documentation for correct behavior here
             args: derived_args,
-            annotations: BTreeSet::new(),
+            annotations,
             original_body: derived_body,
             body: None,
             declaration_file: file,

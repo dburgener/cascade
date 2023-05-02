@@ -155,6 +155,7 @@
 (macro foo-my_func ((type this) (type source)) (allow source this (file (read))))
 (macro some_alias-my_func ((type this) (type source)) (call foo-my_func (this source)))
 (macro foo-read ((type this) (type source)) (allow source this (file (read))))
+(macro some_alias-read ((type this) (type source)) (call foo-read (this source)))
 (macro resource-read ((type this) (type source)) (allow source this (file (read))))
 (macro security_sid-read ((type this) (type source)) (allow source this (file (read))))
 (macro self-read ((type this) (type source)) (allow source this (file (read))))
