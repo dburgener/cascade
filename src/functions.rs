@@ -2457,11 +2457,16 @@ impl<'a> ValidatedStatement<'a> {
                         ))
                     }
                 }
-                None => Ok(WithWarnings::from(
-                    ValidatedCall::new(c, functions, types, class_perms, context, file)?
-                        .into_iter()
-                        .collect::<BTreeSet<ValidatedStatement>>(),
-                )),
+                None => {
+                    let mut warnings = Warnings::new();
+                    Ok(WithWarnings::new(
+                        ValidatedCall::new(c, functions, types, class_perms, context, file)?
+                            .inner(&mut warnings)
+                            .into_iter()
+                            .collect::<BTreeSet<ValidatedStatement>>(),
+                        warnings,
+                    ))
+                }
             },
             Statement::LetBinding(_) => {
                 // Handled in parent
@@ -2789,7 +2794,7 @@ impl ValidatedCall {
         class_perms: &ClassList,
         context: &BlockContext,
         file: Option<&SimpleFile<String, String>>,
-    ) -> Result<BTreeSet<ValidatedStatement<'nothing>>, CascadeErrors> {
+    ) -> Result<WithWarnings<BTreeSet<ValidatedStatement<'nothing>>>, CascadeErrors> {
         // If we have gotten into the state where the class name is none
         // but the cast_name is some, something has gone wrong.
         if call.class_name.is_none() && call.cast_name.is_some() {
@@ -2801,7 +2806,16 @@ impl ValidatedCall {
         let function_info = match functions.get(&cil_name) {
             Some(function_info) => function_info,
             None => {
-                return Err(make_no_such_function_error(file, call, types, context));
+                let mut warnings = Warnings::new();
+                let err =
+                    make_no_such_function_error(file, call, types, context).inner(&mut warnings);
+                if err.is_empty() {
+                    // The type didn't exist.  Abort early and return a warning
+                    // TODO: Mark this as optional
+                    return Ok(WithWarnings::new(BTreeSet::new(), warnings));
+                } else {
+                    return Err(err);
+                }
             }
         };
 
@@ -2906,7 +2920,7 @@ impl ValidatedCall {
             });
         }
 
-        Ok(ret)
+        Ok(ret.into())
     }
 
     pub fn create_non_virtual_child_rules<'a>(
@@ -2952,13 +2966,15 @@ fn make_no_such_function_error(
     call: &FuncCall,
     types: &TypeMap,
     context: &BlockContext,
-) -> CascadeErrors {
+) -> WithWarnings<CascadeErrors> {
     let true_name = match call.get_true_class_name(context, types, file) {
         Ok(n) => n,
         Err(_) => {
             // We just called this from resolve_true_cil_name() and should have already errored
             // out
-            return ErrorItem::Internal(InternalError::new()).into();
+            return WithWarnings::from(CascadeErrors::from(ErrorItem::Internal(
+                InternalError::new(),
+            )));
         }
     };
     // The below only works if it's a member function of a type
@@ -2967,12 +2983,29 @@ fn make_no_such_function_error(
             Some(cast_name) => cast_name.get_range(),
             None => call.get_name_range(),
         };
-        return CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
-            "No such type",
-            file,
-            range,
-            "",
-        ));
+        if call.cast_name.is_none() {
+            // This type might be cross-compiled in. In the long term, we'd like to handle this better,
+            // but for now just downgrade the error to a warning
+            // We return an empty list of errors with a warning
+            if let (Some(file), Some(range)) = (file, range) {
+                let mut ret = WithWarnings::from(CascadeErrors::new());
+                ret.add_warning(Warning::new(
+                    "No such type",
+                    file,
+                    range,
+                    "In the future, this rule will be included as optional for potential cross-compiling.  For now it is ignored",
+                ));
+                return ret;
+            } else {
+                return WithWarnings::from(CascadeErrors::from(ErrorItem::Internal(
+                    InternalError::new(),
+                )));
+            }
+        } else {
+            return WithWarnings::from(CascadeErrors::from(
+                ErrorItem::make_compile_or_internal_error("No such type", file, range, ""),
+            ));
+        }
     }
     if let Some(class_name) = &call.class_name {
         let func_definer = if let Some(cast_name) = &call.cast_name {
@@ -2980,21 +3013,25 @@ fn make_no_such_function_error(
         } else {
             class_name
         };
-        CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
-            "No such member function",
-            file,
-            call.name.get_range(),
-            &format!(
-                "{} does not define a function named {}",
-                &func_definer, &call.name
+        WithWarnings::from(CascadeErrors::from(
+            ErrorItem::make_compile_or_internal_error(
+                "No such member function",
+                file,
+                call.name.get_range(),
+                &format!(
+                    "{} does not define a function named {}",
+                    &func_definer, &call.name
+                ),
             ),
         ))
     } else {
-        CascadeErrors::from(ErrorItem::make_compile_or_internal_error(
-            "No such function",
-            file,
-            call.get_name_range(),
-            "",
+        WithWarnings::from(CascadeErrors::from(
+            ErrorItem::make_compile_or_internal_error(
+                "No such function",
+                file,
+                call.get_name_range(),
+                "",
+            ),
         ))
     }
 }

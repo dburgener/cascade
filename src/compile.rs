@@ -1361,7 +1361,8 @@ pub fn get_policy_rules<'a>(
     let mut reduced_policy_rules = BTreeSet::new();
 
     // Add derived associated calls
-    let mut calls = call_derived_associated_calls(reduced_type_map, reduced_func_map, classlist)?;
+    let mut calls = call_derived_associated_calls(reduced_type_map, reduced_func_map, classlist)?
+        .inner(&mut warnings);
     reduced_policy_rules.append(&mut calls);
 
     for p in policies {
@@ -2044,8 +2045,9 @@ pub fn call_derived_associated_calls<'a>(
     types: &TypeMap,
     funcs: &FunctionMap<'a>,
     class_perms: &ClassList,
-) -> Result<BTreeSet<ValidatedStatement<'a>>, CascadeErrors> {
+) -> Result<WithWarnings<BTreeSet<ValidatedStatement<'a>>>, CascadeErrors> {
     let mut ret = BTreeSet::new();
+    let mut warnings = Warnings::new();
     let mut errors = CascadeErrors::new();
     for t in types.values() {
         if !t.is_domain(types) {
@@ -2081,7 +2083,7 @@ pub fn call_derived_associated_calls<'a>(
                                 &local_context,
                                 f.declaration_file,
                             ) {
-                                Ok(c) => c,
+                                Ok(c) => c.inner(&mut warnings),
                                 Err(e) => {
                                     errors.append(e);
                                     continue;
@@ -2099,7 +2101,7 @@ pub fn call_derived_associated_calls<'a>(
             }
         }
     }
-    errors.into_result(ret)
+    errors.into_result(WithWarnings::new(ret, warnings))
 }
 
 fn do_rules_pass<'a>(

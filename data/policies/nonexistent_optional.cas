@@ -1,0 +1,7 @@
+domain foo {
+	// For 0.1, this is a warning that generates no CIL
+	// Eventually it will be marked as optional
+	doesnt_exist.read();
+	allow(this, resource, file, read);
+}
+
