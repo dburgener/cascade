@@ -793,6 +793,12 @@ fn handle_derive<'a>(
         ) {
             Ok(derived_function) => {
                 let df_cil_name = derived_function.get_cil_name();
+                let mut aliases = BTreeSet::new();
+                for ann in &derived_function.annotations {
+                    if let AnnotationInfo::Alias(alias) = ann {
+                        aliases.insert(alias.to_string());
+                    }
+                }
                 if functions
                     .insert(df_cil_name.clone(), derived_function)
                     .is_err()
@@ -823,6 +829,9 @@ fn handle_derive<'a>(
                         ));
                     }
                     return Err(error.into());
+                }
+                for alias in aliases {
+                    functions.add_alias(alias, df_cil_name.clone());
                 }
             }
             Err(e) => errors.append(e),

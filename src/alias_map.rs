@@ -127,6 +127,10 @@ impl<T: Declared> AliasMap<T> {
 
     pub fn set_aliases(&mut self, aliases: BTreeMap<String, String>) {
         self.aliases = aliases;
+        self.update_alias_secondary_indices()
+    }
+
+    fn update_alias_secondary_indices(&mut self) {
         for (alias, true_name) in &self.aliases {
             if let Some(val) = self.get(true_name) {
                 for secondary in val.get_secondary_indices() {
@@ -142,6 +146,13 @@ impl<T: Declared> AliasMap<T> {
                 }
             }
         }
+    }
+
+    // Add a single alias
+    pub fn add_alias(&mut self, alias: String, true_name: String) {
+        // TODO: worry about duplicates
+        self.aliases.insert(alias, true_name);
+        self.update_alias_secondary_indices();
     }
 
     // fallible extend, reject duplicates

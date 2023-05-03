@@ -50,6 +50,7 @@ domain some_domain {
 	derive_from_foo.read(this);
 	custom_define.read(this);
 	name_diff_child.diff_name(this);
+	an_alias.read();
 
 	some_child.domtrans(this, derive_from_foo);
 
