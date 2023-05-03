@@ -181,7 +181,7 @@ fn compile_machine_policies_internal(
         }
 
         // TODO: Validate original functions before adding synthetic ones to avoid confusing errors for users.
-        match compile::apply_associate_annotations(&type_map, &tmp_func_map) {
+        match compile::apply_associate_annotations(&type_map, &tmp_func_map, &extend_annotations) {
             Ok(exprs) => {
                 let pf = PolicyFile::new(
                     Policy::new(exprs),
@@ -1046,6 +1046,19 @@ mod tests {
             ],
             0,
             )
+    }
+
+    #[test]
+    fn extend_inherit_test() {
+        valid_policy_test(
+            "extend_inherit.cas",
+            &[
+                "(typeattributeset bar (dom-foo))",
+                "(typeattributeset dom_parent (dom))",
+            ],
+            &[],
+            0,
+        )
     }
 
     // This is just a quick compile test.  The true purpose of these files is to actually boot in
