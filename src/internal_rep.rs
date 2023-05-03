@@ -47,6 +47,9 @@ pub enum AnnotationInfo {
     MakeList,
     Associate(Associated),
     Alias(CascadeString),
+    // Inherit isn't exposed to users, who should use the "inherits type" syntax, but its helpful
+    // internally to track inherits on extends as annotations
+    Inherit(Vec<CascadeString>),
     Derive(Vec<Argument>),
     NoDerive,
 }
@@ -84,11 +87,16 @@ impl AnnotationInfo {
             }
             // Treat all @derives as unique, because they require special processing later
             (Derive(_), Derive(_)) => None,
+            // These should be filtered earlier and never processed here
+            (Inherit(_), Inherit(_)) => None,
             // Enumerate the non-equal cases explicitly so that we get non-exhaustive match errors
             // when updating the enum
-            (MakeList, _) | (Associate(_), _) | (Alias(_), _) | (Derive(_), _) | (NoDerive, _) => {
-                None
-            }
+            (MakeList, _)
+            | (Associate(_), _)
+            | (Alias(_), _)
+            | (Inherit(_), _)
+            | (Derive(_), _)
+            | (NoDerive, _) => None,
         }
     }
 
@@ -120,19 +128,34 @@ impl AnnotationInfo {
                 }
             }
             // No need to special handle Derive/Derive.  Derives are always considered disjoint
-            (Derive(_), _) | (MakeList, _) | (Associate(_), _) | (Alias(_), _) | (NoDerive, _) => {
-                Some(self.clone())
-            }
+            (Derive(_), _)
+            | (MakeList, _)
+            | (Associate(_), _)
+            | (Alias(_), _)
+            | (NoDerive, _)
+            | (Inherit(_), _) => Some(self.clone()),
         }
     }
 
     pub fn insert_timing(&self) -> InsertExtendTiming {
         match self {
             AnnotationInfo::Associate(_) => InsertExtendTiming::Early,
+            // Inherit is Early, but note that it may also be set on an associated resource, in
+            // which case it also has special handling in create_synthetic resource.  The "Early"
+            // handling handles regular types
+            AnnotationInfo::Inherit(_) => InsertExtendTiming::Early,
             AnnotationInfo::Derive(_) => InsertExtendTiming::Late,
             AnnotationInfo::NoDerive => InsertExtendTiming::Late,
             AnnotationInfo::MakeList => InsertExtendTiming::Late,
             AnnotationInfo::Alias(_) => InsertExtendTiming::Late,
+        }
+    }
+
+    pub fn as_inherit(&self) -> Option<&Vec<CascadeString>> {
+        if let AnnotationInfo::Inherit(v) = self {
+            Some(v)
+        } else {
+            None
         }
     }
 }

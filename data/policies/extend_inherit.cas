@@ -1,0 +1,14 @@
+virtual resource bar {}
+
+domain dom {
+	resource foo {}
+	allow(this, this.foo, file, read);
+}
+
+extend dom {
+	extend foo inherits bar {}
+}
+
+virtual domain dom_parent {}
+
+extend dom inherits dom_parent {}

@@ -136,10 +136,11 @@ fn map_annotation_info(
             return false;
         }
     };
+    let annotations = annotation_map.entry(key).or_insert_with(BTreeSet::new);
     if !annotation_infos.is_empty() {
-        let annotations = annotation_map.entry(key).or_insert_with(BTreeSet::new);
         annotations.append(&mut annotation_infos);
     }
+    annotations.insert(AnnotationInfo::Inherit(type_decl.inherits.clone()));
     true
 }
 
@@ -256,7 +257,11 @@ pub fn insert_extend_annotations(
                 if a.insert_timing() == timing {
                     // Ideally we would use drain_filter but that is currently unstable.
                     // TODO once drain_filter is stable convert to using that.
-                    t.annotations.insert(a.clone());
+                    if let Some(inherits) = a.as_inherit() {
+                        t.inherits.append(&mut inherits.clone());
+                    } else {
+                        t.annotations.insert(a.clone());
+                    }
                 }
             }
         }
@@ -1467,6 +1472,7 @@ fn create_synthetic_resource(
     class: &TypeInfo,
     class_string: &CascadeString,
     global_exprs: &mut HashSet<Expression>,
+    extend_annotations: &BTreeMap<CascadeString, BTreeSet<AnnotationInfo>>,
 ) -> Result<CascadeString, ErrorItem> {
     if !class.is_resource(types) {
         return Err(ErrorItem::make_compile_or_internal_error(
@@ -1492,6 +1498,14 @@ fn create_synthetic_resource(
     };
 
     parent_names.push(constants::RESOURCE.into());
+
+    for inherit_ann in extend_annotations
+        .get(&res_name)
+        .iter()
+        .flat_map(|anns| anns.iter().filter_map(|ann| ann.as_inherit()))
+    {
+        parent_names.append(&mut inherit_ann.clone());
+    }
 
     dup_res_decl.inherits = parent_names;
     // Virtual resources become concrete when associated to concrete types
@@ -1576,6 +1590,7 @@ fn make_duplicate_associate_error(
                 "Note: parent association was here"))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn interpret_associate(
     global_exprs: &mut HashSet<Expression>,
     local_exprs: &mut HashSet<Expression>,
@@ -1584,6 +1599,7 @@ fn interpret_associate(
     associate: &Associated,
     associated_parents: &Vec<&TypeInfo>,
     dom_info: &TypeInfo,
+    extend_annotations: &BTreeMap<CascadeString, BTreeSet<AnnotationInfo>>,
 ) -> Result<(), CascadeErrors> {
     // Only allow a set of specific annotation names and strictly check their arguments.
     // TODO: Add tests to verify these checks.
@@ -1618,6 +1634,7 @@ fn interpret_associate(
                     class,
                     res,
                     global_exprs,
+                    extend_annotations,
                 ) {
                     Ok(n) => n,
                     Err(e) => {
@@ -1645,6 +1662,7 @@ fn interpret_associate(
                     class,
                     res,
                     global_exprs,
+                    extend_annotations,
                 ) {
                     Ok(_) => {}
                     Err(e) => errors.add_error(e),
@@ -1762,6 +1780,7 @@ fn interpret_inherited_annotations<'a, T>(
     funcs: &FunctionMap<'_>,
     types: &TypeMap,
     dom_info: &'a TypeInfo,
+    extend_annotations: &BTreeMap<CascadeString, BTreeSet<AnnotationInfo>>,
     extra_annotations: T,
 ) -> Result<(), CascadeErrors>
 where
@@ -1792,6 +1811,7 @@ where
                 associate,
                 &inherited.parents,
                 dom_info,
+                extend_annotations,
             ) {
                 Ok(()) => {}
                 Err(e) => errors.append(e),
@@ -1808,6 +1828,7 @@ fn inherit_annotations<'a>(
     funcs: &FunctionMap<'_>,
     types: &'a TypeMap,
     dom_info: &'a TypeInfo,
+    extend_annotations: &BTreeMap<CascadeString, BTreeSet<AnnotationInfo>>,
 ) -> Result<Vec<InheritedAnnotation<'a>>, CascadeErrors> {
     let mut errors = CascadeErrors::new();
 
@@ -1820,7 +1841,14 @@ fn inherit_annotations<'a>(
                 None => continue,
             };
             ret.extend(
-                match inherit_annotations(global_exprs, associate_exprs, funcs, types, parent_ti) {
+                match inherit_annotations(
+                    global_exprs,
+                    associate_exprs,
+                    funcs,
+                    types,
+                    parent_ti,
+                    extend_annotations,
+                ) {
                     Ok(a) => a,
                     Err(e) => {
                         // Can generate duplicated errors because of nested calls.
@@ -1843,6 +1871,7 @@ fn inherit_annotations<'a>(
         funcs,
         types,
         dom_info,
+        extend_annotations,
         inherited_annotations.iter().cloned(),
     ) {
         Ok(()) => {}
@@ -1868,6 +1897,7 @@ fn inherit_annotations<'a>(
 pub fn apply_associate_annotations(
     types: &TypeMap,
     funcs: &FunctionMap<'_>,
+    extend_annotations: &BTreeMap<CascadeString, BTreeSet<AnnotationInfo>>,
 ) -> Result<Vec<Expression>, CascadeErrors> {
     let mut errors = CascadeErrors::new();
 
@@ -1883,6 +1913,7 @@ pub fn apply_associate_annotations(
             funcs,
             types,
             type_info,
+            extend_annotations,
         ) {
             Ok(_) => {}
             Err(e) => errors.append(e),
