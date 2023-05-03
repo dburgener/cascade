@@ -252,6 +252,7 @@
 (macro some_domain_parent-domtrans ((type this) (type source) (type exec)) (typetransition source exec process this))
 (macro to_associate-some_associated_call ((type this) (type source)) (allow source this (dir (add_name))) (allow source this (file (link))))
 (macro union_all_parents-read ((type this) (type source)) (allow source this (dir (read))) (allow source this (file (read))))
+(call aliased_child-read (an_alias some_domain))
 (call associates-to_associate-some_associated_call (associates-to_associate associates))
 (call custom_define-read (custom_define some_domain))
 (call derive_from_foo-read (derive_from_foo some_domain))
