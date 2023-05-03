@@ -1445,6 +1445,12 @@ mod tests {
         ], &[], 0);
     }
 
+    // Post 0.1, we'll mark these as optional
+    #[test]
+    fn nonexistent_optional_test() {
+        valid_policy_test("nonexistent_optional.cas", &[], &["doesnt_exist"], 1);
+    }
+
     #[test]
     fn invalid_inherit_associated_call() {
         error_policy_test!("bad_inherits_associated_call.cas", 2, ErrorItem::Compile(_));
