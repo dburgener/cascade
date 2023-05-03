@@ -3166,8 +3166,9 @@ pub fn validate_arguments<'a>(
             Some(arg) => arg,
             None => {
                 match &a.function_arg.default_value {
-                    // Note that `file` here is the *callers* file, but we're validating against a
-                    // value in the *declarers* file, so we use that instead
+                    // We validated the default argument at function signature creation time.
+                    // That's helpful, because the function may be derived, so it's hard to know
+                    // its file now.  If it fails here, that's an internal error
                     Some(v) => validate_argument(
                         ArgForValidation::from(v),
                         &None,
@@ -3179,7 +3180,8 @@ pub fn validate_arguments<'a>(
                         call.is_avc(),
                         target_func_info,
                         func_map,
-                    )?,
+                    )
+                    .map_err(|_| InternalError::new())?,
                     None => {
                         return Err(ErrorItem::make_compile_or_internal_error(
                             &format!("No value supplied for {}", a.function_arg.name),
