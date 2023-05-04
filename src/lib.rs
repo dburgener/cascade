@@ -1128,7 +1128,7 @@ mod tests {
 
     #[test]
     fn bad_typecast_test() {
-        error_policy_test!("bad_typecasts.cas", 4, ErrorItem::Compile(_));
+        error_policy_test!("bad_typecasts.cas", 3, ErrorItem::Compile(_));
     }
 
     #[test]

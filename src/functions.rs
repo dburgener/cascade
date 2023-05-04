@@ -183,7 +183,7 @@ fn call_to_av_rule<'a>(
     class_perms: &ClassList,
     context: &BlockContext<'_>,
     file: Option<&'a SimpleFile<String, String>>,
-) -> Result<BTreeSet<AvRule<'a>>, CascadeErrors> {
+) -> Result<WithWarnings<BTreeSet<AvRule<'a>>>, CascadeErrors> {
     let flavor = match c.name.as_ref() {
         constants::ALLOW_FUNCTION_NAME => AvRuleFlavor::Allow,
         constants::DONTAUDIT_FUNCTION_NAME => AvRuleFlavor::Dontaudit,
@@ -243,6 +243,7 @@ fn call_to_av_rule<'a>(
         )?,
     ];
 
+    let mut warnings = Warnings::new();
     let validated_args = validate_arguments(
         c,
         &target_args,
@@ -252,7 +253,8 @@ fn call_to_av_rule<'a>(
         file,
         None,
         None,
-    )?;
+    )?
+    .inner(&mut warnings);
     let mut args_iter = validated_args.iter();
 
     let source = args_iter
@@ -335,7 +337,7 @@ fn call_to_av_rule<'a>(
         };
     }
 
-    Ok(av_rules.into_iter().collect())
+    Ok(WithWarnings::new(av_rules.into_iter().collect(), warnings))
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -440,7 +442,7 @@ fn call_to_fc_rules<'a>(
     class_perms: &ClassList,
     context: &BlockContext<'_>,
     file: Option<&'a SimpleFile<String, String>>,
-) -> Result<Vec<FileContextRule<'a>>, CascadeErrors> {
+) -> Result<WithWarnings<Vec<FileContextRule<'a>>>, CascadeErrors> {
     let target_args = vec![
         FunctionArgument::new(
             &DeclaredArgument {
@@ -480,6 +482,7 @@ fn call_to_fc_rules<'a>(
         )?,
     ];
 
+    let mut warnings = Warnings::new();
     let validated_args = validate_arguments(
         c,
         &target_args,
@@ -489,7 +492,8 @@ fn call_to_fc_rules<'a>(
         file,
         None,
         None,
-    )?;
+    )?
+    .inner(&mut warnings);
     let mut args_iter = validated_args.iter();
     let mut ret = Vec::new();
 
@@ -530,7 +534,7 @@ fn call_to_fc_rules<'a>(
         });
     }
 
-    Ok(ret)
+    Ok(WithWarnings::new(ret, warnings))
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -576,7 +580,7 @@ pub fn call_to_portcon_rules<'a>(
     class_perms: &ClassList,
     context: &BlockContext,
     file: Option<&SimpleFile<String, String>>,
-) -> Result<BTreeSet<PortconRule<'a>>, CascadeErrors> {
+) -> Result<WithWarnings<BTreeSet<PortconRule<'a>>>, CascadeErrors> {
     let target_args = vec![
         FunctionArgument::new(
             &DeclaredArgument {
@@ -616,6 +620,7 @@ pub fn call_to_portcon_rules<'a>(
         )?,
     ];
 
+    let mut warnings = Warnings::new();
     let validated_args = validate_arguments(
         c,
         &target_args,
@@ -625,7 +630,8 @@ pub fn call_to_portcon_rules<'a>(
         file,
         None,
         None,
-    )?;
+    )?
+    .inner(&mut warnings);
     let mut args_iter = validated_args.iter();
 
     let proto = args_iter
@@ -675,7 +681,7 @@ pub fn call_to_portcon_rules<'a>(
             context: context.clone(),
         });
     }
-    Ok(ret)
+    Ok(WithWarnings::new(ret, warnings))
 }
 
 // Recursively validate a port
@@ -859,7 +865,7 @@ fn call_to_fsc_rules<'a>(
     class_perms: &ClassList,
     context: &BlockContext<'_>,
     file: Option<&'a SimpleFile<String, String>>,
-) -> Result<Vec<FileSystemContextRule<'a>>, CascadeErrors> {
+) -> Result<WithWarnings<Vec<FileSystemContextRule<'a>>>, CascadeErrors> {
     let target_args = vec![
         FunctionArgument::new(
             &DeclaredArgument {
@@ -922,6 +928,7 @@ fn call_to_fsc_rules<'a>(
             None,
         )?,
     ];
+    let mut warnings = Warnings::new();
     let validated_args = validate_arguments(
         c,
         &target_args,
@@ -931,7 +938,8 @@ fn call_to_fsc_rules<'a>(
         file,
         None,
         None,
-    )?;
+    )?
+    .inner(&mut warnings);
     let mut args_iter = validated_args.iter();
     let mut ret = Vec::new();
 
@@ -1070,7 +1078,7 @@ fn call_to_fsc_rules<'a>(
         }
     }
 
-    Ok(ret)
+    Ok(WithWarnings::new(ret, warnings))
 }
 
 fn call_to_sids<'a>(
@@ -1079,7 +1087,7 @@ fn call_to_sids<'a>(
     class_perms: &ClassList,
     context: &BlockContext<'_>,
     file: Option<&SimpleFile<String, String>>,
-) -> Result<Vec<Sid<'a>>, CascadeErrors> {
+) -> Result<WithWarnings<Vec<Sid<'a>>>, CascadeErrors> {
     if context.in_function_block() {
         return Err(CascadeErrors::from(
             ErrorItem::make_compile_or_internal_error(
@@ -1117,6 +1125,7 @@ fn call_to_sids<'a>(
             None,
         )?,
     ];
+    let mut warnings = Warnings::new();
     let validated_args = validate_arguments(
         c,
         &target_args,
@@ -1126,7 +1135,8 @@ fn call_to_sids<'a>(
         file,
         None,
         None,
-    )?;
+    )?
+    .inner(&mut warnings);
     let mut args_iter = validated_args.iter();
 
     let sid_name = args_iter
@@ -1151,7 +1161,10 @@ fn call_to_sids<'a>(
         }
     };
 
-    Ok(vec![Sid::new(sid_name.to_string(), sid_context)])
+    Ok(WithWarnings::new(
+        vec![Sid::new(sid_name.to_string(), sid_context)],
+        warnings,
+    ))
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -1196,7 +1209,7 @@ fn call_to_domain_transition<'a>(
     class_perms: &ClassList,
     context: &BlockContext<'_>,
     file: Option<&'a SimpleFile<String, String>>,
-) -> Result<DomtransRule<'a>, CascadeErrors> {
+) -> Result<WithWarnings<DomtransRule<'a>>, CascadeErrors> {
     let target_args = vec![
         FunctionArgument::new(
             &DeclaredArgument {
@@ -1236,6 +1249,7 @@ fn call_to_domain_transition<'a>(
         )?,
     ];
 
+    let mut warnings = Warnings::new();
     let validated_args = validate_arguments(
         c,
         &target_args,
@@ -1245,7 +1259,8 @@ fn call_to_domain_transition<'a>(
         file,
         None,
         None,
-    )?;
+    )?
+    .inner(&mut warnings);
     let mut args_iter = validated_args.into_iter();
 
     let source = args_iter
@@ -1265,11 +1280,14 @@ fn call_to_domain_transition<'a>(
         return Err(ErrorItem::Internal(InternalError::new()).into());
     }
 
-    Ok(DomtransRule {
-        source: Cow::Owned(source),
-        target: Cow::Owned(target),
-        executable: Cow::Owned(executable),
-    })
+    Ok(WithWarnings::new(
+        DomtransRule {
+            source: Cow::Owned(source),
+            target: Cow::Owned(target),
+            executable: Cow::Owned(executable),
+        },
+        warnings,
+    ))
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -1327,7 +1345,7 @@ fn call_to_resource_transition<'a>(
     class_perms: &ClassList,
     context: &BlockContext<'_>,
     file: Option<&'a SimpleFile<String, String>>,
-) -> Result<Vec<ResourcetransRule<'a>>, CascadeErrors> {
+) -> Result<WithWarnings<Vec<ResourcetransRule<'a>>>, CascadeErrors> {
     let target_args = vec![
         FunctionArgument::new(
             &DeclaredArgument {
@@ -1391,6 +1409,7 @@ fn call_to_resource_transition<'a>(
         )?,
     ];
 
+    let mut warnings = Warnings::new();
     let validated_args = validate_arguments(
         c,
         &target_args,
@@ -1400,7 +1419,8 @@ fn call_to_resource_transition<'a>(
         file,
         None,
         None,
-    )?;
+    )?
+    .inner(&mut warnings);
     let mut args_iter = validated_args.into_iter();
     let mut ret = Vec::new();
 
@@ -1446,7 +1466,7 @@ fn call_to_resource_transition<'a>(
         });
     }
 
-    Ok(ret)
+    Ok(WithWarnings::new(ret, warnings))
 }
 
 fn check_associated_call(
@@ -2220,14 +2240,20 @@ fn validate_cast(
         .or_else(|| context.symbol_in_context(&true_start_type, types));
     if type_info.is_none() || !type_info.map(|ti| ti.is_setype(types)).unwrap_or(false) {
         let mut warnings = Warnings::new();
-        warnings.push(Warning::new(
-            "Could not resolve type.",
-            // TODO deal with unwrap
-            file.unwrap(),
-            start_type.get_range().unwrap_or_default(),
-            "This is not something that can be typecast. Could not resolve type.",
-        ));
-        return Ok(WithWarnings::new((), warnings));
+        match (file, start_type.get_range()) {
+            (Some(file), Some(range)) => {
+                warnings.push(Warning::new(
+                    "Could not resolve type.",
+                    file,
+                    range,
+                    "This policy will be omited",
+                ));
+                return Ok(WithWarnings::new((), warnings));
+            }
+            (_, _) => {
+                return Err(ErrorItem::Internal(InternalError::new()));
+            }
+        }
     }
     match (cast_ti, func_call, func_info) {
         (Some(cast_ti), Some(func_call), Some(func_info)) => {
@@ -2368,21 +2394,26 @@ impl<'a> ValidatedStatement<'a> {
             }
         }
 
+        let mut warnings = Warnings::new();
         match statement {
             Statement::Call(c) => match c.check_builtin() {
-                Some(BuiltIns::AvRule) => Ok(WithWarnings::from(
+                Some(BuiltIns::AvRule) => Ok(WithWarnings::new(
                     call_to_av_rule(c, types, class_perms, context, file)?
+                        .inner(&mut warnings)
                         .into_iter()
                         .map(ValidatedStatement::AvRule)
                         .collect::<BTreeSet<ValidatedStatement>>(),
+                    warnings,
                 )),
                 Some(BuiltIns::FileContext) => {
                     if in_resource {
-                        Ok(WithWarnings::from(
+                        Ok(WithWarnings::new(
                             call_to_fc_rules(c, types, class_perms, context, file)?
+                                .inner(&mut warnings)
                                 .into_iter()
                                 .map(ValidatedStatement::FcRule)
                                 .collect::<BTreeSet<ValidatedStatement>>(),
+                            warnings,
                         ))
                     } else {
                         Err(CascadeErrors::from(
@@ -2395,19 +2426,23 @@ impl<'a> ValidatedStatement<'a> {
                         ))
                     }
                 }
-                Some(BuiltIns::ResourceTransition) => Ok(WithWarnings::from(
+                Some(BuiltIns::ResourceTransition) => Ok(WithWarnings::new(
                     call_to_resource_transition(c, types, class_perms, context, file)?
+                        .inner(&mut warnings)
                         .into_iter()
                         .map(ValidatedStatement::ResourcetransRule)
                         .collect::<BTreeSet<ValidatedStatement>>(),
+                    warnings,
                 )),
                 Some(BuiltIns::FileSystemContext) => {
                     if in_resource {
-                        Ok(WithWarnings::from(
+                        Ok(WithWarnings::new(
                             call_to_fsc_rules(c, types, class_perms, context, file)?
+                                .inner(&mut warnings)
                                 .into_iter()
                                 .map(ValidatedStatement::FscRule)
                                 .collect::<BTreeSet<ValidatedStatement>>(),
+                            warnings,
                         ))
                     } else {
                         Err(CascadeErrors::from(
@@ -2424,11 +2459,13 @@ impl<'a> ValidatedStatement<'a> {
                     if in_resource {
                         // Unwrap is safe because in_resource can only be true when parent_type
                         // is Some
-                        Ok(WithWarnings::from(
+                        Ok(WithWarnings::new(
                             call_to_portcon_rules(c, types, class_perms, context, file)?
+                                .inner(&mut warnings)
                                 .into_iter()
                                 .map(ValidatedStatement::PortconRule)
                                 .collect::<BTreeSet<ValidatedStatement>>(),
+                            warnings,
                         ))
                     } else {
                         Err(CascadeErrors::from(
@@ -2441,24 +2478,24 @@ impl<'a> ValidatedStatement<'a> {
                         ))
                     }
                 }
-                Some(BuiltIns::InitialContext) => Ok(WithWarnings::from(
+                Some(BuiltIns::InitialContext) => Ok(WithWarnings::new(
                     call_to_sids(c, types, class_perms, context, file)?
+                        .inner(&mut warnings)
                         .into_iter()
                         .map(ValidatedStatement::Sid)
                         .collect::<BTreeSet<ValidatedStatement>>(),
+                    warnings,
                 )),
                 Some(BuiltIns::DomainTransition) => {
                     if !in_resource {
-                        Ok(WithWarnings::from(
-                            Some(ValidatedStatement::DomtransRule(call_to_domain_transition(
-                                c,
-                                types,
-                                class_perms,
-                                context,
-                                file,
-                            )?))
+                        Ok(WithWarnings::new(
+                            Some(ValidatedStatement::DomtransRule(
+                                call_to_domain_transition(c, types, class_perms, context, file)?
+                                    .inner(&mut warnings),
+                            ))
                             .into_iter()
                             .collect::<BTreeSet<ValidatedStatement>>(),
+                            warnings,
                         ))
                     } else {
                         Err(CascadeErrors::from(
@@ -2845,6 +2882,7 @@ impl ValidatedCall {
 
         if let Some(cast_name) = &call.cast_name {
             if let Some(class_name) = &call.class_name {
+                let mut warnings = Warnings::new();
                 validate_cast(
                     class_name,
                     types.get(cast_name.as_ref()),
@@ -2853,7 +2891,13 @@ impl ValidatedCall {
                     types,
                     context,
                     file,
-                )?;
+                )?
+                .inner(&mut warnings);
+                if !warnings.is_empty() {
+                    // The type didn't exist.  Abort early and return a warning
+                    // TODO: Mark this as optional
+                    return Ok(WithWarnings::new(BTreeSet::new(), warnings));
+                }
             }
         }
 
@@ -2888,6 +2932,7 @@ impl ValidatedCall {
         let mut arg_lists = Vec::new();
         arg_lists.push(args);
 
+        let mut warnings = Warnings::new();
         for arg in validate_arguments(
             call,
             &function_info.args,
@@ -2897,7 +2942,12 @@ impl ValidatedCall {
             file,
             Some(function_info),
             Some(functions),
-        )? {
+        )?
+        .inner(&mut warnings)
+        {
+            if !warnings.is_empty() {
+                return Ok(WithWarnings::new(BTreeSet::new(), warnings));
+            }
             // We don't know if these are symbols or lists.
             // If they are symbols, we save them as CilArg::Name
             // If they are lists, then we either need to explode our calls to the list count, or in
@@ -3080,7 +3130,7 @@ pub fn validate_arguments<'a>(
     // target_func_info and func_map will be None for built-ins
     target_func_info: Option<&'a FunctionInfo>,
     func_map: Option<&FunctionMap>,
-) -> Result<Vec<TypeInstance<'a>>, CascadeErrors> {
+) -> Result<WithWarnings<Vec<TypeInstance<'a>>>, CascadeErrors> {
     // Member functions start with an invisible"this" argument.  If it does, skip it
     let function_args_iter = function_args.iter().skip_while(|a| a.name == "this");
 
@@ -3145,6 +3195,7 @@ pub fn validate_arguments<'a>(
     for fa in function_args_iter {
         args.push(ExpectedArgInfo::from(fa));
     }
+    let mut warnings = Warnings::new();
     for (call_arg, decl_arg) in call_args
         .iter()
         .take_while(|a| !matches!(a.0, Argument::Named(_, _)))
@@ -3161,7 +3212,8 @@ pub fn validate_arguments<'a>(
             call.is_avc(),
             target_func_info,
             func_map,
-        )?;
+        )?
+        .inner(&mut warnings);
         decl_arg.provided_arg = Some(validated_arg);
     }
 
@@ -3197,7 +3249,8 @@ pub fn validate_arguments<'a>(
                     call.is_avc(),
                     target_func_info,
                     func_map,
-                )?;
+                )?
+                .inner(&mut warnings);
                 args[index].provided_arg = Some(validated_arg);
             }
             _ => {
@@ -3232,7 +3285,8 @@ pub fn validate_arguments<'a>(
                         target_func_info,
                         func_map,
                     )
-                    .map_err(|_| InternalError::new())?,
+                    .map_err(|_| InternalError::new())?
+                    .inner(&mut warnings),
                     None => {
                         return Err(ErrorItem::make_compile_or_internal_error(
                             &format!("No value supplied for {}", a.function_arg.name),
@@ -3251,7 +3305,7 @@ pub fn validate_arguments<'a>(
         out.push(provided_arg);
     }
 
-    Ok(out)
+    Ok(out.into())
 }
 
 // The ast Argument owns the data, this struct is similar, but has references to the owned data in
@@ -3324,7 +3378,7 @@ impl<'a> ArgForValidation<'a> {
         types: &TypeMap,
         context: &BlockContext<'a>,
         file: Option<&SimpleFile<String, String>>,
-    ) -> Result<(), ErrorItem> {
+    ) -> Result<WithWarnings<()>, ErrorItem> {
         let err_ret = |msg: &str, r: Option<Range<usize>>| {
             ErrorItem::make_compile_or_internal_error(
                 format!("Cannot typecast {}", msg).as_ref(),
@@ -3345,7 +3399,6 @@ impl<'a> ArgForValidation<'a> {
                     context,
                     file,
                 )?;
-                return Ok(());
             }
             ArgForValidation::List(v) => {
                 for s in v {
@@ -3372,7 +3425,7 @@ impl<'a> ArgForValidation<'a> {
             }
         }
 
-        Ok(())
+        Ok(().into())
     }
 
     // Return true if this is a symbol which binds to a list, else false
@@ -3397,9 +3450,10 @@ fn validate_argument<'a>(
     is_avc: bool,
     func_info: Option<&FunctionInfo>,
     func_map: Option<&FunctionMap>,
-) -> Result<TypeInstance<'a>, ErrorItem> {
+) -> Result<WithWarnings<TypeInstance<'a>>, ErrorItem> {
     // If there is a cast, we first validate that regardless of whether the actual value is a list
     if let Some(cast_name) = cast_name {
+        let mut warnings = Warnings::new();
         // If the cast doesn't validate, that's an error and we can just return the cast validation
         // error
         let cast_ti = validate_argument(
@@ -3413,20 +3467,25 @@ fn validate_argument<'a>(
             is_avc,
             func_info,
             func_map,
-        )?;
-        arg.validate_argcast(&cast_ti, types, context, file)?;
+        )?
+        .inner(&mut warnings);
+        arg.validate_argcast(&cast_ti, types, context, file)?
+            .inner(&mut warnings);
 
-        return Ok(TypeInstance::new_cast_instance(
-            &arg,
-            argument_to_typeinfo(
+        return Ok(WithWarnings::new(
+            TypeInstance::new_cast_instance(
                 &arg,
-                types,
-                class_perms,
-                Some(target_argument.param_type),
-                context,
+                argument_to_typeinfo(
+                    &arg,
+                    types,
+                    class_perms,
+                    Some(target_argument.param_type),
+                    context,
+                    file,
+                )?,
                 file,
-            )?,
-            file,
+            ),
+            warnings,
         ));
     }
 
@@ -3463,7 +3522,7 @@ fn validate_argument<'a>(
                     ));
                 }
             }
-            Ok(TypeInstance::new(&arg, target_ti, file, context))
+            Ok(TypeInstance::new(&arg, target_ti, file, context).into())
         }
         _ => {
             let arg_typeinfo = argument_to_typeinfo(
@@ -3521,7 +3580,7 @@ fn validate_argument<'a>(
             }
 
             if arg_typeinfo.is_child_or_actual_type(target_argument.param_type, types) {
-                Ok(TypeInstance::new(&arg, arg_typeinfo, file, context))
+                Ok(TypeInstance::new(&arg, arg_typeinfo, file, context).into())
             } else {
                 Err(validate_argument_error_handler(
                     arg,

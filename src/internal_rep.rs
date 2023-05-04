@@ -712,6 +712,7 @@ pub fn validate_derive_args<'a>(
 
     let fake_call = FuncCall::new(None, CascadeString::from("derive"), arguments.to_vec());
 
+    let mut warnings = Warnings::new();
     let valid_args = validate_arguments(
         &fake_call,
         &target_args,
@@ -721,7 +722,8 @@ pub fn validate_derive_args<'a>(
         file,
         None,
         None,
-    )?;
+    )?
+    .inner(&mut warnings);
 
     let mut args_iter = valid_args.iter();
 
