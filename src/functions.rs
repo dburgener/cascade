@@ -2246,7 +2246,7 @@ fn validate_cast(
                     "Could not resolve type.",
                     file,
                     range,
-                    "This policy will be omited",
+                    "In the future, this rule will be included as optional for potential cross-compiling.  For now it is ignored",
                 ));
                 return Ok(WithWarnings::new((), warnings));
             }

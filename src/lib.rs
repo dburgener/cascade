@@ -1448,7 +1448,12 @@ mod tests {
     // Post 0.1, we'll mark these as optional
     #[test]
     fn nonexistent_optional_test() {
-        valid_policy_test("nonexistent_optional.cas", &[], &["doesnt_exist"], 1);
+        valid_policy_test(
+            "nonexistent_optional.cas",
+            &[],
+            &["doesnt_exist", "not_here"],
+            2,
+        );
     }
 
     #[test]
