@@ -155,3 +155,28 @@ domain f {
 	e.call_arg(b1, this);
 	e.call_arg(b2, this);
 }
+
+// Derive with this
+virtual resource derive_this_2 inherits foo {
+	fn my_func(domain source) {
+		this.read(source);
+	}
+
+	fn use_this(domain source) {
+		this.my_func(source);
+	}
+}
+
+virtual resource derive_this_1 {
+	fn use_this(domain source) {
+		// do something else
+		allow(source, this, file, read);
+	}
+}
+
+resource derive_this_3 inherits derive_this_2, derive_this_1 {}
+
+domain call_derive_this {
+	// Please never write real policy that uses the word "this" this confusingly
+	derive_this_3.use_this(this);
+}

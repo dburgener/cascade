@@ -1902,6 +1902,12 @@ impl<'a> FunctionInfo<'a> {
 
         for (arg, name) in derived_args.iter_mut().zip(derived_arg_names.iter()) {
             arg.name = name.iter().cloned().collect::<Vec<String>>().join("_");
+            if arg.name == "this" {
+                // While we generally match the identical parent signatures, "this" is special.  It
+                // should always refer to the type that owns the function.  So it gets set
+                // specially to the type deriving, not a parent type
+                arg.param_type = deriving_type;
+            }
         }
 
         let mut annotations = BTreeSet::new();
