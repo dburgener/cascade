@@ -112,3 +112,46 @@ resource overwrite_two inherits bar {
 
 @alias(an_alias)
 resource aliased_child inherits bar {}
+
+// Derive arg call test
+
+virtual resource a {
+	fn read(domain source) {
+		allow(source, this, file, read);
+	}
+	fn write(domain source) {
+		allow(source, this, file, write);
+	}
+}
+
+resource b1 inherits a {
+	fn read(domain source) {
+		allow(source, this, lnk_file, read);
+	}
+	fn write(domain source) {
+		allow(source, this, lnk_file, write);
+	}
+}
+
+resource b2 inherits a {}
+
+// c and d have similar functions with different arg names
+virtual resource c {
+	fn call_arg(a to_call_read, domain source) {
+		to_call_read.read(source);
+	}
+}
+
+virtual resource d {
+	fn call_arg(a to_call_write, domain source) {
+		to_call_write.write(source);
+	}
+}
+
+// Should derive call_arg with read and write and a rewritten argument name
+resource e inherits c,d {}
+
+domain f {
+	e.call_arg(b1, this);
+	e.call_arg(b2, this);
+}
