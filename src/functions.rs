@@ -2186,7 +2186,7 @@ fn validate_cast(
     context: &BlockContext,
     // File used for error output
     file: Option<&SimpleFile<String, String>>,
-) -> Result<(), ErrorItem> {
+) -> Result<WithWarnings<()>, ErrorItem> {
     let err_ret = |msg: &str, r: Option<Range<usize>>| {
         ErrorItem::make_compile_or_internal_error(
             "Cannot typecast",
@@ -2219,7 +2219,15 @@ fn validate_cast(
         .get(&true_start_type)
         .or_else(|| context.symbol_in_context(&true_start_type, types));
     if type_info.is_none() || !type_info.map(|ti| ti.is_setype(types)).unwrap_or(false) {
-        return Err(err_ret("Could not resolve type", start_type.get_range()));
+        let mut warnings = Warnings::new();
+        warnings.push(Warning::new(
+            "Could not resolve type.",
+            // TODO deal with unwrap
+            file.unwrap(),
+            start_type.get_range().unwrap_or_default(),
+            "This is not something that can be typecast. Could not resolve type.",
+        ));
+        return Ok(WithWarnings::new((), warnings));
     }
     match (cast_ti, func_call, func_info) {
         (Some(cast_ti), Some(func_call), Some(func_info)) => {
@@ -2227,26 +2235,26 @@ fn validate_cast(
             // we need to check if the function itself is castable.
             if !validate_inheritance(func_call, type_info, &cast_ti.name, file)? {
                 if func_info.is_castable {
-                    Ok(())
+                    Ok(().into())
                 } else {
                     Err(ErrorItem::make_compile_or_internal_error(
                         "Not something we can cast to",
                         file,
                         func_call.get_name_range(),
-                        "The function is not castable or inherited by caller",
+                        "The function is not castable or inherited by caller.",
                     ))
                 }
             } else {
-                Ok(())
+                Ok(().into())
             }
         }
         (Some(_), Some(_), None) => Err(ErrorItem::Internal(InternalError::new())),
         (Some(_), None, Some(_)) => Err(ErrorItem::Internal(InternalError::new())),
         (None, _, _) => Err(err_ret(
-            "Could not resolve cast type",
+            "Could not resolve cast type.",
             start_type.get_range(),
         )),
-        (_, _, _) => Ok(()),
+        (_, _, _) => Ok(().into()),
     }
 }
 
@@ -3328,7 +3336,7 @@ impl<'a> ArgForValidation<'a> {
 
         match self {
             ArgForValidation::Var(s) => {
-                return validate_cast(
+                validate_cast(
                     s,
                     Some(cast_ti.type_info.borrow()),
                     None,
@@ -3336,7 +3344,8 @@ impl<'a> ArgForValidation<'a> {
                     types,
                     context,
                     file,
-                );
+                )?;
+                return Ok(());
             }
             ArgForValidation::List(v) => {
                 for s in v {
