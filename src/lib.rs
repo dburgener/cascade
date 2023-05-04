@@ -1694,4 +1694,18 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn error_in_associate_test() {
+        // It's important that there be only 1 error and that it actually point at a code point
+        error_policy_test!("error_in_associate.cas", 1, ErrorItem::Compile(CompileError {
+            diagnostic: Diag {
+                inner: Diagnostic {
+                    message: msg,
+                    ..
+                }
+            },
+            ..
+        }) if msg.contains("file_context"));
+    }
 }

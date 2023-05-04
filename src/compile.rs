@@ -1539,7 +1539,11 @@ fn create_synthetic_resource(
     dup_res_decl
         .expressions
         // If dup_res_decl is concrete, do not inherit virtual functions
-        .retain(|e| dup_res_is_virtual || !e.is_virtual_function());
+        // Never inherit statements
+        .retain(|e| {
+            (dup_res_is_virtual || !e.is_virtual_function())
+                && matches!(e, Expression::Decl(Declaration::Func(_)))
+        });
     if !global_exprs.insert(Expression::Decl(Declaration::Type(Box::new(
         dup_res_decl.clone(),
     )))) {

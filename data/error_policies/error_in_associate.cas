@@ -1,0 +1,5 @@
+domain dom {
+	resource res {
+		file_context("/too/few/args");
+	}
+}
