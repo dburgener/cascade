@@ -126,12 +126,12 @@ impl<T: Declared> AliasMap<T> {
     }
 
     pub fn set_aliases(&mut self, aliases: BTreeMap<String, String>) {
+        self.update_alias_secondary_indices(&aliases);
         self.aliases = aliases;
-        self.update_alias_secondary_indices()
     }
 
-    fn update_alias_secondary_indices(&mut self) {
-        for (alias, true_name) in &self.aliases {
+    fn update_alias_secondary_indices(&mut self, new_aliases: &BTreeMap<String, String>) {
+        for (alias, true_name) in new_aliases {
             if let Some(val) = self.get(true_name) {
                 for secondary in val.get_secondary_indices() {
                     match self.secondary_indices.get_mut(&secondary) {
@@ -150,9 +150,12 @@ impl<T: Declared> AliasMap<T> {
 
     // Add a single alias
     pub fn add_alias(&mut self, alias: String, true_name: String) {
+        let mut map = BTreeMap::new();
+        // TODO: These clones can probably be eliminated, but it's not immediately clear to me how
+        map.insert(alias.clone(), true_name.clone());
+        self.update_alias_secondary_indices(&map);
         // TODO: worry about duplicates
         self.aliases.insert(alias, true_name);
-        self.update_alias_secondary_indices();
     }
 
     // fallible extend, reject duplicates
