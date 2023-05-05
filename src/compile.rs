@@ -578,15 +578,6 @@ pub fn prevalidate_functions(
         num_changed = determine_castable(functions, types);
     }
 
-    let (mut terminated_functions, mut nonterm_functions) = initialize_terminated(functions);
-
-    search_for_recursion(
-        &mut terminated_functions,
-        &mut nonterm_functions,
-        types,
-        functions,
-    )?;
-
     Ok(())
 }
 
@@ -693,6 +684,15 @@ fn postvalidate_functions(
 ) -> Result<(), CascadeErrors> {
     let mut deferrals = BTreeSet::new();
     let mut errors = CascadeErrors::new();
+
+    let (mut terminated_functions, mut nonterm_functions) = initialize_terminated(functions);
+
+    search_for_recursion(
+        &mut terminated_functions,
+        &mut nonterm_functions,
+        types,
+        functions,
+    )?;
 
     for (name, fi) in functions.iter() {
         for statement in fi.body.as_ref().unwrap_or(&BTreeSet::new()) {
