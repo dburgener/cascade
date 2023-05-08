@@ -3934,8 +3934,12 @@ pub fn search_for_recursion(
                 }
                 if is_term {
                     terminated_list.insert(function_info.get_cil_name());
-                    removed += 1;
-                    functions.remove(&function_info.get_cil_name());
+                    if functions.remove(&function_info.get_cil_name()) {
+                        removed += 1;
+                    } else {
+                        // We tried removing, but it was already gone.  Something has gone wrong
+                        return Err(ErrorItem::Internal(InternalError::new()).into());
+                    }
                 }
             }
         }
