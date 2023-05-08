@@ -2015,7 +2015,11 @@ fn organize_type_map(types: &TypeMap) -> Result<Vec<&TypeInfo>, CascadeErrors> {
             ));
         }
         for t in &current_pass_types {
-            tmp_types.remove(&t.name.to_string());
+            if tmp_types.remove(&t.name.to_string()).is_none() {
+                // If remove failed, something has gone wrong, and we'll keep trying to remove this
+                // forever, so bail out
+                return Err(ErrorItem::Internal(InternalError::new()).into());
+            }
         }
         out.append(&mut current_pass_types);
 
