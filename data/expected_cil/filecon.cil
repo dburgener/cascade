@@ -154,6 +154,7 @@
 (filecon "/etc/somesymlink" symlink (system_u object_r foo ((s0) (s0))))
 (filecon "/var/somepipe" pipe (system_u object_r foo ((s0) (s0))))
 (filecon "/var/somesocket" socket (system_u object_r foo ((s0) (s0))))
+(filecon "HOME_ROOT" dir (system_u object_r foo ((s0) (s0))))
 (sid kernel)
 (sidcontext kernel (system_u system_r kernel_sid ((s0) (s0))))
 (sid security)

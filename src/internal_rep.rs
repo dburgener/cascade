@@ -785,7 +785,7 @@ pub fn validate_derive_args<'a>(
 
 // strings may be paths or strings
 pub fn type_name_from_string(string: &str) -> String {
-    if string.contains('/') {
+    if string.contains('/') || string.contains("HOME_ROOT") || string.contains("HOME_DIR") {
         "path".to_string()
     } else {
         "string".to_string()
