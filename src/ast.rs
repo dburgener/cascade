@@ -324,14 +324,30 @@ impl TypeDecl {
 
 impl Hash for TypeDecl {
     fn hash<H: Hasher>(&self, h: &mut H) {
-        self.name.hash(h);
+        if self.is_extension {
+            self.name.hash(h);
+            self.is_extension.hash(h);
+            self.inherits.hash(h);
+            self.expressions.hash(h);
+        } else {
+            self.name.hash(h);
+        }
     }
 }
 
-// Only one Type declaration allowed per name
+// Only one real Type declaration allowed per name
+// Extensions compare other aspects
 impl PartialEq for TypeDecl {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
+        if self.is_extension || other.is_extension {
+            self.name == other.name
+                && self.is_extension == other.is_extension
+                && self.expressions == other.expressions
+                && self.inherits == other.inherits
+                && self.annotations == other.annotations
+        } else {
+            self.name == other.name
+        }
     }
 }
 
@@ -1234,7 +1250,7 @@ mod tests {
             inherits: Vec::new(),
             is_virtual: true,
             is_trait: true,
-            is_extension: true,
+            is_extension: false,
             expressions: Vec::new(),
             annotations: Annotations::new(),
         };
@@ -1251,7 +1267,14 @@ mod tests {
             },
         };
         assert_eq!(c, d);
-        assert_eq!(hash(c), hash(d));
+        assert_eq!(hash(c.clone()), hash(d));
+
+        let mut c_extension = c.clone();
+        c_extension.is_extension = true;
+
+        assert_ne!(c, c_extension);
+        assert_ne!(hash(c), hash(c_extension.clone()));
+        assert_eq!(hash(c_extension.clone()), hash(c_extension));
 
         let e = Port {
             low_port_num: 2,
