@@ -1463,6 +1463,17 @@ mod tests {
     }
 
     #[test]
+    fn nested_conflict_test() {
+        valid_policy_test(
+            "nested_conflict.cas",
+            &["(macro name-conflict_func ((type source)) (allow source self (capability (sys_admin))))",
+            ],
+            &["(type name)"],
+            0
+            );
+    }
+
+    #[test]
     fn invalid_inherit_associated_call() {
         error_policy_test!("bad_inherits_associated_call.cas", 2, ErrorItem::Compile(_));
     }
