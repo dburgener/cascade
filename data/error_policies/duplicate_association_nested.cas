@@ -1,0 +1,9 @@
+virtual resource tmp {}
+
+@associate([tmp])
+virtual domain bar {}
+
+domain baz inherits bar {
+	resource tmp {}
+}
+

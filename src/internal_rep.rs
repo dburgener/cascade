@@ -38,6 +38,7 @@ pub struct Associated {
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum InsertExtendTiming {
+    All,
     Early,
     Late,
 }
@@ -160,7 +161,7 @@ impl AnnotationInfo {
 
     pub fn insert_timing(&self) -> InsertExtendTiming {
         match self {
-            AnnotationInfo::Associate(_) => InsertExtendTiming::Early,
+            AnnotationInfo::Associate(_) => InsertExtendTiming::All,
             AnnotationInfo::NestAssociate(_) => InsertExtendTiming::Early,
             // Inherit is Early, but note that it may also be set on an associated resource, in
             // which case it also has special handling in create_synthetic resource.  The "Early"
@@ -224,6 +225,7 @@ pub struct TypeInfo {
     pub list_coercion: bool, // Automatically transform single instances of this type to a single element list
     pub declaration_file: Option<SimpleFile<String, String>>, // Built in types have no file
     pub annotations: BTreeSet<AnnotationInfo>,
+    pub associated_resources: BTreeSet<CascadeString>,
     // TODO: replace with Option<&TypeDecl>
     pub decl: Option<TypeDecl>,
     // If self.is_virtual, then this should always be empty.  However, if !self.is_virtual, then
@@ -277,6 +279,25 @@ impl Declared for TypeInfo {
     }
 }
 
+#[cfg(test)]
+impl Default for TypeInfo {
+    fn default() -> Self {
+        TypeInfo {
+            name: "".into(),
+            inherits: Vec::new(),
+            variant: TypeVar::Other,
+            is_virtual: false,
+            is_trait: false,
+            list_coercion: false,
+            declaration_file: None,
+            annotations: BTreeSet::new(),
+            associated_resources: BTreeSet::new(),
+            decl: None,
+            non_virtual_children: BTreeSet::new(),
+        }
+    }
+}
+
 impl TypeInfo {
     pub fn new(
         td: TypeDecl,
@@ -303,6 +324,13 @@ impl TypeInfo {
 
         let annotations = get_type_annotations(file, &td.annotations)?.inner(&mut warnings);
 
+        let mut associated_resources = BTreeSet::new();
+        for ann in &annotations {
+            if let AnnotationInfo::Associate(associations) = ann {
+                associated_resources.append(&mut associations.resources.clone());
+            }
+        }
+
         Ok(WithWarnings::new(
             TypeInfo {
                 name: td.name.clone(),
@@ -314,6 +342,7 @@ impl TypeInfo {
                 list_coercion: td.annotations.has_annotation("makelist"),
                 declaration_file: Some(file.clone()), // TODO: Turn into reference
                 annotations,
+                associated_resources,
                 decl: Some(td),
                 non_virtual_children: BTreeSet::new(),
             },
@@ -332,6 +361,7 @@ impl TypeInfo {
             list_coercion: makelist,
             declaration_file: None,
             annotations: BTreeSet::new(),
+            associated_resources: BTreeSet::new(),
             decl: None,
             non_virtual_children: BTreeSet::new(),
         }
@@ -490,6 +520,16 @@ impl TypeInfo {
             }
         }
         ret
+    }
+
+    // If the resource is associated, return just the resource name portion (not the domain
+    // portion).  Otherwise, just return the name.
+    // eg foo.bar -> bar, baz -> baz
+    pub fn basename(&self) -> &str {
+        match self.name.as_ref().split_once('.') {
+            Some((_, r)) => r,
+            _ => self.name.as_ref(),
+        }
     }
 }
 
@@ -1418,6 +1458,21 @@ impl<'a> From<&'a TypeInfo> for TypeInstance<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn basename_test() {
+        let ti = TypeInfo {
+            name: "foo".into(),
+            ..TypeInfo::default()
+        };
+        assert_eq!(ti.basename(), "foo");
+
+        let ti = TypeInfo {
+            name: "foo.bar".into(),
+            ..TypeInfo::default()
+        };
+        assert_eq!(ti.basename(), "bar");
+    }
 
     #[test]
     fn typeinstance_test() {

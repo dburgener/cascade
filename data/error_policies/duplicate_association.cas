@@ -7,8 +7,3 @@ virtual domain bar {}
 domain foo inherits bar {
 	allow(this, this.tmp, file, write);
 }
-
-domain baz inherits bar {
-	resource tmp {}
-}
-
