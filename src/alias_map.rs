@@ -5,6 +5,7 @@ use std::ops::Range;
 
 use codespan_reporting::files::SimpleFile;
 
+use crate::ast::CascadeString;
 use crate::error::{CascadeErrors, ErrorItem, InternalError};
 use crate::util::append_set_map;
 
@@ -12,7 +13,7 @@ use crate::util::append_set_map;
 pub struct AliasMap<T> {
     declarations: BTreeMap<String, T>,
     #[allow(dead_code)]
-    aliases: BTreeMap<String, String>,
+    aliases: BTreeMap<CascadeString, String>,
     // Secondary_indices allow efficient lookups based on some other key.  This is useful to
     // efficiently get a subset of the map based on a prepopulated key, such as all functions for a
     // given type
@@ -25,9 +26,9 @@ pub type AliasMapValuesMut<'a, T> = std::collections::btree_map::ValuesMut<'a, S
 pub type AliasMapIntoIter<T> = std::collections::btree_map::IntoIter<String, T>;
 
 impl<T: Declared> AliasMap<T> {
-    fn get_type_name<'a>(aliases: &'a BTreeMap<String, String>, key: &'a str) -> &'a str {
-        if aliases.contains_key(key) {
-            &aliases[key]
+    fn get_type_name<'a>(aliases: &'a BTreeMap<CascadeString, String>, key: &'a str) -> &'a str {
+        if aliases.contains_key(&CascadeString::from(key)) {
+            &aliases[&CascadeString::from(key)]
         } else {
             key
         }
@@ -125,22 +126,54 @@ impl<T: Declared> AliasMap<T> {
         append_set_map(&mut self.secondary_indices, &mut other.secondary_indices);
     }
 
-    pub fn set_aliases(&mut self, aliases: BTreeMap<String, String>) {
+    pub fn validate_aliases(
+        &self,
+        aliases: &BTreeMap<CascadeString, String>,
+        alias_files: &BTreeMap<CascadeString, SimpleFile<String, String>>,
+    ) -> Result<(), CascadeErrors> {
+        let mut errors = CascadeErrors::new();
+        for a in aliases.keys() {
+            if let Some(existing) = self.declarations.get(a.as_ref()) {
+                errors.append(
+                    ErrorItem::make_compile_or_internal_error(
+                        &format!(
+                            "Alias name conflicts with an existing {}",
+                            existing.get_generic_name()
+                        ),
+                        alias_files.get(a),
+                        a.get_range(),
+                        "",
+                    )
+                    .maybe_add_additional_message(
+                        existing.get_file().as_ref(),
+                        existing.get_name_range(),
+                        &format!("Existing {} found here", existing.get_generic_name()),
+                    )
+                    .into(),
+                )
+            }
+        }
+        errors.into_result(())
+    }
+
+    // The need for alias_files is a little awkward. Without it, we can't report errors on the
+    // alias declarations.  Post-0.1 we'll include file info in CascadeStrings and this can go away
+    pub fn set_aliases(&mut self, aliases: BTreeMap<CascadeString, String>) {
         self.update_alias_secondary_indices(&aliases);
         self.aliases = aliases;
     }
 
-    fn update_alias_secondary_indices(&mut self, new_aliases: &BTreeMap<String, String>) {
+    fn update_alias_secondary_indices(&mut self, new_aliases: &BTreeMap<CascadeString, String>) {
         for (alias, true_name) in new_aliases {
             if let Some(val) = self.get(true_name) {
                 for secondary in val.get_secondary_indices() {
                     match self.secondary_indices.get_mut(&secondary) {
                         Some(val) => {
-                            val.insert(alias.clone());
+                            val.insert(alias.to_string());
                         }
                         None => {
                             self.secondary_indices
-                                .insert(secondary, BTreeSet::from([alias.clone()]));
+                                .insert(secondary, BTreeSet::from([alias.to_string()]));
                         }
                     }
                 }
@@ -149,7 +182,7 @@ impl<T: Declared> AliasMap<T> {
     }
 
     // Add a single alias
-    pub fn add_alias(&mut self, alias: String, true_name: String) {
+    pub fn add_alias(&mut self, alias: CascadeString, true_name: String) {
         let mut map = BTreeMap::new();
         // TODO: These clones can probably be eliminated, but it's not immediately clear to me how
         map.insert(alias.clone(), true_name.clone());

@@ -1,0 +1,16 @@
+virtual resource parent {
+	fn func(domain source) {
+		allow(source, this, file, read);
+	}
+}
+
+virtual resource foo inherits parent {}
+
+@alias(foo)
+virtual resource bar inherits parent {}
+
+domain dom {
+	allow(this, foo, file, read);
+}
+
+

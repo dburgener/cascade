@@ -146,7 +146,8 @@ fn compile_machine_policies_internal(
     }
 
     // Generate type aliases
-    let t_aliases = compile::collect_aliases(type_map.iter());
+    let (t_aliases, alias_files) = compile::collect_aliases(type_map.iter());
+    type_map.validate_aliases(&t_aliases, &alias_files)?;
     type_map.set_aliases(t_aliases);
 
     for p in &policies {
@@ -236,7 +237,8 @@ fn compile_machine_policies_internal(
     compile::validate_modules(&policies, &type_map, &mut module_map)?;
 
     // Generate module aliases
-    let m_aliases = compile::collect_aliases(module_map.iter());
+    let (m_aliases, alias_files) = compile::collect_aliases(module_map.iter());
+    module_map.validate_aliases(&m_aliases, &alias_files)?;
     module_map.set_aliases(m_aliases);
 
     // Validate machines
@@ -1707,5 +1709,10 @@ mod tests {
             },
             ..
         }) if msg.contains("file_context"));
+    }
+
+    #[test]
+    fn alias_name_conflict_test() {
+        error_policy_test!("alias_conflict.cas", 1, ErrorItem::Compile(_));
     }
 }
