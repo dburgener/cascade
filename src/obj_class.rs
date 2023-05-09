@@ -732,6 +732,15 @@ pub fn make_classlist() -> ClassList<'static> {
         ],
     );
 
+    classlist.add_class(
+        "passwd",
+        vec!["chfn", "chsh", "crontab", "passwd", "rootok"],
+    );
+
+    classlist.add_class("context", vec!["contains", "translate"]);
+
+    classlist.add_class("proxy", vec!["read"]);
+
     classlist
 }
 
