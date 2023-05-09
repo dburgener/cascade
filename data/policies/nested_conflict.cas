@@ -1,0 +1,24 @@
+collection name {
+	fn func(domain source) {
+		allow(source, self, capability, sys_ptrace);
+	}
+
+	fn conflict_func(domain source) {
+		allow(source, self, capability, sys_admin);
+	}
+}
+
+virtual resource name_parent {
+	fn conflict_func(domain source) {
+		allow(source, this, file, read);
+	}
+}
+
+domain foo {
+	// Should only derive a function from name_parent, not collection name
+	resource name inherits name_parent {}
+}
+
+domain bar {
+	name.func(foo);
+}
