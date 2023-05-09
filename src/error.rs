@@ -253,6 +253,24 @@ impl ErrorItem {
             (_, _) => ErrorItem::Internal(InternalError::new()),
         }
     }
+
+    // If it's a compile error, add an additional message, otherwise just return the error
+    pub fn maybe_add_additional_message(
+        self,
+        file: Option<&SimpleFile<String, String>>,
+        range: Option<Range<usize>>,
+        msg: &str,
+    ) -> Self {
+        if let ErrorItem::Compile(error) = self {
+            if let (Some(file), Some(range)) = (file, range) {
+                ErrorItem::Compile(error.add_additional_message(file, range, msg))
+            } else {
+                ErrorItem::Internal(InternalError::new())
+            }
+        } else {
+            self
+        }
+    }
 }
 
 impl From<ErrorItem> for Vec<ErrorItem> {

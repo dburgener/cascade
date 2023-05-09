@@ -801,7 +801,7 @@ fn handle_derive<'a>(
                 let mut aliases = BTreeSet::new();
                 for ann in &derived_function.annotations {
                     if let AnnotationInfo::Alias(alias) = ann {
-                        aliases.insert(alias.to_string());
+                        aliases.insert(alias.clone());
                     }
                 }
                 if functions
@@ -836,6 +836,14 @@ fn handle_derive<'a>(
                     return Err(error.into());
                 }
                 for alias in aliases {
+                    let mut files_map = BTreeMap::new();
+                    if let Some(file) = target_type.declaration_file.clone() {
+                        files_map.insert(alias.clone(), file);
+                    }
+                    functions.validate_aliases(
+                        &BTreeMap::from([(alias.clone(), df_cil_name.clone())]),
+                        &files_map,
+                    )?;
                     functions.add_alias(alias, df_cil_name.clone());
                 }
             }
@@ -1202,7 +1210,8 @@ pub fn get_reduced_infos(
     mark_non_virtual_children(&mut new_type_map);
 
     // Generate type aliases for the new reduced type map
-    let new_t_aliases = collect_aliases(new_type_map.iter());
+    let (new_t_aliases, alias_files) = collect_aliases(new_type_map.iter());
+    new_type_map.validate_aliases(&new_t_aliases, &alias_files)?;
     new_type_map.set_aliases(new_t_aliases);
 
     // Get the function infos
@@ -1344,7 +1353,8 @@ pub fn get_funcs<'a>(
     // Stops if something went wrong for this major step.
     ret = ret.into_result_self()?;
     // Get function aliases
-    let f_aliases = collect_aliases(reduced_func_map.iter());
+    let (f_aliases, alias_files) = collect_aliases(reduced_func_map.iter());
+    reduced_func_map.validate_aliases(&f_aliases, &alias_files)?;
     reduced_func_map.set_aliases(f_aliases);
     ret.into_result(reduced_func_map)
 }
@@ -2032,21 +2042,33 @@ fn organize_type_map(types: &TypeMap) -> Result<Vec<&TypeInfo>, CascadeErrors> {
 
 // Gather all the alias annotations for types and functions and return them so they can be stored
 // in the maps
-pub fn collect_aliases<'a, I, T>(aliasable_map: I) -> BTreeMap<String, String>
+// We gather files, because we aren't storing file info in CascadeStrings yet.  That can go away
+// once we store file info in CascadeStrings
+pub fn collect_aliases<'a, I, T>(
+    aliasable_map: I,
+) -> (
+    BTreeMap<CascadeString, String>,
+    BTreeMap<CascadeString, SimpleFile<String, String>>,
+)
 where
-    I: Iterator<Item = (&'a String, T)>,
-    T: Annotated,
+    I: Iterator<Item = (&'a String, &'a T)>,
+    T: Declared + 'a,
+    &'a T: Annotated,
 {
     let mut aliases = BTreeMap::new();
+    let mut alias_files = BTreeMap::new();
     for (k, v) in aliasable_map {
         for a in v.get_annotations() {
             if let AnnotationInfo::Alias(a) = a {
-                aliases.insert(a.to_string(), k.clone());
+                aliases.insert(a.clone(), k.clone());
+                if let Some(file) = v.get_file().clone() {
+                    alias_files.insert(a.clone(), file);
+                }
             }
         }
     }
 
-    aliases
+    (aliases, alias_files)
 }
 
 pub fn call_derived_associated_calls<'a>(
