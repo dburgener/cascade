@@ -408,6 +408,42 @@ domain foo inherits bar {
 `read_bar_tmp` references an associated type `bar.tmp`.  The function cast of
 `foo<bar>.read_bar_tmp` is allowed since foo is a child of bar.
 
+## Process labeling
+By default, processes inherit the SELinux label of their parent process. To
+override this behavior, a policy developer can use the `domain_transition()`
+function to specify what new label a process should have.  This function takes
+the labels of the parent process and executable, and a new label to assign to
+the child process.
+
+```
+fn domain_transition(domain source, resource executable, domain target)
+```
+
+For example:
+
+```
+domain my_app {
+	resource exec {}
+}
+
+domain admin {
+	domain_transition(this, my_app.exec, my_app);
+}
+```
+
+The `domain_transition()` function does not grant access, it only specifies
+what the labeling behavior should be if access is granted.  Access needs to be
+granted with corresponding allow rules, for each relationship between parent,
+executable and child.  For example, continuing from above:
+
+```
+extend domain admin {
+	allow(this, my_app.exec, file, [ execute getattr open read ]);
+	allow(this, my_app, process, transition);
+	allow(my_app, my_app.exec, file, entrypoint);
+}
+```
+
 ## File labeling
 
 SELinux supports three types of labeling: dynamic labeling, file contexts and
