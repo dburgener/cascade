@@ -9,8 +9,8 @@ use std::ops::Range;
 
 use crate::alias_map::Declared;
 use crate::ast::{
-    Argument, CascadeString, Declaration, Expression, FuncCall, LetBinding, Machine, Module,
-    PolicyFile, Statement, TypeDecl,
+    Annotation, Annotations, Argument, CascadeString, Declaration, Expression, FuncCall,
+    LetBinding, Machine, Module, PolicyFile, Statement, TypeDecl,
 };
 use crate::constants;
 use crate::context::{BindableObject, BlockType, Context as BlockContext};
@@ -160,25 +160,38 @@ pub fn extend_type_map(
             _ => continue,
         };
         if let Declaration::Type(t) = d {
+            let mut associated_resources = BTreeSet::new();
             // If there are nested declarations, they associate
             for e in &t.expressions {
                 if let Expression::Decl(Declaration::Type(associated_type)) = e {
                     if !associated_type.is_extension {
-                        // Make the synthetic type to associate
+                        let nested_name =
+                            get_synthetic_resource_name(&t.name, &associated_type.name);
                         if type_map.get(associated_type.name.as_ref()).is_none() {
-                            match TypeInfo::new(*associated_type.clone(), &p.file) {
+                            // Make the synthetic type to associate
+                            // create_synthetic_resource() assumes this must be inherited from a
+                            // global parent, which may not be the case
+                            let mut nested_td = associated_type.clone();
+                            nested_td.name = nested_name.clone();
+                            match TypeInfo::new(*nested_td, &p.file) {
                                 Ok(ww) => {
-                                    // The associated type may or may not be virtual, but this is
-                                    // its parent, which should be
-                                    let mut new_type = ww.inner(&mut warnings);
-                                    new_type.is_virtual = true;
-                                    type_map.insert(associated_type.name.to_string(), new_type)?
+                                    let new_type = ww.inner(&mut warnings);
+                                    type_map.insert(nested_name.to_string(), new_type)?;
+                                    associated_resources.insert(nested_name.clone());
                                 }
                                 Err(e) => errors.append(e),
                             }
+                        } else {
+                            // The domain doesn't exist in the map yet, so we can't use
+                            // make_duplciate_associate_error() here
+                            return Err(ErrorItem::make_compile_or_internal_error(
+                                "This resource is explicitly associated to both the parent and child.  (Perhaps you meant to extend the existing resource in the child?)",
+                                Some(&p.file),
+                                associated_type.name.get_range(),
+                                "").into());
                         }
-                        let ann_to_insert = AnnotationInfo::Associate(Associated {
-                            resources: BTreeSet::from([associated_type.name.clone()]),
+                        let ann_to_insert = AnnotationInfo::NestAssociate(Associated {
+                            resources: BTreeSet::from([nested_name.clone()]),
                         });
                         let annotations = ret.entry(t.name.clone()).or_insert_with(BTreeSet::new);
                         annotations.insert(ann_to_insert);
@@ -203,7 +216,10 @@ pub fn extend_type_map(
             if !t.is_extension {
                 match TypeInfo::new(*t.clone(), &p.file) {
                     Ok(new_type) => {
-                        let new_type = new_type.inner(&mut warnings);
+                        let mut new_type = new_type.inner(&mut warnings);
+                        new_type
+                            .associated_resources
+                            .append(&mut associated_resources);
                         type_map.insert(t.name.to_string(), new_type)?;
                     }
                     Err(e) => errors.append(e),
@@ -254,7 +270,7 @@ pub fn insert_extend_annotations(
         // whether we added an annotation, so we can just skip silently for now
         if let Some(t) = type_map.get_mut(annotated_type.as_ref()) {
             for a in annotations {
-                if a.insert_timing() == timing {
+                if a.insert_timing() == timing || a.insert_timing() == InsertExtendTiming::All {
                     // Ideally we would use drain_filter but that is currently unstable.
                     // TODO once drain_filter is stable convert to using that.
                     if let Some(inherits) = a.as_inherit() {
@@ -262,6 +278,15 @@ pub fn insert_extend_annotations(
                     } else {
                         t.annotations.insert(a.clone());
                     }
+                }
+                // We only insert Associate annotations early, but we should add them to
+                // associated_resources regardless.  It's a BTreeSet, so it automatically dedups,
+                // which we want, since we'll be re-adding the Early ones during Late
+                // This is because association adds new annotations on TypeDecls for inherited
+                // annotations
+                if let AnnotationInfo::Associate(associations) = a {
+                    t.associated_resources
+                        .append(&mut associations.resources.clone());
                 }
             }
         }
@@ -302,6 +327,7 @@ pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
         list_coercion: false,
         declaration_file: None,
         annotations: BTreeSet::new(),
+        associated_resources: BTreeSet::new(),
         decl: None,
         non_virtual_children: BTreeSet::new(),
     };
@@ -315,6 +341,7 @@ pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
         list_coercion: false,
         declaration_file: None,
         annotations: BTreeSet::new(),
+        associated_resources: BTreeSet::new(),
         decl: None,
         non_virtual_children: BTreeSet::new(),
     };
@@ -328,6 +355,7 @@ pub fn get_built_in_types_map() -> Result<TypeMap, CascadeErrors> {
         list_coercion: false,
         declaration_file: None,
         annotations: BTreeSet::new(),
+        associated_resources: BTreeSet::new(),
         decl: None,
         non_virtual_children: BTreeSet::new(),
     };
@@ -388,7 +416,12 @@ pub fn build_func_map<'a>(
         };
         match d {
             Declaration::Type(t) => {
-                let type_being_parsed = match types.get(t.name.as_ref()) {
+                let type_name = if let FunctionClass::Type(pt) = parent_type {
+                    get_synthetic_resource_name(&pt.name, &t.name)
+                } else {
+                    t.name.clone()
+                };
+                let type_being_parsed = match types.get(type_name.as_ref()) {
                     Some(t) => t,
                     // If a type exists but is not in the machine, skip it for now
                     // TODO: Add extra validation for types defined, but not in the machine
@@ -417,10 +450,8 @@ pub fn build_func_map<'a>(
                 }
             }
             Declaration::Func(f) => {
-                decl_map.insert(
-                    f.get_cil_name(),
-                    FunctionInfo::new(f, types, classlist, parent_type, file)?,
-                )?;
+                let new_func = FunctionInfo::new(f, types, classlist, parent_type, file)?;
+                decl_map.insert(new_func.get_cil_name(), new_func)?;
             }
             _ => continue,
         };
@@ -1389,9 +1420,9 @@ pub fn get_policy_rules<'a>(
     let mut warnings = Warnings::new();
     let mut reduced_policy_rules = BTreeSet::new();
 
-    // Add derived associated calls
-    let mut calls = call_derived_associated_calls(reduced_type_map, reduced_func_map, classlist)?
-        .inner(&mut warnings);
+    // Add derived and nested associated calls
+    let mut calls =
+        call_associated_calls(reduced_type_map, reduced_func_map, classlist)?.inner(&mut warnings);
     reduced_policy_rules.append(&mut calls);
 
     for p in policies {
@@ -1498,10 +1529,10 @@ fn generate_type_no_parent_errors(missed_types: Vec<&TypeInfo>, types: &TypeMap)
 }
 
 fn get_synthetic_resource_name(
-    dom_info: &TypeInfo,
+    dom_name: &CascadeString,
     associated_resource: &CascadeString,
 ) -> CascadeString {
-    format!("{}.{}", dom_info.name, associated_resource).into()
+    format!("{}.{}", dom_name, associated_resource).into()
 }
 
 fn create_synthetic_resource(
@@ -1522,17 +1553,32 @@ fn create_synthetic_resource(
         ));
     }
 
+    let class_name = CascadeString::from(class.basename());
+
     // Creates a synthetic resource declaration.
     let mut dup_res_decl = class.decl.as_ref().ok_or_else(InternalError::new)?.clone();
-    let res_name = get_synthetic_resource_name(dom_info, &class.name);
+    let res_name = get_synthetic_resource_name(&dom_info.name, &class_name);
+    if types.get(res_name.as_ref()).is_some() {
+        // A synthetic type with this name already exists, due to a nested association
+        // TODO: I don't think it's an accurate assumption that dom_info is definitely the child in
+        // this case.  It's just whichever one happens to be done via annotation
+        return Err(
+            match make_duplicate_associate_error(types, dom_info, &res_name) {
+                Some(e) => e.into(),
+                None => ErrorItem::Internal(InternalError::new()),
+            },
+        );
+    }
     dup_res_decl.name = res_name.clone();
     // See TypeDecl::new() in parser.lalrpop for resource inheritance.
     let mut parent_names = if associated_parents.is_empty() {
+        // This is the full parent.resource name because resource may not exist and parent.resource
+        // is the true parent anyways
         vec![class.name.clone()]
     } else {
         associated_parents
             .iter()
-            .map(|parent| get_synthetic_resource_name(parent, &class.name))
+            .map(|parent| get_synthetic_resource_name(&parent.name, &class_name))
             .collect()
     };
 
@@ -1636,8 +1682,6 @@ fn make_duplicate_associate_error(
 #[allow(clippy::too_many_arguments)]
 fn interpret_associate(
     global_exprs: &mut HashSet<Expression>,
-    local_exprs: &mut HashSet<Expression>,
-    funcs: &FunctionMap<'_>,
     types: &TypeMap,
     associate: &Associated,
     associated_parents: &Vec<&TypeInfo>,
@@ -1648,52 +1692,11 @@ fn interpret_associate(
     // TODO: Add tests to verify these checks.
 
     let mut errors = CascadeErrors::new();
-    let mut potential_resources: BTreeMap<_, _> = associate
+    let potential_resources: BTreeMap<_, _> = associate
         .resources
         .iter()
         .map(|r| (r.as_ref(), (r, false)))
         .collect();
-
-    // Finds the associated call.
-    for func_info in funcs.values().filter(|f| f.is_associated_call) {
-        if let FunctionClass::Type(class) = func_info.class {
-            if let Some((res, seen)) = potential_resources.get_mut(class.name.as_ref()) {
-                *seen = if *seen {
-                    errors.add_error(ErrorItem::make_compile_or_internal_error(
-                        "multiple @associated_call in the same resource",
-                        func_info.declaration_file,
-                        func_info.get_declaration_range(),
-                        "Only one function in the same resource can be annotated with @associated_call.",
-                    ));
-                    continue;
-                } else {
-                    true
-                };
-
-                let res_name = match create_synthetic_resource(
-                    types,
-                    dom_info,
-                    associated_parents,
-                    class,
-                    res,
-                    global_exprs,
-                    extend_annotations,
-                ) {
-                    Ok(n) => n,
-                    Err(e) => {
-                        errors.add_error(e);
-                        continue;
-                    }
-                };
-
-                // Creates a synthetic call.
-                let new_call = make_associated_call(res_name, func_info);
-                if !local_exprs.insert(Expression::Stmt(Statement::Call(Box::new(new_call)))) {
-                    return Err(ErrorItem::Internal(InternalError::new()).into());
-                }
-            }
-        }
-    }
 
     for (_, (res, _)) in potential_resources.iter().filter(|(_, (_, seen))| !seen) {
         match types.get(res.as_ref()) {
@@ -1707,7 +1710,28 @@ fn interpret_associate(
                     global_exprs,
                     extend_annotations,
                 ) {
-                    Ok(_) => {}
+                    Ok(_) => {
+                        // If the associated call is derived, we'll need to add it in later.  If
+                        // the association is inherited, we need to make sure to mark it now so we
+                        // know to do that.
+                        let class_name = CascadeString::from(class.basename());
+                        global_exprs.insert(Expression::Decl(Declaration::Type(Box::new(
+                            TypeDecl {
+                                name: dom_info.name.clone(),
+                                inherits: Vec::new(),
+                                is_virtual: dom_info.is_virtual,
+                                is_trait: dom_info.is_trait,
+                                is_extension: true,
+                                expressions: Vec::new(),
+                                annotations: Annotations {
+                                    annotations: vec![Annotation {
+                                        name: "associate".into(),
+                                        arguments: vec![Argument::List(vec![class_name])],
+                                    }],
+                                },
+                            },
+                        ))));
+                    }
                     Err(e) => errors.add_error(e),
                 }
             }
@@ -1820,7 +1844,6 @@ fn dedup_inherited_annotations_one<'a>(
 fn interpret_inherited_annotations<'a, T>(
     global_exprs: &mut HashSet<Expression>,
     associate_exprs: &mut AssociateExprs,
-    funcs: &FunctionMap<'_>,
     types: &TypeMap,
     dom_info: &'a TypeInfo,
     extend_annotations: &BTreeMap<CascadeString, BTreeSet<AnnotationInfo>>,
@@ -1831,7 +1854,7 @@ where
 {
     let mut errors = CascadeErrors::new();
 
-    let local_exprs = match associate_exprs.entry(dom_info.name.clone()) {
+    match associate_exprs.entry(dom_info.name.clone()) {
         // Ignores already processed domains.
         Entry::Occupied(_) => return Ok(()),
         vacant => vacant.or_default(),
@@ -1848,8 +1871,6 @@ where
         if let AnnotationInfo::Associate(ref associate) = inherited.annotation {
             match interpret_associate(
                 global_exprs,
-                local_exprs,
-                funcs,
                 types,
                 associate,
                 &inherited.parents,
@@ -1868,7 +1889,6 @@ where
 fn inherit_annotations<'a>(
     global_exprs: &mut HashSet<Expression>,
     associate_exprs: &mut AssociateExprs,
-    funcs: &FunctionMap<'_>,
     types: &'a TypeMap,
     dom_info: &'a TypeInfo,
     extend_annotations: &BTreeMap<CascadeString, BTreeSet<AnnotationInfo>>,
@@ -1887,7 +1907,6 @@ fn inherit_annotations<'a>(
                 match inherit_annotations(
                     global_exprs,
                     associate_exprs,
-                    funcs,
                     types,
                     parent_ti,
                     extend_annotations,
@@ -1911,7 +1930,6 @@ fn inherit_annotations<'a>(
     match interpret_inherited_annotations(
         global_exprs,
         associate_exprs,
-        funcs,
         types,
         dom_info,
         extend_annotations,
@@ -1925,9 +1943,16 @@ fn inherit_annotations<'a>(
         dom_info
             .annotations
             .iter()
-            .map(|a| InheritedAnnotation {
-                annotation: a.clone(),
-                parents: vec![dom_info],
+            .map(|a| {
+                let ann = if let AnnotationInfo::NestAssociate(r) = a {
+                    AnnotationInfo::Associate(r.clone())
+                } else {
+                    a.clone()
+                };
+                InheritedAnnotation {
+                    annotation: ann,
+                    parents: vec![dom_info],
+                }
             })
             .chain(inherited_annotations.into_iter().map(|mut a| {
                 a.parents = vec![dom_info];
@@ -1939,7 +1964,6 @@ fn inherit_annotations<'a>(
 
 pub fn apply_associate_annotations(
     types: &TypeMap,
-    funcs: &FunctionMap<'_>,
     extend_annotations: &BTreeMap<CascadeString, BTreeSet<AnnotationInfo>>,
 ) -> Result<Vec<Expression>, CascadeErrors> {
     let mut errors = CascadeErrors::new();
@@ -1953,7 +1977,6 @@ pub fn apply_associate_annotations(
         match inherit_annotations(
             &mut global_exprs,
             &mut associate_exprs,
-            funcs,
             types,
             type_info,
             extend_annotations,
@@ -2090,7 +2113,7 @@ where
     (aliases, alias_files)
 }
 
-pub fn call_derived_associated_calls<'a>(
+pub fn call_associated_calls<'a>(
     types: &TypeMap,
     funcs: &FunctionMap<'a>,
     class_perms: &ClassList,
@@ -2102,49 +2125,74 @@ pub fn call_derived_associated_calls<'a>(
         if !t.is_domain(types) {
             continue;
         }
-        for a in &t.annotations {
-            if let AnnotationInfo::Associate(associations) = a {
-                for f in funcs.values() {
-                    if f.is_derived && f.is_associated_call {
-                        let resource_name = match f.class {
-                            FunctionClass::Type(n) => n.name.clone(),
-                            _ => {
-                                // Can't derive from Global or API
-                                continue;
-                            }
-                        };
-                        if associations.resources.iter().any(|r| {
-                            [t.name.as_ref(), r.as_ref()].join(".") == resource_name.as_ref()
-                        }) {
-                            let call = make_associated_call(resource_name, f);
-                            let args = vec![FunctionArgument::new_this_argument(t)];
-                            // TODO: Should there be a parent_context here?  I think this is
-                            // effectively a "fake" context since we're not really parsing the tree
-                            let mut local_context =
-                                BlockContext::new(BlockType::Domain, Some(t), None);
-                            local_context.insert_function_args(&args);
 
-                            let validated_calls = match ValidatedCall::new(
-                                &call,
-                                funcs,
-                                types,
-                                class_perms,
-                                &local_context,
-                                f.declaration_file,
-                            ) {
-                                Ok(c) => c.inner(&mut warnings),
-                                Err(e) => {
-                                    errors.append(e);
-                                    continue;
-                                }
-                            };
-
-                            // These are definitely ValidatedCalls, but ValidatedCall::new()
-                            // returns ValidatedStatements, so they can be inserted directly
-                            for c in validated_calls {
-                                ret.insert(c);
+        for f in funcs.values() {
+            if f.is_associated_call {
+                let resource_name = match f.class {
+                    FunctionClass::Type(n) => n.name.clone(),
+                    _ => {
+                        // Can't derive from Global or API
+                        continue;
+                    }
+                };
+                // Calls from annotations were already added if they weren't derived.  If the call
+                // was derived AND via an annotation, we add it.  If it was via nest, we add it
+                // unconditionally
+                let mut nested_associate = false;
+                let mut regular_associate = false;
+                for ann in &t.annotations {
+                    match ann {
+                        AnnotationInfo::Associate(associations) => {
+                            if associations
+                                .resources
+                                .iter()
+                                .any(|r| get_synthetic_resource_name(&t.name, r) == resource_name)
+                            {
+                                regular_associate = true;
                             }
                         }
+                        AnnotationInfo::NestAssociate(associations) => {
+                            if associations.resources.iter().any(|r| r == &resource_name) {
+                                nested_associate = true;
+                            }
+                        }
+                        _ => (),
+                    }
+                }
+                if regular_associate || nested_associate {
+                    let r_basename = match resource_name.as_ref().split_once('.') {
+                        Some((_, r)) => r,
+                        None => resource_name.as_ref(),
+                    };
+                    let call = make_associated_call(
+                        get_synthetic_resource_name(&t.name, &r_basename.into()),
+                        f,
+                    );
+                    let args = vec![FunctionArgument::new_this_argument(t)];
+                    // TODO: Should there be a parent_context here?  I think this is
+                    // effectively a "fake" context since we're not really parsing the tree
+                    let mut local_context = BlockContext::new(BlockType::Domain, Some(t), None);
+                    local_context.insert_function_args(&args);
+
+                    let validated_calls = match ValidatedCall::new(
+                        &call,
+                        funcs,
+                        types,
+                        class_perms,
+                        &local_context,
+                        f.declaration_file,
+                    ) {
+                        Ok(c) => c.inner(&mut warnings),
+                        Err(e) => {
+                            errors.append(e);
+                            continue;
+                        }
+                    };
+
+                    // These are definitely ValidatedCalls, but ValidatedCall::new()
+                    // returns ValidatedStatements, so they can be inserted directly
+                    for c in validated_calls {
+                        ret.insert(c);
                     }
                 }
             }
@@ -2268,8 +2316,8 @@ fn do_rules_pass<'a>(
                 }
             }
             Expression::Decl(Declaration::Type(t)) => {
-                let type_name = if let Some(p) = parent_type.into() {
-                    get_synthetic_resource_name(p, &t.name)
+                let type_name = if let Some(p) = Option::<&TypeInfo>::from(parent_type) {
+                    get_synthetic_resource_name(&p.name, &t.name)
                 } else {
                     t.name.clone()
                 };

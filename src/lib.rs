@@ -182,19 +182,15 @@ fn compile_machine_policies_internal(
         }
 
         // TODO: Validate original functions before adding synthetic ones to avoid confusing errors for users.
-        match compile::apply_associate_annotations(&type_map, &tmp_func_map, &extend_annotations) {
+        match compile::apply_associate_annotations(&type_map, &extend_annotations) {
             Ok(exprs) => {
                 let pf = PolicyFile::new(
                     Policy::new(exprs),
                     SimpleFile::new(String::new(), String::new()),
                 );
                 match compile::extend_type_map(&pf, &mut type_map) {
-                    Ok(ww) => {
-                        // Currently we are going to drop "Late" annotations (see insert_timing()) if we do not
-                        // call append_set_map here like we do above.  As of writing this comment we do not
-                        // encounter any Late annotations, so functionality is not effected, but performance is.
-                        // We take around 100ms hit on our benchmarking which we do not want to take at this time.
-                        ww.inner(&mut warnings);
+                    Ok(anns) => {
+                        append_set_map(&mut extend_annotations, &mut anns.inner(&mut warnings));
                         policies.push(pf);
                     }
                     Err(e) => errors.append(e),
@@ -1642,7 +1638,10 @@ mod tests {
 
     #[test]
     fn duplicate_association_test() {
-        error_policy_test!("duplicate_association.cas", 2, ErrorItem::Compile(_));
+        // The nested and non-nested cases happen at different stages of compilation now, so these
+        // need to be two separate tests to check both errors
+        error_policy_test!("duplicate_association.cas", 1, ErrorItem::Compile(_));
+        error_policy_test!("duplicate_association_nested.cas", 1, ErrorItem::Compile(_));
     }
 
     #[test]

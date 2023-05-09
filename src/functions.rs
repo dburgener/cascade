@@ -1977,13 +1977,10 @@ impl<'a> FunctionInfo<'a> {
     }
 
     pub fn get_cil_name(&self) -> String {
-        match self.decl {
-            Some(decl) => decl.get_cil_name(),
-            None => get_cil_name(
-                self.class.get_name(),
-                &CascadeString::from(&self.name as &str),
-            ),
-        }
+        get_cil_name(
+            self.class.get_name(),
+            &CascadeString::from(&self.name as &str),
+        )
     }
 
     pub fn validate_body(
