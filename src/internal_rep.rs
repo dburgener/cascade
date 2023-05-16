@@ -46,6 +46,7 @@ pub enum InsertExtendTiming {
 pub enum AnnotationInfo {
     MakeList,
     Associate(Associated),
+    NestAssociate(Associated),
     Alias(CascadeString),
     // Inherit isn't exposed to users, who should use the "inherits type" syntax, but its helpful
     // internally to track inherits on extends as annotations
@@ -64,7 +65,7 @@ impl AnnotationInfo {
         match (self, other) {
             (MakeList, MakeList) => Some(AnnotationInfo::MakeList),
             (NoDerive, NoDerive) => Some(AnnotationInfo::NoDerive),
-            (Associate(left), Associate(right)) => {
+            (Associate(left), Associate(right)) | (NestAssociate(left), NestAssociate(right)) => {
                 let intersect: BTreeSet<CascadeString> = left
                     .resources
                     .intersection(&right.resources)
@@ -73,9 +74,18 @@ impl AnnotationInfo {
                 if intersect.is_empty() {
                     None
                 } else {
-                    Some(Associate(Associated {
-                        resources: intersect,
-                    }))
+                    match self {
+                        Associate(_) => Some(Associate(Associated {
+                            resources: intersect,
+                        })),
+                        NestAssociate(_) => Some(NestAssociate(Associated {
+                            resources: intersect,
+                        })),
+                        _ => {
+                            // impossible
+                            None
+                        }
+                    }
                 }
             }
             (Alias(left), Alias(right)) => {
@@ -93,6 +103,7 @@ impl AnnotationInfo {
             // when updating the enum
             (MakeList, _)
             | (Associate(_), _)
+            | (NestAssociate(_), _)
             | (Alias(_), _)
             | (Inherit(_), _)
             | (Derive(_), _)
@@ -106,7 +117,7 @@ impl AnnotationInfo {
         match (self, other) {
             (MakeList, MakeList) => None,
             (NoDerive, NoDerive) => None,
-            (Associate(left), Associate(right)) => {
+            (Associate(left), Associate(right)) | (NestAssociate(left), NestAssociate(right)) => {
                 let difference: BTreeSet<CascadeString> = left
                     .resources
                     .difference(&right.resources)
@@ -115,9 +126,18 @@ impl AnnotationInfo {
                 if difference.is_empty() {
                     None
                 } else {
-                    Some(Associate(Associated {
-                        resources: difference,
-                    }))
+                    match self {
+                        Associate(_) => Some(Associate(Associated {
+                            resources: difference,
+                        })),
+                        NestAssociate(_) => Some(NestAssociate(Associated {
+                            resources: difference,
+                        })),
+                        _ => {
+                            //impossible
+                            None
+                        }
+                    }
                 }
             }
             (Alias(left), Alias(right)) => {
@@ -131,6 +151,7 @@ impl AnnotationInfo {
             (Derive(_), _)
             | (MakeList, _)
             | (Associate(_), _)
+            | (NestAssociate(_), _)
             | (Alias(_), _)
             | (NoDerive, _)
             | (Inherit(_), _) => Some(self.clone()),
@@ -140,6 +161,7 @@ impl AnnotationInfo {
     pub fn insert_timing(&self) -> InsertExtendTiming {
         match self {
             AnnotationInfo::Associate(_) => InsertExtendTiming::Early,
+            AnnotationInfo::NestAssociate(_) => InsertExtendTiming::Early,
             // Inherit is Early, but note that it may also be set on an associated resource, in
             // which case it also has special handling in create_synthetic resource.  The "Early"
             // handling handles regular types
