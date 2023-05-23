@@ -745,7 +745,7 @@ pub fn validate_derive_args<'a>(
     }
 
     let derive_parents = if parents.first() == Some(&CascadeString::from("*")) {
-        target_type.get_all_parent_names(types)
+        target_type.inherits.iter().collect()
     } else {
         let mut ret = BTreeSet::new();
         for name in &parents {

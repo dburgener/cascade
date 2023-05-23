@@ -180,3 +180,19 @@ domain call_derive_this {
 	// Please never write real policy that uses the word "this" this confusingly
 	derive_this_3.use_this(this);
 }
+
+virtual resource alias_parent1 {
+	@alias(alias1)
+	fn has_alias(domain source) {
+		allow(source, this, file, read);
+	}
+}
+
+virtual resource alias_parent2 inherits alias_parent1 {
+	fn alias1(domain source) {
+		allow(source, this, file, write);
+	}
+}
+
+@alias(alias2)
+resource my_res inherits alias_parent2 {}
