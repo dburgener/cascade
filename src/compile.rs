@@ -788,12 +788,13 @@ fn handle_derive<'a>(
     }
 
     let mut errors = CascadeErrors::new();
-    for f in func_names {
+    for f in &func_names {
         match FunctionInfo::new_derived_function(
-            &f,
+            f,
             target_type,
             &parents,
             functions,
+            &func_names,
             target_type.declaration_file.as_ref(),
         ) {
             Ok(derived_function) => {

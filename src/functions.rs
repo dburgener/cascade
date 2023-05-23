@@ -1778,6 +1778,7 @@ impl<'a> FunctionInfo<'a> {
         deriving_type: &'a TypeInfo,
         derive_classes: &BTreeSet<&CascadeString>,
         functions: &FunctionMap<'a>,
+        func_names_being_derived: &[CascadeString],
         file: Option<&'a SimpleFile<String, String>>,
     ) -> Result<FunctionInfo<'a>, CascadeErrors> {
         let mut first_parent = None;
@@ -1931,14 +1932,27 @@ impl<'a> FunctionInfo<'a> {
         }
 
         let mut annotations = BTreeSet::new();
-        for class_alias in &deriving_type.get_aliases() {
+        for class_alias in deriving_type
+            .get_aliases()
+            .into_iter()
+            .chain(std::iter::once(&deriving_type.name))
+        {
             for func_alias in &derived_name_aliases {
                 // No alias for real class and func combo
-                if *class_alias == &deriving_type.name && name == func_alias {
+                if class_alias == &deriving_type.name && name == func_alias {
+                    continue;
+                }
+                // If we already define a function with this name, then we're overriding that
+                // alias, so we don't alias to it here. This includes functions we're in the
+                // process of deriving
+                if deriving_type.defines_function(func_alias.as_ref(), functions)
+                    || (name != func_alias
+                        && func_names_being_derived.iter().any(|n| n == func_alias))
+                {
                     continue;
                 }
                 annotations.insert(AnnotationInfo::Alias(
-                    get_cil_name(Some(*class_alias), &CascadeString::from(func_alias as &str))
+                    get_cil_name(Some(class_alias), &CascadeString::from(func_alias as &str))
                         .into(),
                 ));
             }
