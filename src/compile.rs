@@ -776,11 +776,13 @@ fn handle_derive<'a>(
     types: &'a TypeMap,
     class_perms: &ClassList,
 ) -> Result<(), CascadeErrors> {
-    let (parents, mut func_names) =
+    let (selected_parents, mut func_names) =
         validate_derive_args(target_type, derive_args, types, class_perms)?;
 
+    let all_parents = target_type.inherits.iter().collect();
+
     if vec![CascadeString::from("*")] == func_names {
-        func_names = get_all_function_names(&parents, &*functions)
+        func_names = get_all_function_names(&all_parents, &*functions)
             .iter()
             .filter(|f_name| !target_type.defines_function(f_name.as_ref(), functions))
             .cloned()
@@ -789,10 +791,21 @@ fn handle_derive<'a>(
 
     let mut errors = CascadeErrors::new();
     for f in &func_names {
+        // If the explicitly listed parents define the function, use one only that list.  If they
+        // don't, get it from all of the types parents
+        let this_func_parents = if selected_parents.iter().any(|p| {
+            types.get(p.as_ref()).map_or(false, |parent_type| {
+                parent_type.defines_function(f.as_ref(), functions)
+            })
+        }) {
+            &selected_parents
+        } else {
+            &all_parents
+        };
         match FunctionInfo::new_derived_function(
             f,
             target_type,
-            &parents,
+            this_func_parents,
             functions,
             &func_names,
             target_type.declaration_file.as_ref(),
