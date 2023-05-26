@@ -129,18 +129,7 @@ name (where it will always refer to the original type) and the keyword "this"
 automatically created type).
 
 ## Nested syntax
-As a syntactic sugar, the below two syntaxes are equivalent:
-
-```
-resource foo {}
-
-@associate([foo])
-domain bar {
-	let foo = bar.foo;
-}
-```
-
-and:
+Assocations can also be created via a nesting syntax, like below:
 
 ```
 domain bar {
@@ -148,8 +137,13 @@ domain bar {
 }
 ```
 
-In other words, nesting provides a shorthand for association, plus a local
-binding of the short name.
+This has two key differences from the annotation style association.
+
+1. It does not require there to be a global type.  In the above example no
+global `foo` exists.  Any of `bar.foo`'s parents need to be inherited
+explicitly
+2. This allows you to refer to `bar.foo` directly as `foo` inside of the `bar`
+block.
 
 [1] https://github.com/SELinuxProject/refpolicy/blob/master/policy/modules/system/iptables.te
 https://github.com/SELinuxProject/refpolicy/blob/master/policy/modules/system/iptables.if
