@@ -638,6 +638,11 @@ The derive function may also be given the special character `*` instead of
 function names to derive all conflicting functions from parent classes using
 this method.
 
+The list of functions refers to all functions defined by parents of this type,
+not all functions defined by the `@derive` `parents` argument.  So if a
+function is defined by some parent not listed in `parents`, then we will derive
+it from a union of all parents 
+
 ### hint annotation
 
 The hint annotation is passed on to audit2cascade to provide suggestions to

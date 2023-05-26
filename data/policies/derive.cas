@@ -36,6 +36,10 @@ resource union_all_parents inherits foo, bar {}
 @derive([read], parents=foo)
 resource derive_from_foo inherits foo, bar {}
 
+// This derives bar.write() while unioning foo.read() and bar.read()
+@derive(*, parents=foo)
+resource derive_from_foo2 inherits foo, bar {}
+
 @derive(*, *)
 resource derive_all inherits foo, bar {}
 

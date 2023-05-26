@@ -974,7 +974,11 @@ mod tests {
         "(macro overwrite_one-read ((type this) (type source)) (allow source this (lnk_file (read))))",
         "(macro overwrite_one-write ((type this) (type source)) (allow source this (dir (write))))",
         "(macro aliased_child-read",
-        "(macro an_alias-read"
+        "(macro an_alias-read",
+        // Bar's version, because foo doesn't define it
+        "(macro derive_from_foo2-write ((type this) (type source)) (allow source this (dir (write))))",
+        // Just foo's version, because we specifical parent=foo
+        "(macro derive_from_foo2-read ((type this) (type source)) (allow source this (file (read))))"
         ],
         &[
         "(macro overwrite_one-read ((type this) (type source)) (allow source this (dir (read))))",
