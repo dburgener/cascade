@@ -779,7 +779,11 @@ fn handle_derive<'a>(
     let (selected_parents, mut func_names) =
         validate_derive_args(target_type, derive_args, types, class_perms)?;
 
-    let all_parents = target_type.inherits.iter().collect();
+    let all_parents = target_type
+        .inherits
+        .iter()
+        .filter_map(|name| types.get(name.as_ref()).map(|ti| &ti.name))
+        .collect();
 
     if vec![CascadeString::from("*")] == func_names {
         func_names = get_all_function_names(&all_parents, &*functions)
