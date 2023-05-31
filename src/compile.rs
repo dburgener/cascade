@@ -1301,10 +1301,11 @@ pub fn get_reduced_types(
         }
         for parent in &t.inherits {
             if let Some(parent_type_info) = type_map.get(parent.as_ref()) {
-                if !reduced_type_map.iter().any(|(k, _v)| k == parent.as_ref()) {
-                    // The parent name may be an alias, so get the real name from the TypeInfo
+                // The parent name may be an alias, so get the real name from the TypeInfo
+                let real_parent_name = parent_type_info.name.as_ref();
+                if !reduced_type_map.iter().any(|(k, _v)| k == real_parent_name) {
                     reduced_type_map
-                        .insert(parent_type_info.name.to_string(), parent_type_info.clone())?;
+                        .insert(real_parent_name.to_string(), parent_type_info.clone())?;
                 }
             }
         }
