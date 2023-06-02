@@ -826,7 +826,7 @@ fn handle_derive<'a>(
 
     let mut errors = CascadeErrors::new();
     for f in &func_names {
-        // If the explicitly listed parents define the function, use one only that list.  If they
+        // If the explicitly listed parents define the function, use only ones that are listed.  If they
         // don't, get it from all of the types parents
         let this_func_parents = if selected_parents.iter().any(|p| {
             types.get(p.as_ref()).map_or(false, |parent_type| {

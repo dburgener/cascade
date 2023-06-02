@@ -974,7 +974,11 @@ mod tests {
         // Bar's version, because foo doesn't define it
         "(macro derive_from_foo2-write ((type this) (type source)) (allow source this (dir (write))))",
         // Just foo's version, because we specifical parent=foo
-        "(macro derive_from_foo2-read ((type this) (type source)) (allow source this (file (read))))"
+        "(macro derive_from_foo2-read ((type this) (type source)) (allow source this (file (read))))",
+        "(macro j-func ((type this) (type source)) (call i-func (this source)))",
+        "(macro j-func2 ((type this) (type source)) (call i-func2 (this source)))",
+        "(macro k-func ((type this) (type source)) (allow source this (file (read))) (allow source this (file (write))))",
+        "(macro k-func2 ((type this) (type source)) (allow source this (file (write))))",
         ],
         &[
         "(macro overwrite_one-read ((type this) (type source)) (allow source this (dir (read))))",
