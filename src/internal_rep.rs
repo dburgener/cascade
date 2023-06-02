@@ -64,9 +64,37 @@ impl AnnotationInfo {
     pub fn intersection(&self, other: &AnnotationInfo) -> Option<AnnotationInfo> {
         use AnnotationInfo::*;
         match (self, other) {
+            // Transform NestAssociate into Associate for these.  There are two reasons for this:
+            // 1. NestAssociate takes dom_name.res_name instead of just res_name.  We want to dedup
+            //    on res_name
+            // 2. In association inheritance we transform NestAssociates to Associates.  So we want
+            //    to dedup across them
+            (NestAssociate(left), right) => {
+                let basenames: BTreeSet<CascadeString> = left
+                    .resources
+                    .iter()
+                    .filter_map(|r| r.as_ref().split_once('.'))
+                    .map(|res| CascadeString::from(res.1))
+                    .collect();
+                Associate(Associated {
+                    resources: basenames,
+                })
+                .intersection(right)
+            }
+            (left, NestAssociate(right)) => {
+                let basenames: BTreeSet<CascadeString> = right
+                    .resources
+                    .iter()
+                    .filter_map(|r| r.as_ref().split_once('.'))
+                    .map(|res| CascadeString::from(res.1))
+                    .collect();
+                left.intersection(&Associate(Associated {
+                    resources: basenames,
+                }))
+            }
             (MakeList, MakeList) => Some(AnnotationInfo::MakeList),
             (NoDerive, NoDerive) => Some(AnnotationInfo::NoDerive),
-            (Associate(left), Associate(right)) | (NestAssociate(left), NestAssociate(right)) => {
+            (Associate(left), Associate(right)) => {
                 let intersect: BTreeSet<CascadeString> = left
                     .resources
                     .intersection(&right.resources)
@@ -104,7 +132,6 @@ impl AnnotationInfo {
             // when updating the enum
             (MakeList, _)
             | (Associate(_), _)
-            | (NestAssociate(_), _)
             | (Alias(_), _)
             | (Inherit(_), _)
             | (Derive(_), _)
@@ -116,9 +143,34 @@ impl AnnotationInfo {
     pub fn difference(&self, other: &AnnotationInfo) -> Option<AnnotationInfo> {
         use AnnotationInfo::*;
         match (self, other) {
+            // See comment in intersection()
+            (NestAssociate(left), right) => {
+                let basenames: BTreeSet<CascadeString> = left
+                    .resources
+                    .iter()
+                    .filter_map(|r| r.as_ref().split_once('.'))
+                    .map(|res| CascadeString::from(res.1))
+                    .collect();
+                Associate(Associated {
+                    resources: basenames,
+                })
+                .difference(right)
+            }
+            (left, NestAssociate(right)) => {
+                let basenames: BTreeSet<CascadeString> = right
+                    .resources
+                    .iter()
+                    .filter_map(|r| r.as_ref().split_once('.'))
+                    .map(|res| CascadeString::from(res.1))
+                    .collect();
+                left.difference(&Associate(Associated {
+                    resources: basenames,
+                }))
+            }
+
             (MakeList, MakeList) => None,
             (NoDerive, NoDerive) => None,
-            (Associate(left), Associate(right)) | (NestAssociate(left), NestAssociate(right)) => {
+            (Associate(left), Associate(right)) => {
                 let difference: BTreeSet<CascadeString> = left
                     .resources
                     .difference(&right.resources)
@@ -152,7 +204,6 @@ impl AnnotationInfo {
             (Derive(_), _)
             | (MakeList, _)
             | (Associate(_), _)
-            | (NestAssociate(_), _)
             | (Alias(_), _)
             | (NoDerive, _)
             | (Inherit(_), _) => Some(self.clone()),

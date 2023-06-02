@@ -2602,6 +2602,12 @@ mod tests {
                 parents: vec![types.get("domain").unwrap()],
             },
             InheritedAnnotation {
+                annotation: AnnotationInfo::NestAssociate(Associated {
+                    resources: BTreeSet::from([CascadeString::from("domain.bar")]),
+                }),
+                parents: vec![types.get("domain").unwrap()],
+            },
+            InheritedAnnotation {
                 annotation: AnnotationInfo::Alias(CascadeString::from("alias")),
                 parents: vec![types.get("domain").unwrap()],
             },
