@@ -9,6 +9,17 @@ resource my_file {
 }
 
 domain my_domain {
+
+	resource res {
+		my_domain.access(this);
+	}
+
+	fn access(resource target) {
+		allow(this, target, file, read);
+	}
+
+	this.access(this.res);
+
 	my_file.read(this);
 	my_file.call_read();
 }

@@ -572,8 +572,10 @@ mod tests {
         valid_policy_test(
             "function.cas",
             &["macro my_file-read", "call my_file-read", "allow source",
-            "(macro my_file-call_read ((type this) (type source)) (call my_file-read (my_file source)))"],
-            &[],
+            "(macro my_file-call_read ((type this) (type source)) (call my_file-read (my_file source)))",
+            "(call my_domain-access (my_domain my_domain-res))",
+            ],
+            &["my_domain.res"],
             0,
         );
     }
@@ -1048,7 +1050,8 @@ mod tests {
             ";Pushed to callers: (source-read foo arg)"
             ],
             &[
-            "call source-read"
+            "call source-read",
+            "dom4.foo",
             ],
             0,
             )

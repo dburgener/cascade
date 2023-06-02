@@ -1335,7 +1335,11 @@ impl<'a> TypeInstance<'a> {
                     if context.in_function_block() {
                         Ok(CascadeString::from("this"))
                     } else {
-                        Ok(self.type_info.name.clone())
+                        let ret_str = self.type_info.name.get_cil_name();
+                        match self.get_range() {
+                            Some(range) => Ok(CascadeString::new(ret_str, range)),
+                            None => Ok(CascadeString::from(ret_str)),
+                        }
                     }
                 } else {
                     context
@@ -1350,7 +1354,7 @@ impl<'a> TypeInstance<'a> {
                 "Expected scalar value here",
             )),
             TypeValue::SEType(_) => {
-                let ret_string = self.type_info.name.to_string();
+                let ret_string = self.type_info.name.get_cil_name();
                 match self.get_range() {
                     Some(range) => Ok(CascadeString::new(ret_string, range)),
                     None => Ok(CascadeString::from(ret_string)),

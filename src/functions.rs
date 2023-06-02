@@ -2717,7 +2717,12 @@ impl DeferredCall {
         current_function: &FunctionInfo,
         caller_info: &CallerInfo,
     ) -> ValidatedStatement<'a> {
-        if types.get(self.call_class_name().as_ref()).is_some() {
+        // The call_class_name was converted to CIL style, but we need to look it up in internal
+        // style, so we convert back
+        if types
+            .get(&self.call_class_name().as_ref().replace('-', "."))
+            .is_some()
+        {
             // We can resolve correctly at this level
             ValidatedStatement::Call(Box::new(ValidatedCall::from(self)))
         } else {
@@ -3018,7 +3023,7 @@ impl ValidatedCall {
                     //    a clone of self.args, so they are definitely the same length
                     // 2. We validated the call already.  Does this child validate?  Should be "yes",
                     //    because if the parent can validate the child can
-                    new_call.args[index] = CilArg::Name(nv_child.to_string());
+                    new_call.args[index] = CilArg::Name(nv_child.get_cil_name());
                     // There may be more children to resolve, so we call recursively
                     // This is guaranteed to terminate, because the typemap has been checked for
                     // inheritance loops already
