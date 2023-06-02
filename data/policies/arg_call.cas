@@ -39,3 +39,8 @@ domain dom3 {
 		baz.call_source_read(bar3, this);
 	}
 }
+
+@associate([foo])
+domain dom4 {
+	baz.call_source_read(this.foo, this);
+}
