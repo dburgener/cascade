@@ -200,3 +200,21 @@ virtual resource alias_parent2 inherits alias_parent1 {
 
 @alias(alias2)
 resource my_res inherits alias_parent2 {}
+
+virtual resource g {
+	fn func(domain source) {
+		allow(source, this, file, read);
+	}
+}
+
+virtual resource h {
+	@alias(func)
+	fn func2(domain source) {
+		allow(source, this, file, write);
+	}
+}
+
+@alias(j)
+virtual resource i inherits g, h {}
+
+resource k inherits j {}

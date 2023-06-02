@@ -1785,7 +1785,7 @@ impl<'a> FunctionInfo<'a> {
         let mut derived_body = Vec::new();
         let mut derived_is_associated_call = false;
         let mut derived_arg_names: Vec<BTreeSet<String>> = Vec::new();
-        let mut derived_name_aliases = BTreeSet::new();
+        let mut derived_name_aliases = BTreeSet::from([name.to_string()]);
 
         for parent in derive_classes {
             // The parent may or may not have such a function implemented.
@@ -1932,6 +1932,7 @@ impl<'a> FunctionInfo<'a> {
         }
 
         let mut annotations = BTreeSet::new();
+        let mut final_name_aliases = BTreeSet::new();
         for class_alias in deriving_type
             .get_aliases()
             .into_iter()
@@ -1951,6 +1952,7 @@ impl<'a> FunctionInfo<'a> {
                 {
                     continue;
                 }
+                final_name_aliases.insert(func_alias.clone());
                 annotations.insert(AnnotationInfo::Alias(
                     get_cil_name(Some(class_alias), &CascadeString::from(func_alias as &str))
                         .into(),
@@ -1960,7 +1962,7 @@ impl<'a> FunctionInfo<'a> {
 
         Ok(FunctionInfo {
             name: name.to_string(),
-            name_aliases: derived_name_aliases,
+            name_aliases: final_name_aliases,
             class: FunctionClass::Type(deriving_type),
             is_virtual: false, // TODO: Check documentation for correct behavior here
             args: derived_args,
