@@ -2926,7 +2926,7 @@ impl ValidatedCall {
         // Note that we need to have validated the function exists first.  The above lookup is
         // being done against the argument type, which may be a parent function.
         if let Some(orig_name) = call.cast_name.as_ref().or(call.class_name.as_ref()) {
-            // 'this' is technically an argument, but it locally resolvable
+            // 'this' is technically an argument, but is locally resolvable
             if orig_name.as_ref() != "this" && context.symbol_is_arg(orig_name.as_ref()) {
                 defer = Some((&call.name, orig_name));
             }
@@ -2934,10 +2934,18 @@ impl ValidatedCall {
 
         let args = match (&call.class_name, function_info.class) {
             (Some(class_name), FunctionClass::Type(_)) => {
-                vec![CilArg::Name(
+                // If we are deferring, we don't resolve the arg, which would resolve to the type
+                // of the argument.  We want to keep the symbol name for updating across the
+                // deferral propagation
+                let this_arg_name = if defer.is_some() {
+                    Some(class_name)
+                } else {
                     context
                         .symbol_in_context(class_name.as_ref(), types)
                         .map(|ti| &ti.name)
+                };
+                vec![CilArg::Name(
+                    this_arg_name
                         .unwrap_or(&CascadeString::from(
                             context.convert_arg_this(class_name.as_ref()),
                         ))
