@@ -3189,7 +3189,7 @@ pub fn validate_arguments<'a>(
 
     if function_args_iter
         .clone()
-        .take_while(|a| matches!(a.default_value, None))
+        .take_while(|a| a.default_value.is_none())
         .count()
         > call_args.len()
         || function_args_len < call_args.len()
