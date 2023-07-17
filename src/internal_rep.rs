@@ -31,9 +31,70 @@ const DEFAULT_MLS: &str = "s0";
 
 pub type TypeMap = AliasMap<TypeInfo>;
 
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub struct AssociatedResource {
+    pub name: CascadeString,
+    pub doms: BTreeSet<Option<CascadeString>>,
+}
+
+impl AssociatedResource {
+    pub fn get_range(&self) -> Option<Range<usize>> {
+        // TODO: This works in the annotation case, but not the nested case
+        self.name.get_range()
+    }
+
+    pub fn get_class_names(&self) -> Vec<String> {
+        self.doms
+            .iter()
+            .map(|d| match d {
+                Some(d) => {
+                    format!("{}.{}", d, &self.name)
+                }
+                None => self.name.to_string(),
+            })
+            .collect()
+    }
+
+    pub fn basename(&self) -> &str {
+        self.name.as_ref()
+    }
+
+    // Return true if type_name is one of the resources that have been combined in this
+    // AssociatedResource
+    pub fn string_is_instance(&self, type_name: &CascadeString) -> bool {
+        match type_name.as_ref().split_once('.') {
+            Some((dom, res)) => {
+                res == self.name && self.doms.contains(&Some(CascadeString::from(dom)))
+            }
+            None => type_name == &self.name && self.doms.contains(&None),
+        }
+    }
+}
+
+impl From<&CascadeString> for AssociatedResource {
+    fn from(cs: &CascadeString) -> Self {
+        match cs.as_ref().split_once('.') {
+            Some((dom, res)) => AssociatedResource {
+                name: res.into(),
+                doms: [Some(dom.into())].into(),
+            },
+            None => AssociatedResource {
+                name: cs.clone(),
+                doms: [None].into(),
+            },
+        }
+    }
+}
+
+impl From<CascadeString> for AssociatedResource {
+    fn from(cs: CascadeString) -> Self {
+        (&cs).into()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Associated {
-    pub resources: BTreeSet<CascadeString>,
+    pub resources: BTreeSet<AssociatedResource>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -67,11 +128,18 @@ impl AnnotationInfo {
             (MakeList, MakeList) => Some(AnnotationInfo::MakeList),
             (NoDerive, NoDerive) => Some(AnnotationInfo::NoDerive),
             (Associate(left), Associate(right)) | (NestAssociate(left), NestAssociate(right)) => {
-                let intersect: BTreeSet<CascadeString> = left
-                    .resources
-                    .intersection(&right.resources)
-                    .cloned()
-                    .collect();
+                let mut intersect: BTreeSet<AssociatedResource> = BTreeSet::new();
+                for l_res in &left.resources {
+                    for r_res in &right.resources {
+                        if l_res.name == r_res.name {
+                            // TODO: Do we need to worry about insert failing?
+                            intersect.insert(AssociatedResource {
+                                name: l_res.name.clone(),
+                                doms: l_res.doms.union(&r_res.doms).cloned().collect(),
+                            });
+                        }
+                    }
+                }
                 if intersect.is_empty() {
                     None
                 } else {
@@ -119,11 +187,13 @@ impl AnnotationInfo {
             (MakeList, MakeList) => None,
             (NoDerive, NoDerive) => None,
             (Associate(left), Associate(right)) | (NestAssociate(left), NestAssociate(right)) => {
-                let difference: BTreeSet<CascadeString> = left
+                let difference: BTreeSet<AssociatedResource> = left
                     .resources
-                    .difference(&right.resources)
+                    .iter()
+                    .filter(|l_res| !right.resources.iter().any(|r_res| r_res.name == l_res.name))
                     .cloned()
                     .collect();
+
                 if difference.is_empty() {
                     None
                 } else {
@@ -225,7 +295,7 @@ pub struct TypeInfo {
     pub list_coercion: bool, // Automatically transform single instances of this type to a single element list
     pub declaration_file: Option<SimpleFile<String, String>>, // Built in types have no file
     pub annotations: BTreeSet<AnnotationInfo>,
-    pub associated_resources: BTreeSet<CascadeString>,
+    pub associated_resources: BTreeSet<AssociatedResource>,
     // TODO: replace with Option<&TypeDecl>
     pub decl: Option<TypeDecl>,
     // If self.is_virtual, then this should always be empty.  However, if !self.is_virtual, then
@@ -503,7 +573,9 @@ impl TypeInfo {
         for ann in &self.annotations {
             if let AnnotationInfo::Associate(associations) = ann {
                 for res in &associations.resources {
-                    if res.as_ref() == associate_name && res.get_range().is_some() {
+                    if res.string_is_instance(&CascadeString::from(associate_name))
+                        && res.get_range().is_some()
+                    {
                         return res.get_range();
                     }
                 }
@@ -629,7 +701,7 @@ fn get_associate(
     Ok(AnnotationInfo::Associate(Associated {
         // Checks for duplicate resources.
         resources: res_list.iter().try_fold(BTreeSet::new(), |mut s, e| {
-            if !s.insert(e.clone()) {
+            if !s.insert(e.into()) {
                 Err(ErrorItem::make_compile_or_internal_error(
                     "Duplicate resource",
                     Some(file),
@@ -1462,6 +1534,18 @@ impl<'a> From<&'a TypeInfo> for TypeInstance<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ar_string_is_instance_test() {
+        let foo_bar = CascadeString::from("foo.bar");
+        let bar = CascadeString::from("bar");
+        let foo = CascadeString::from("foo");
+        let ar = AssociatedResource::from(&foo_bar);
+
+        assert!(ar.string_is_instance(&foo_bar));
+        assert!(!ar.string_is_instance(&bar));
+        assert!(!ar.string_is_instance(&foo));
+    }
 
     #[test]
     fn basename_test() {

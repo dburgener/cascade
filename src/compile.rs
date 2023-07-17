@@ -177,7 +177,7 @@ pub fn extend_type_map(
                                 Ok(ww) => {
                                     let new_type = ww.inner(&mut warnings);
                                     type_map.insert(nested_name.to_string(), new_type)?;
-                                    associated_resources.insert(nested_name.clone());
+                                    associated_resources.insert((&nested_name).into());
                                 }
                                 Err(e) => errors.append(e),
                             }
@@ -191,7 +191,7 @@ pub fn extend_type_map(
                                 "").into());
                         }
                         let ann_to_insert = AnnotationInfo::NestAssociate(Associated {
-                            resources: BTreeSet::from([nested_name.clone()]),
+                            resources: BTreeSet::from([(&nested_name).into()]),
                         });
                         let annotations = ret.entry(t.name.clone()).or_insert_with(BTreeSet::new);
                         annotations.insert(ann_to_insert);
@@ -219,7 +219,7 @@ pub fn extend_type_map(
                         let mut new_type = new_type.inner(&mut warnings);
                         new_type
                             .associated_resources
-                            .append(&mut associated_resources);
+                            .append(&mut (associated_resources).into());
                         type_map.insert(t.name.to_string(), new_type)?;
                     }
                     Err(e) => errors.append(e),
@@ -1539,11 +1539,14 @@ fn create_synthetic_resource(
     types: &TypeMap,
     dom_info: &TypeInfo,
     associated_parents: &Vec<&TypeInfo>,
-    class: &TypeInfo,
+    classes: Vec<&TypeInfo>,
     class_string: &CascadeString,
     global_exprs: &mut HashSet<Expression>,
     extend_annotations: &BTreeMap<CascadeString, BTreeSet<AnnotationInfo>>,
 ) -> Result<CascadeString, ErrorItem> {
+    // DO NOT MERGE
+    // Just use first class to get things working while in development
+    let class = classes[0];
     if !class.is_resource(types) {
         return Err(ErrorItem::make_compile_or_internal_error(
             "not a resource",
@@ -1683,52 +1686,57 @@ fn interpret_associate(
     let potential_resources: BTreeMap<_, _> = associate
         .resources
         .iter()
-        .map(|r| (r.as_ref(), (r, false)))
+        .map(|r| (r.name.as_ref(), (r, false)))
         .collect();
 
     for (_, (res, _)) in potential_resources.iter().filter(|(_, (_, seen))| !seen) {
-        match types.get(res.as_ref()) {
-            Some(class) => {
-                match create_synthetic_resource(
-                    types,
-                    dom_info,
-                    associated_parents,
-                    class,
-                    res,
-                    global_exprs,
-                    extend_annotations,
-                ) {
-                    Ok(_) => {
-                        // If the associated call is derived, we'll need to add it in later.  If
-                        // the association is inherited, we need to make sure to mark it now so we
-                        // know to do that.
-                        let class_name = CascadeString::from(class.basename());
-                        global_exprs.insert(Expression::Decl(Declaration::Type(Box::new(
-                            TypeDecl {
-                                name: dom_info.name.clone(),
-                                inherits: Vec::new(),
-                                is_virtual: dom_info.is_virtual,
-                                is_trait: dom_info.is_trait,
-                                is_extension: true,
-                                expressions: Vec::new(),
-                                annotations: Annotations {
-                                    annotations: vec![Annotation {
-                                        name: "associate".into(),
-                                        arguments: vec![Argument::List(vec![class_name])],
-                                    }],
-                                },
-                            },
-                        ))));
-                    }
-                    Err(e) => errors.add_error(e),
+        let mut classes = Vec::new();
+        for real_parent_resource in res.get_class_names() {
+            match types.get(&real_parent_resource) {
+                Some(class) => classes.push(class),
+                None => {
+                    errors.add_error(ErrorItem::make_compile_or_internal_error(
+                        "unknown resource",
+                        dom_info.declaration_file.as_ref(),
+                        res.get_range(),
+                        "didn't find this resource in the policy",
+                    ))
                 }
             }
-            None => errors.add_error(ErrorItem::make_compile_or_internal_error(
-                "unknown resource",
-                dom_info.declaration_file.as_ref(),
-                res.get_range(),
-                "didn't find this resource in the policy",
-            )),
+        }
+
+        errors = errors.into_result_self()?;
+
+        match create_synthetic_resource(
+            types,
+            dom_info,
+            associated_parents,
+            classes,
+            &res.basename().into(),
+            global_exprs,
+            extend_annotations,
+        ) {
+            Ok(_) => {
+                // If the associated call is derived, we'll need to add it in later.  If
+                // the association is inherited, we need to make sure to mark it now so we
+                // know to do that.
+                let class_name = CascadeString::from(res.basename());
+                global_exprs.insert(Expression::Decl(Declaration::Type(Box::new(TypeDecl {
+                    name: dom_info.name.clone(),
+                    inherits: Vec::new(),
+                    is_virtual: dom_info.is_virtual,
+                    is_trait: dom_info.is_trait,
+                    is_extension: true,
+                    expressions: Vec::new(),
+                    annotations: Annotations {
+                        annotations: vec![Annotation {
+                            name: "associate".into(),
+                            arguments: vec![Argument::List(vec![class_name])],
+                        }],
+                    },
+                }))));
+            }
+            Err(e) => errors.add_error(e),
         }
     }
 
@@ -2128,16 +2136,19 @@ pub fn call_associated_calls<'a>(
                 for ann in &t.annotations {
                     match ann {
                         AnnotationInfo::Associate(associations) => {
-                            if associations
-                                .resources
-                                .iter()
-                                .any(|r| get_synthetic_resource_name(&t.name, r) == resource_name)
-                            {
+                            if associations.resources.iter().any(|r| {
+                                get_synthetic_resource_name(&t.name, &r.basename().into())
+                                    == resource_name
+                            }) {
                                 regular_associate = true;
                             }
                         }
                         AnnotationInfo::NestAssociate(associations) => {
-                            if associations.resources.iter().any(|r| r == &resource_name) {
+                            if associations
+                                .resources
+                                .iter()
+                                .any(|r| r.string_is_instance(&resource_name))
+                            {
                                 nested_associate = true;
                             }
                         }
@@ -2571,8 +2582,8 @@ mod tests {
             InheritedAnnotation {
                 annotation: AnnotationInfo::Associate(Associated {
                     resources: BTreeSet::from([
-                        CascadeString::from("foo"),
-                        CascadeString::from("bar"),
+                        CascadeString::from("foo").into(),
+                        CascadeString::from("bar").into(),
                     ]),
                 }),
                 parents: vec![types.get("resource").unwrap()],
@@ -2580,8 +2591,8 @@ mod tests {
             InheritedAnnotation {
                 annotation: AnnotationInfo::Associate(Associated {
                     resources: BTreeSet::from([
-                        CascadeString::from("bar"),
-                        CascadeString::from("baz"),
+                        CascadeString::from("bar").into(),
+                        CascadeString::from("baz").into(),
                     ]),
                 }),
                 parents: vec![types.get("domain").unwrap()],
@@ -2613,24 +2624,24 @@ mod tests {
             },
             InheritedAnnotation {
                 annotation: AnnotationInfo::Associate(Associated {
-                    resources: BTreeSet::from([CascadeString::from("foo")]),
+                    resources: BTreeSet::from([CascadeString::from("foo").into()]),
                 }),
                 parents: vec![types.get("resource").unwrap()],
             },
             InheritedAnnotation {
                 annotation: AnnotationInfo::Associate(Associated {
-                    resources: BTreeSet::from([CascadeString::from("bar")]),
+                    resources: BTreeSet::from([CascadeString::from("bar").into()]),
                 }),
                 parents: vec![types.get("domain").unwrap(), types.get("resource").unwrap()],
             },
             InheritedAnnotation {
                 annotation: AnnotationInfo::Associate(Associated {
-                    resources: BTreeSet::from([CascadeString::from("baz")]),
+                    resources: BTreeSet::from([CascadeString::from("baz").into()]),
                 }),
                 parents: vec![types.get("domain").unwrap()],
             },
             InheritedAnnotation {
-                annotation: AnnotationInfo::Alias(CascadeString::from("alias")),
+                annotation: AnnotationInfo::Alias(CascadeString::from("alias").into()),
                 parents: vec![types.get("domain").unwrap()],
             },
             // Not deduped, because derive doesn't dedup by design
