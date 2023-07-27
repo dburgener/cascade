@@ -1773,11 +1773,8 @@ impl<'a> InheritedAnnotation<'a> {
             Some(intersect) => Some(InheritedAnnotation {
                 annotation: intersect,
                 parents: {
-                    let mut ret: Vec<&TypeInfo> = self
-                        .parents
-                        .into_iter()
-                        .chain(other.parents.into_iter())
-                        .collect();
+                    let mut ret: Vec<&TypeInfo> =
+                        self.parents.into_iter().chain(other.parents).collect();
                     ret.sort();
                     ret.dedup();
                     ret
