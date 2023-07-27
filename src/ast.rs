@@ -130,7 +130,7 @@ impl PartialEq<CascadeString> for &str {
 
 impl PartialOrd for CascadeString {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.string.partial_cmp(&other.string)
+        Some(self.cmp(other))
     }
 }
 
@@ -848,7 +848,7 @@ impl Hash for Port {
 // while ignoring the high
 impl PartialOrd for Port {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.low_port_num.partial_cmp(&other.low_port_num)
+        Some(self.cmp(other))
     }
 }
 
@@ -910,7 +910,7 @@ impl Hash for IpAddr {
 
 impl PartialOrd for IpAddr {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.inner.partial_cmp(&other.inner)
+        Some(self.cmp(other))
     }
 }
 
