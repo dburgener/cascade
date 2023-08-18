@@ -31,16 +31,19 @@ const DEFAULT_MLS: &str = "s0";
 
 pub type TypeMap = AliasMap<TypeInfo>;
 
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AssociatedResource {
     pub name: CascadeString,
     pub doms: BTreeSet<Option<CascadeString>>,
+    pub ranges: BTreeMap<String, Range<usize>>,
 }
 
 impl AssociatedResource {
-    pub fn get_range(&self) -> Option<Range<usize>> {
-        // TODO: This works in the annotation case, but not the nested case
-        self.name.get_range()
+    // Unlike most get_range() functions, this one takes an argument.  An AssociatedResource
+    // possibly contains information about various associated points, so we need to know the name
+    // of the resource we want the range for
+    pub fn get_range(&self, resource_name: &str) -> Option<Range<usize>> {
+        self.ranges.get(resource_name).cloned()
     }
 
     pub fn get_class_names(&self) -> Vec<String> {
@@ -73,14 +76,23 @@ impl AssociatedResource {
 
 impl From<&CascadeString> for AssociatedResource {
     fn from(cs: &CascadeString) -> Self {
+        let mut ranges = BTreeMap::new();
+        // If the range is None, we just don't store it and later map lookups will return None,
+        // which is exactly what we want
+        if let Some(range) = cs.get_range() {
+            ranges.insert(cs.to_string(), range);
+        }
+
         match cs.as_ref().split_once('.') {
             Some((dom, res)) => AssociatedResource {
                 name: res.into(),
                 doms: [Some(dom.into())].into(),
+                ranges,
             },
             None => AssociatedResource {
                 name: cs.clone(),
                 doms: [None].into(),
+                ranges,
             },
         }
     }
@@ -89,6 +101,18 @@ impl From<&CascadeString> for AssociatedResource {
 impl From<CascadeString> for AssociatedResource {
     fn from(cs: CascadeString) -> Self {
         (&cs).into()
+    }
+}
+
+impl PartialOrd for AssociatedResource {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for AssociatedResource {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.name.cmp(&other.name)
     }
 }
 
@@ -132,10 +156,26 @@ impl AnnotationInfo {
                 for l_res in &left.resources {
                     for r_res in &right.resources {
                         if l_res.name == r_res.name {
+                            // TODO: The whole below should probably be in an impl in
+                            // AssociatedResource.  That allows at least ranges to become private
+                            let mut unioned_ranges = BTreeMap::new();
+                            for (key, val) in &l_res.ranges {
+                                if r_res.ranges.contains_key(key as &String) {
+                                    // TODO: I think this could result in weird error messages.
+                                    // We're just keeping the left and discarding the right.  I'm
+                                    // not 100% sure how much that matters, but if there's
+                                    // something wrong with right and not left, the error would be
+                                    // confusing.  Probably the common case is just "there is a
+                                    // parent named this", and so it doesn't overly matter if we
+                                    // point at right or left...
+                                    unioned_ranges.insert(key.to_string(), val.clone());
+                                }
+                            }
                             // TODO: Do we need to worry about insert failing?
                             intersect.insert(AssociatedResource {
                                 name: l_res.name.clone(),
                                 doms: l_res.doms.union(&r_res.doms).cloned().collect(),
+                                ranges: unioned_ranges,
                             });
                         }
                     }
@@ -574,9 +614,9 @@ impl TypeInfo {
             if let AnnotationInfo::Associate(associations) = ann {
                 for res in &associations.resources {
                     if res.string_is_instance(&CascadeString::from(associate_name))
-                        && res.get_range().is_some()
+                        && res.get_range(associate_name).is_some()
                     {
-                        return res.get_range();
+                        return res.get_range(associate_name);
                     }
                 }
             }

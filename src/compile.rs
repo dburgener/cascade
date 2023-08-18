@@ -1694,14 +1694,12 @@ fn interpret_associate(
         for real_parent_resource in res.get_class_names() {
             match types.get(&real_parent_resource) {
                 Some(class) => classes.push(class),
-                None => {
-                    errors.add_error(ErrorItem::make_compile_or_internal_error(
-                        "unknown resource",
-                        dom_info.declaration_file.as_ref(),
-                        res.get_range(),
-                        "didn't find this resource in the policy",
-                    ))
-                }
+                None => errors.add_error(ErrorItem::make_compile_or_internal_error(
+                    "unknown resource",
+                    dom_info.declaration_file.as_ref(),
+                    res.get_range(&real_parent_resource),
+                    "didn't find this resource in the policy",
+                )),
             }
         }
 
