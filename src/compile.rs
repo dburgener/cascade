@@ -1544,23 +1544,27 @@ fn create_synthetic_resource(
     global_exprs: &mut HashSet<Expression>,
     extend_annotations: &BTreeMap<CascadeString, BTreeSet<AnnotationInfo>>,
 ) -> Result<CascadeString, ErrorItem> {
-    // DO NOT MERGE
-    // Just use first class to get things working while in development
-    let class = classes[0];
-    if !class.is_resource(types) {
-        return Err(ErrorItem::make_compile_or_internal_error(
+    if !classes.iter().all(|c| c.is_resource(types)) {
+        let mut non_resource_classes = classes.iter().filter(|c| !c.is_resource(types));
+        let mut error = ErrorItem::make_compile_or_internal_error(
             "not a resource",
             dom_info.declaration_file.as_ref(),
-            class_string.get_range(),
+            non_resource_classes.next().and_then(|c| c.name.get_range()),
             "This should be a resource, not a domain.",
-        ));
+        );
+
+        for c in non_resource_classes {
+            error = error.maybe_add_additional_message(
+                dom_info.declaration_file.as_ref(),
+                c.name.get_range(),
+                "This should be a resource, not a domain.",
+            );
+        }
+        return Err(error);
     }
 
-    let class_name = CascadeString::from(class.basename());
-
     // Creates a synthetic resource declaration.
-    let mut dup_res_decl = class.decl.as_ref().ok_or_else(InternalError::new)?.clone();
-    let res_name = get_synthetic_resource_name(&dom_info.name, &class_name);
+    let res_name = get_synthetic_resource_name(&dom_info.name, class_string);
     if types.get(res_name.as_ref()).is_some() {
         // A synthetic type with this name already exists, due to a nested association
         // TODO: I don't think it's an accurate assumption that dom_info is definitely the child in
@@ -1572,16 +1576,15 @@ fn create_synthetic_resource(
             },
         );
     }
-    dup_res_decl.name = res_name.clone();
     // See TypeDecl::new() in parser.lalrpop for resource inheritance.
-    let mut parent_names = if associated_parents.is_empty() {
+    let mut parent_names: Vec<CascadeString> = if associated_parents.is_empty() {
         // This is the full parent.resource name because resource may not exist and parent.resource
         // is the true parent anyways
-        vec![class.name.clone()]
+        classes.iter().map(|c| c.name.clone()).collect()
     } else {
         associated_parents
             .iter()
-            .map(|parent| get_synthetic_resource_name(&parent.name, &class_name))
+            .map(|parent| get_synthetic_resource_name(&parent.name, class_string))
             .collect()
     };
 
@@ -1595,28 +1598,28 @@ fn create_synthetic_resource(
         parent_names.append(&mut inherit_ann.clone());
     }
 
-    dup_res_decl.inherits = parent_names;
+    let mut new_decl = TypeDecl::new(res_name.clone(), parent_names, Vec::new());
     // Virtual resources become concrete when associated to concrete types
-    dup_res_decl.is_virtual = dup_res_decl.is_virtual && dom_info.is_virtual;
+    new_decl.is_virtual = classes.iter().all(|c| c.is_virtual) && dom_info.is_virtual;
+    new_decl.is_trait = false;
+    new_decl.is_extension = false;
     // The synthetic resource keeps some, but not all annotations from its parent.
     // Specifically, Makelist and derive are kept from the parent
     // TODO: This would be cleaner if we convert to AnnotationInfos first and implent the logic as
     // a member funtion in AnnotationInfo
     // See https://github.com/dburgener/cascade/pull/39#discussion_r999510493 for fuller discussion
-    dup_res_decl
-        .annotations
-        .annotations
-        .retain(|a| a.name.as_ref() == "makelist" || a.name.as_ref() == "derive");
+    new_decl.annotations.annotations = classes
+        .iter()
+        .flat_map(|c| c.decl.iter().flat_map(|d| d.annotations.annotations.iter()))
+        .filter(|a| a.name.as_ref() == "makelist" || a.name.as_ref() == "derive")
+        .cloned()
+        .collect(); // TODO: dedup?
 
-    dup_res_decl.expressions = Vec::new();
-
-    if !global_exprs.insert(Expression::Decl(Declaration::Type(Box::new(
-        dup_res_decl.clone(),
-    )))) {
+    if !global_exprs.insert(Expression::Decl(Declaration::Type(Box::new(new_decl)))) {
         // The callers should be handling the situation where the same resource was declared at the
         // same level of inheritance, but this can arise if a parent associated a resource and a
         // child associated the same resource.  We should find them and return and error message
-        return match make_duplicate_associate_error(types, dom_info, &class.name) {
+        return match make_duplicate_associate_error(types, dom_info, class_string) {
             Some(e) => Err(e.into()),
             None => Err(InternalError::new().into()),
         };
