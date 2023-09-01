@@ -4,7 +4,13 @@ virtual resource tmp {
 }
 
 @associate([tmp])
-virtual domain foo {}
+virtual domain foo {
+	extend tmp {
+		fn read(domain source) {
+			allow(source, this, file, read);
+		}
+	}
+}
 
 domain bar inherits foo {
 

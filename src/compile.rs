@@ -687,9 +687,9 @@ pub fn validate_functions<'a>(
 
     // Validate that all required functions exist
     for setype in types.values() {
-        for parent in &setype.inherits {
+        for parent in &setype.get_all_parent_names(types) {
             for required_function_name in classes_to_required_functions
-                .get(&parent)
+                .get(parent)
                 .unwrap_or(&BTreeSet::new())
             {
                 if !setype.defines_function(required_function_name, &functions) {
@@ -1595,7 +1595,6 @@ fn create_synthetic_resource(
     dup_res_decl.inherits = parent_names;
     // Virtual resources become concrete when associated to concrete types
     dup_res_decl.is_virtual = dup_res_decl.is_virtual && dom_info.is_virtual;
-    let dup_res_is_virtual = dup_res_decl.is_virtual;
     // The synthetic resource keeps some, but not all annotations from its parent.
     // Specifically, Makelist and derive are kept from the parent
     // TODO: This would be cleaner if we convert to AnnotationInfos first and implent the logic as
@@ -1606,19 +1605,8 @@ fn create_synthetic_resource(
         .annotations
         .retain(|a| a.name.as_ref() == "makelist" || a.name.as_ref() == "derive");
 
-    dup_res_decl
-        .expressions
-        .iter_mut()
-        .for_each(|e| e.set_class_name_if_decl(res_name.clone()));
+    dup_res_decl.expressions = Vec::new();
 
-    dup_res_decl
-        .expressions
-        // If dup_res_decl is concrete, do not inherit virtual functions
-        // Never inherit statements
-        .retain(|e| {
-            (dup_res_is_virtual || !e.is_virtual_function())
-                && matches!(e, Expression::Decl(Declaration::Func(_)))
-        });
     if !global_exprs.insert(Expression::Decl(Declaration::Type(Box::new(
         dup_res_decl.clone(),
     )))) {
