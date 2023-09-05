@@ -136,7 +136,7 @@ fn map_annotation_info(
             return false;
         }
     };
-    let annotations = annotation_map.entry(key).or_insert_with(BTreeSet::new);
+    let annotations = annotation_map.entry(key).or_default();
     if !annotation_infos.is_empty() {
         annotations.append(&mut annotation_infos);
     }
