@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 use sexp::{atom_s, list, Sexp};
 
-use std::borrow::{Borrow, Cow};
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryFrom;
@@ -938,7 +938,7 @@ impl<'a> Context<'a> {
         // The global rename_cow works on CascadeStrings.  In this local case we work on &strs
         // instead
         fn rename_cow<'a>(cow_str: &str, renames: &BTreeMap<String, String>) -> Cow<'a, str> {
-            let new_str: &str = cow_str.borrow();
+            let new_str: &str = cow_str;
             Cow::Owned(renames.get(new_str).unwrap_or(&new_str.to_string()).clone())
         }
         Context {

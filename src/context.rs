@@ -1,6 +1,5 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
-use std::borrow::Borrow;
 use std::collections::BTreeMap;
 use std::iter;
 use std::ops::Range;
@@ -96,7 +95,7 @@ impl<'a> Context<'a> {
         let arg = self.convert_arg_this(arg);
         match self.symbols.get(&CascadeString::from(&arg as &str)) {
             Some(b) => match b {
-                BindableObject::Type(t) => Some(t.type_info.borrow()),
+                BindableObject::Type(t) => Some(t.type_info),
                 // TypeList isn't natural to implement with the current API
                 BindableObject::TypeList(_) => todo!(),
                 BindableObject::PermList(_) => type_map.get("perm"),

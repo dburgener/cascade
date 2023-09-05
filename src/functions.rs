@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 use sexp::{atom_s, list, Atom, Sexp};
 
-use std::borrow::{Borrow, Cow};
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryFrom;
@@ -3416,28 +3416,12 @@ impl<'a> ArgForValidation<'a> {
 
         match self {
             ArgForValidation::Var(s) => {
-                validate_cast(
-                    s,
-                    Some(cast_ti.type_info.borrow()),
-                    None,
-                    None,
-                    types,
-                    context,
-                    file,
-                )?;
+                validate_cast(s, Some(cast_ti.type_info), None, None, types, context, file)?;
             }
             ArgForValidation::List(v) => {
                 for s in v {
                     // TODO: report more than just the first error
-                    validate_cast(
-                        s,
-                        Some(cast_ti.type_info.borrow()),
-                        None,
-                        None,
-                        types,
-                        context,
-                        file,
-                    )?;
+                    validate_cast(s, Some(cast_ti.type_info), None, None, types, context, file)?;
                 }
             }
             ArgForValidation::Quote(inner) => {
