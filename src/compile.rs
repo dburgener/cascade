@@ -167,7 +167,7 @@ pub fn extend_type_map(
                     if !associated_type.is_extension {
                         let nested_name =
                             get_synthetic_resource_name(&t.name, &associated_type.name);
-                        if type_map.get(associated_type.name.as_ref()).is_none() {
+                        if type_map.get(nested_name.as_ref()).is_none() {
                             // Make the synthetic type to associate
                             // create_synthetic_resource() assumes this must be inherited from a
                             // global parent, which may not be the case
