@@ -621,7 +621,9 @@ impl TypeInfo {
         use crate::compile::get_synthetic_resource_name;
 
         for ann in &self.annotations {
-            if let AnnotationInfo::Associate(associations) | AnnotationInfo::NestAssociate(associations) = ann {
+            if let AnnotationInfo::Associate(associations)
+            | AnnotationInfo::NestAssociate(associations) = ann
+            {
                 for res in &associations.resources {
                     if res.string_is_instance(&CascadeString::from(associate_name))
                         && res.get_range(associate_name).is_some()
@@ -631,13 +633,13 @@ impl TypeInfo {
                 }
             }
         }
-        let ar_range = self.associated_resources
+        let ar_range = self
+            .associated_resources
             .iter()
             .find(|a| a.string_is_instance(&associate_name.into()))
             .and_then(|ar| {
                 ar.get_range(
-                    get_synthetic_resource_name(&self.name, &associate_name.into())
-                        .as_ref(),
+                    get_synthetic_resource_name(&self.name, &associate_name.into()).as_ref(),
                 )
             });
 
@@ -655,9 +657,9 @@ impl TypeInfo {
                     None
                 }
             }
-            None => {
-                self.explicitly_associates(get_synthetic_resource_name(&self.name, &associate_name.into()).as_ref())
-            }
+            None => self.explicitly_associates(
+                get_synthetic_resource_name(&self.name, &associate_name.into()).as_ref(),
+            ),
         }
     }
 
