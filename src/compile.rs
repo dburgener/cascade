@@ -219,7 +219,7 @@ pub fn extend_type_map(
                         let mut new_type = new_type.inner(&mut warnings);
                         new_type
                             .associated_resources
-                            .append(&mut (associated_resources).into());
+                            .append(&mut associated_resources);
                         type_map.insert(t.name.to_string(), new_type)?;
                     }
                     Err(e) => errors.append(e),
@@ -1537,7 +1537,7 @@ pub fn get_synthetic_resource_name(
     // resource was defined
     match associated_resource.get_range() {
         Some(range) => CascadeString::new(cs_name, range),
-        None => CascadeString::from(cs_name)
+        None => CascadeString::from(cs_name),
     }
 }
 
@@ -1574,7 +1574,7 @@ fn create_synthetic_resource(
     if types.get(res_name.as_ref()).is_some() {
         // A synthetic type with this name already exists, due to a nested association
         return Err(
-            match make_duplicate_associate_error(types, dom_info, &class_string) {
+            match make_duplicate_associate_error(types, dom_info, class_string) {
                 Some(e) => e.into(),
                 None => ErrorItem::Internal(InternalError::new()),
             },
