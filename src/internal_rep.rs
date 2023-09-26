@@ -33,9 +33,9 @@ pub type TypeMap = AliasMap<TypeInfo>;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AssociatedResource {
-    pub name: CascadeString,
-    pub doms: BTreeSet<Option<CascadeString>>,
-    pub ranges: BTreeMap<String, Range<usize>>,
+    name: CascadeString,
+    doms: BTreeSet<Option<CascadeString>>,
+    ranges: BTreeMap<String, Range<usize>>,
 }
 
 impl AssociatedResource {
@@ -44,6 +44,10 @@ impl AssociatedResource {
     // of the resource we want the range for
     pub fn get_range(&self, resource_name: &str) -> Option<Range<usize>> {
         self.ranges.get(resource_name).cloned()
+    }
+
+    pub fn name(&self) -> &CascadeString {
+        &self.name
     }
 
     pub fn get_class_names(&self) -> Vec<String> {
@@ -564,6 +568,10 @@ impl TypeInfo {
         self.is_resource(types) && self.name.as_ref().contains('.')
     }
 
+    pub fn get_associated_dom_name(&self) -> Option<&str> {
+        self.name.as_ref().split_once('.').map(|split| split.0)
+    }
+
     // Returns false if this type is explicitly declared in source code, and true otherwise
     pub fn is_synthetic(&self) -> bool {
         self.name.get_range().is_none()
@@ -610,8 +618,10 @@ impl TypeInfo {
     // specifically associations specifically in source, rather than somehow derived by the
     // compiler
     pub fn explicitly_associates(&self, associate_name: &str) -> Option<Range<usize>> {
+        use crate::compile::get_synthetic_resource_name;
+
         for ann in &self.annotations {
-            if let AnnotationInfo::Associate(associations) = ann {
+            if let AnnotationInfo::Associate(associations) | AnnotationInfo::NestAssociate(associations) = ann {
                 for res in &associations.resources {
                     if res.string_is_instance(&CascadeString::from(associate_name))
                         && res.get_range(associate_name).is_some()
@@ -621,7 +631,34 @@ impl TypeInfo {
                 }
             }
         }
-        None
+        let ar_range = self.associated_resources
+            .iter()
+            .find(|a| a.string_is_instance(&associate_name.into()))
+            .and_then(|ar| {
+                ar.get_range(
+                    get_synthetic_resource_name(&self.name, &associate_name.into())
+                        .as_ref(),
+                )
+            });
+
+        if ar_range.is_some() {
+            return ar_range;
+        }
+
+        // If the resource is foo.bar, and we are foo, we need to check bar as well.  If the
+        // resource is bar and we are foo, we need to check foo.bar as well
+        match associate_name.split_once('.') {
+            Some((dom_name, res_name)) => {
+                if dom_name == self.name {
+                    self.explicitly_associates(res_name)
+                } else {
+                    None
+                }
+            }
+            None => {
+                self.explicitly_associates(get_synthetic_resource_name(&self.name, &associate_name.into()).as_ref())
+            }
+        }
     }
 
     pub fn get_aliases(&self) -> BTreeSet<&CascadeString> {

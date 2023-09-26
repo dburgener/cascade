@@ -1528,11 +1528,17 @@ fn generate_type_no_parent_errors(missed_types: Vec<&TypeInfo>, types: &TypeMap)
     ret
 }
 
-fn get_synthetic_resource_name(
+pub fn get_synthetic_resource_name(
     dom_name: &CascadeString,
     associated_resource: &CascadeString,
 ) -> CascadeString {
-    format!("{}.{}", dom_name, associated_resource).into()
+    let cs_name = format!("{}.{}", dom_name, associated_resource);
+    // We keep the range of the *resource* part specifically, which should always be where this
+    // resource was defined
+    match associated_resource.get_range() {
+        Some(range) => CascadeString::new(cs_name, range),
+        None => CascadeString::from(cs_name)
+    }
 }
 
 fn create_synthetic_resource(
@@ -1567,10 +1573,8 @@ fn create_synthetic_resource(
     let res_name = get_synthetic_resource_name(&dom_info.name, class_string);
     if types.get(res_name.as_ref()).is_some() {
         // A synthetic type with this name already exists, due to a nested association
-        // TODO: I don't think it's an accurate assumption that dom_info is definitely the child in
-        // this case.  It's just whichever one happens to be done via annotation
         return Err(
-            match make_duplicate_associate_error(types, dom_info, &res_name) {
+            match make_duplicate_associate_error(types, dom_info, &class_string) {
                 Some(e) => e.into(),
                 None => ErrorItem::Internal(InternalError::new()),
             },
@@ -1689,7 +1693,7 @@ fn interpret_associate(
     let potential_resources: BTreeMap<_, _> = associate
         .resources
         .iter()
-        .map(|r| (r.name.as_ref(), (r, false)))
+        .map(|r| (r.name().as_ref(), (r, false)))
         .collect();
 
     for (_, (res, _)) in potential_resources.iter().filter(|(_, (_, seen))| !seen) {
