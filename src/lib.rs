@@ -309,6 +309,7 @@ fn compile_machine_policies_internal(
 fn get_policies(input_files: Vec<&str>) -> Result<Vec<PolicyFile>, CascadeErrors> {
     let mut errors = CascadeErrors::new();
     let mut policies: Vec<PolicyFile> = Vec::new();
+    let parser = parser::PolicyParser::new();
     for f in input_files {
         let policy_str = match std::fs::read_to_string(f) {
             Ok(s) => s,
@@ -317,7 +318,7 @@ fn get_policies(input_files: Vec<&str>) -> Result<Vec<PolicyFile>, CascadeErrors
                 continue;
             }
         };
-        let p = match parse_policy(&policy_str) {
+        let p = match parse_policy(&parser, &policy_str) {
             Ok(p) => p,
             Err(evec) => {
                 for e in evec {
@@ -332,13 +333,13 @@ fn get_policies(input_files: Vec<&str>) -> Result<Vec<PolicyFile>, CascadeErrors
     errors.into_result(policies)
 }
 
-fn parse_policy(
-    policy: &str,
-) -> Result<Box<Policy>, Vec<LalrpopParseError<usize, lalrpop_util::lexer::Token, ParseErrorMsg>>> {
+fn parse_policy<'a>(
+    parser: &parser::PolicyParser,
+    policy: &'a str,
+) -> Result<Box<Policy>, Vec<LalrpopParseError<usize, lalrpop_util::lexer::Token<'a>, ParseErrorMsg>>>
+{
     let mut errors = Vec::new();
-    // TODO: Probably should only construct once
-    // Why though?
-    let parse_res = parser::PolicyParser::new().parse(&mut errors, policy);
+    let parse_res = parser.parse(&mut errors, policy);
     // errors is a vec of ErrorRecovery.  ErrorRecovery is a struct wrapping a ParseError
     // and a sequence of discarded characters.  We don't need those characters, so we just
     // remove the wrapping.
