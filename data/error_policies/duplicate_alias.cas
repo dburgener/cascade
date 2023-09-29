@@ -1,0 +1,7 @@
+@alias(some_alias)
+domain foo {
+	allow(this, resource, file, read);
+}
+
+@alias(some_alias)
+domain bar {}
