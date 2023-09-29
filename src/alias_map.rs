@@ -12,7 +12,6 @@ use crate::util::append_set_map;
 #[derive(Clone, Debug)]
 pub struct AliasMap<T> {
     declarations: BTreeMap<String, T>,
-    #[allow(dead_code)]
     aliases: BTreeMap<CascadeString, String>,
     // Secondary_indices allow efficient lookups based on some other key.  This is useful to
     // efficiently get a subset of the map based on a prepopulated key, such as all functions for a
@@ -156,8 +155,6 @@ impl<T: Declared> AliasMap<T> {
         errors.into_result(())
     }
 
-    // The need for alias_files is a little awkward. Without it, we can't report errors on the
-    // alias declarations.  Post-0.1 we'll include file info in CascadeStrings and this can go away
     pub fn set_aliases(&mut self, aliases: BTreeMap<CascadeString, String>) {
         self.update_alias_secondary_indices(&aliases);
         self.aliases = aliases;
