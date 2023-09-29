@@ -146,7 +146,7 @@ fn compile_machine_policies_internal(
     }
 
     // Generate type aliases
-    let (t_aliases, alias_files) = compile::collect_aliases(type_map.iter());
+    let (t_aliases, alias_files) = compile::collect_aliases(type_map.iter())?;
     type_map.validate_aliases(&t_aliases, &alias_files)?;
     type_map.set_aliases(t_aliases);
 
@@ -233,7 +233,7 @@ fn compile_machine_policies_internal(
     compile::validate_modules(&policies, &type_map, &mut module_map)?;
 
     // Generate module aliases
-    let (m_aliases, alias_files) = compile::collect_aliases(module_map.iter());
+    let (m_aliases, alias_files) = compile::collect_aliases(module_map.iter())?;
     module_map.validate_aliases(&m_aliases, &alias_files)?;
     module_map.set_aliases(m_aliases);
 
@@ -1670,6 +1670,11 @@ mod tests {
     #[test]
     fn derive_no_derive_test() {
         error_policy_test!("derive_noderive.cas", 1, ErrorItem::Compile(_));
+    }
+
+    #[test]
+    fn duplicate_alias_test() {
+        error_policy_test!("duplicate_alias.cas", 1, ErrorItem::Compile(_));
     }
 
     #[test]

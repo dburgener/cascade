@@ -1259,7 +1259,7 @@ pub fn get_reduced_infos(
     mark_non_virtual_children(&mut new_type_map);
 
     // Generate type aliases for the new reduced type map
-    let (new_t_aliases, alias_files) = collect_aliases(new_type_map.iter());
+    let (new_t_aliases, alias_files) = collect_aliases(new_type_map.iter())?;
     new_type_map.validate_aliases(&new_t_aliases, &alias_files)?;
     new_type_map.set_aliases(new_t_aliases);
 
@@ -1403,7 +1403,7 @@ pub fn get_funcs<'a>(
     // Stops if something went wrong for this major step.
     ret = ret.into_result_self()?;
     // Get function aliases
-    let (f_aliases, alias_files) = collect_aliases(reduced_func_map.iter());
+    let (f_aliases, alias_files) = collect_aliases(reduced_func_map.iter())?;
     reduced_func_map.validate_aliases(&f_aliases, &alias_files)?;
     reduced_func_map.set_aliases(f_aliases);
     ret.into_result(reduced_func_map)
@@ -2084,12 +2084,18 @@ fn organize_type_map(types: &TypeMap) -> Result<Vec<&TypeInfo>, CascadeErrors> {
 // in the maps
 // We gather files, because we aren't storing file info in CascadeStrings yet.  That can go away
 // once we store file info in CascadeStrings
+// Silence the clippy warning about the return type.  It's not *that* complex, and it will get
+// simpler naturally once we do the above
+#[allow(clippy::type_complexity)]
 pub fn collect_aliases<'a, I, T>(
     aliasable_map: I,
-) -> (
-    BTreeMap<CascadeString, String>,
-    BTreeMap<CascadeString, SimpleFile<String, String>>,
-)
+) -> Result<
+    (
+        BTreeMap<CascadeString, String>,
+        BTreeMap<CascadeString, SimpleFile<String, String>>,
+    ),
+    CascadeErrors,
+>
 where
     I: Iterator<Item = (&'a String, &'a T)>,
     T: Declared + 'a,
@@ -2097,10 +2103,31 @@ where
 {
     let mut aliases = BTreeMap::new();
     let mut alias_files = BTreeMap::new();
+    let mut errors = CascadeErrors::new();
     for (k, v) in aliasable_map {
         for a in v.get_annotations() {
             if let AnnotationInfo::Alias(a) = a {
-                aliases.insert(a.clone(), k.clone());
+                if aliases.insert(a.clone(), k.clone()).is_some() {
+                    errors.append(
+                        ErrorItem::make_compile_or_internal_error(
+                            "Alias name conflicts with an existing alias",
+                            v.get_file().as_ref(),
+                            a.get_range(),
+                            "",
+                        )
+                        .maybe_add_additional_message(
+                            alias_files.get(a),
+                            // This is the range of the *existing* key.  Insert updates the
+                            // value, but not the key when we overwrite.  Since our PartialEq
+                            // isn't identical (it just compares the strings, not the ranges),
+                            // we still have the old range in the key
+                            // https://doc.rust-lang.org/std/collections/struct.BTreeMap.html#method.insert
+                            aliases.get_key_value(a).and_then(|(a, _)| a.get_range()),
+                            "Existing alias found here",
+                        )
+                        .into(),
+                    );
+                }
                 if let Some(file) = v.get_file().clone() {
                     alias_files.insert(a.clone(), file);
                 }
@@ -2108,7 +2135,7 @@ where
         }
     }
 
-    (aliases, alias_files)
+    errors.into_result((aliases, alias_files))
 }
 
 pub fn call_associated_calls<'a>(
