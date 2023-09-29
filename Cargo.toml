@@ -15,7 +15,7 @@ clap = { version = "4", features = ["derive"] }
 clap_mangen = "0.2"
 
 [dev-dependencies]
-criterion = "0.4"
+criterion = "0.5"
 
 [dependencies]
 backtrace = "0.3"
