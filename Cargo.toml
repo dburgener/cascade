@@ -10,7 +10,7 @@ readme = "README.md"
 keywords = [ "selinux" ]
 
 [build-dependencies]
-lalrpop = "^0.19.12"
+lalrpop = "0.20"
 clap = { version = "4", features = ["derive"] }
 clap_mangen = "0.2"
 
@@ -23,7 +23,7 @@ clap = { version = "4", features = ["derive"] }
 codespan-reporting = "0.11"
 flate2 = "1"
 is-terminal = "0.4"
-lalrpop-util = "0.19"
+lalrpop-util = "0.20"
 quick-xml = "0.27"
 sexp = "1.1"
 tar = "0.4"

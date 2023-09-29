@@ -147,7 +147,7 @@ impl From<LalrpopParseError<usize, Token<'_>, ParseErrorMsg>> for ParseErrorMsg 
                 range: Some(location..location),
                 help: String::new(),
             },
-            LalrpopParseError::UnrecognizedEOF { location, expected } => ParseErrorMsg {
+            LalrpopParseError::UnrecognizedEof { location, expected } => ParseErrorMsg {
                 issue: "Unexpected end of file".into(),
                 range: Some(location..location),
                 help: format!("Expected {}", expected.join(" or ")),
