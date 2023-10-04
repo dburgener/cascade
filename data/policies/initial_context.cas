@@ -10,6 +10,10 @@ resource security_con {
         initial_context("security", this);
 }
 
+resource other_con {
+	initial_context("other", system_u:object_r:this);
+}
+
 domain some_dom {
 	allow(this, unlabeled_con, file, read);
 }

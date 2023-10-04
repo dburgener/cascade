@@ -3,6 +3,7 @@ resource foo {
     fs_context("sockfs", task, this);
     fs_context("tmpfs", trans, this);
     fs_context("tmpfs", trans, this);
+    fs_context("hugetblfs", xattr, system_u:object_r:this);
 
     fs_context("proc", genfscon, this, "/");
     fs_context("proc", genfscon, this, "/");

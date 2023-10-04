@@ -144,6 +144,7 @@
 (typeattributeset resource (unlabeled_sid))
 (allow domain foo (file (read)))
 (fsuse xattr ext3 (system_u object_r foo ((s0) (s0))))
+(fsuse xattr hugetblfs (system_u object_r foo ((s0) (s0))))
 (fsuse task sockfs (system_u object_r foo ((s0) (s0))))
 (fsuse trans tmpfs (system_u object_r foo ((s0) (s0))))
 (genfscon cgroup "/" (system_u object_r foo ((s0) (s0))))
