@@ -239,7 +239,7 @@ fn filecon_test() {
             "(filecon \"/bin\" dir (",
             "(filecon \"/etc\" any (",
         ],
-        &[],
+        &["this"],
         0,
     );
 }

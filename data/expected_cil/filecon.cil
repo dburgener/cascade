@@ -148,6 +148,7 @@
 (filecon "/bin/some_bin" file (system_u object_r foo ((s0) (s0))))
 (filecon "/bin/some_bin2" file (system_u object_r foo ((s0) (s0))))
 (filecon "/bin/some_bin3" file (system_u object_r foo ((s0) (s0))))
+(filecon "/bin/some_bin4" file (system_u object_r foo ((s0) (s0))))
 (filecon "/dev/sda1" block (system_u object_r foo ((s0) (s0))))
 (filecon "/dev/tty.*" char (system_u object_r foo ((s0) (s0))))
 (filecon "/etc" any (system_u object_r foo ((s0) (s0))))

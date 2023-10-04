@@ -9,6 +9,7 @@ resource foo {
 	file_context("/bin/some_bin", [file], system_u:object_r:foo:s0);
 	file_context("/bin/some_bin2", [file], system_u:object_r:foo:s0-s0);
 	file_context("/bin/some_bin3", [file], system_u:object_r:foo:s0-s0:c0.c255);
+	file_context("/bin/some_bin4", [file], system_u:object_r:this:s0);
 	file_context("HOME_ROOT", dir, this);
 	// Policies must include at least one av rule
 	allow(domain, foo, file, [read]);
