@@ -27,8 +27,7 @@ jobs:
         # informationally check the latest as well.  We should
         # regularly update the known good once we know that tests
         # pass on it
-        # 1.70 is our MSRV, so we should keep testing on it
-        rust-toolchain: [ 1.77, stable, nightly, 1.70 ]
+        rust-toolchain: [ 1.77, stable, nightly ]
     steps:
     - uses: actions/checkout@v3
     - name: Setup
@@ -76,6 +75,8 @@ jobs:
         include:
           - selinux-version: '3.7'
             rust-toolchain: nightly
+          - selinux-version: '3.7'
+            rust-toolchain: 1.70
     steps:
     - uses: actions/checkout@v3
     - name: Checkout selinux userspace
