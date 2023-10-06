@@ -511,7 +511,7 @@ fn call_to_fc_rules<'a>(
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
         .get_name_or_string(context)?;
     let context = match Context::try_from(context_str.to_string()) {
-        Ok(c) => c,
+        Ok(c) => c.resolve(types, context),
         Err(_) => {
             return Err(CascadeErrors::from(
                 ErrorItem::make_compile_or_internal_error(
@@ -667,7 +667,7 @@ pub fn call_to_portcon_rules<'a>(
         .get_name_or_string(context)?;
 
     let context = match Context::try_from(context_str.to_string()) {
-        Ok(c) => c,
+        Ok(c) => c.resolve(types, context),
         Err(()) => {
             return Err(ErrorItem::Internal(InternalError::new()).into());
         }
@@ -969,7 +969,7 @@ fn call_to_fsc_rules<'a>(
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?;
     let context_str = context_str_arg.get_name_or_string(context)?;
     let fs_context = match Context::try_from(context_str.to_string()) {
-        Ok(c) => c,
+        Ok(c) => c.resolve(types, context),
         Err(_) => {
             return Err(CascadeErrors::from(
                 ErrorItem::make_compile_or_internal_error(
@@ -1148,7 +1148,7 @@ fn call_to_sids<'a>(
         .ok_or_else(|| ErrorItem::Internal(InternalError::new()))?
         .get_name_or_string(context)?;
     let sid_context = match Context::try_from(context_str.to_string()) {
-        Ok(c) => c,
+        Ok(c) => c.resolve(types, context),
         Err(_) => {
             return Err(CascadeErrors::from(
                 ErrorItem::make_compile_or_internal_error(
