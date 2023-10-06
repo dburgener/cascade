@@ -1100,6 +1100,26 @@ impl<'a> Context<'a> {
             mls_high: rename_cow(&self.mls_high, renames),
         }
     }
+
+    // Resolve symbols and return a new Context
+    pub fn resolve(&'_ self, types: &TypeMap, block_context: &BlockContext) -> Self {
+        Context {
+            setype: block_context
+                .symbol_in_context(self.setype.as_ref(), types)
+                .map(|t| Cow::Owned(t.name.to_string()))
+                .or_else(|| {
+                    if self.setype == "this" {
+                        block_context
+                            .get_parent_type_name()
+                            .map(|cs| Cow::Owned(cs.to_string()))
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or_else(|| self.setype.clone()),
+            ..self.clone()
+        }
+    }
 }
 
 impl From<&Context<'_>> for sexp::Sexp {
@@ -1826,5 +1846,14 @@ mod tests {
         if context.is_ok() {
             panic!("Bad context compiled successfully");
         }
+    }
+
+    #[test]
+    fn resolve_context_test() {
+        let context = Context::try_from("u:r:this:s0").unwrap();
+        let types = crate::compile::get_built_in_types_map().unwrap();
+        let block_context = BlockContext::new(BlockType::Resource, types.get("resource"), None);
+        let res = context.resolve(&types, &block_context);
+        assert_eq!(res.setype, "resource");
     }
 }
