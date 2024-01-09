@@ -1544,7 +1544,7 @@ pub fn get_synthetic_resource_name(
 fn create_synthetic_resource(
     types: &TypeMap,
     dom_info: &TypeInfo,
-    associated_parents: &Vec<&TypeInfo>,
+    associated_parents: &[&TypeInfo],
     classes: Vec<&TypeInfo>,
     class_string: &CascadeString,
     global_exprs: &mut HashSet<Expression>,
@@ -1682,7 +1682,7 @@ fn interpret_associate(
     global_exprs: &mut HashSet<Expression>,
     types: &TypeMap,
     associate: &Associated,
-    associated_parents: &Vec<&TypeInfo>,
+    associated_parents: &[&TypeInfo],
     dom_info: &TypeInfo,
     extend_annotations: &BTreeMap<CascadeString, BTreeSet<AnnotationInfo>>,
 ) -> Result<(), CascadeErrors> {
