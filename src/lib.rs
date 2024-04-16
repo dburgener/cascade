@@ -54,7 +54,7 @@ pub fn compile_combined(
     let errors = CascadeErrors::new();
     let policies = get_policies(input_files)?;
     let mut res = compile_machine_policies_internal(policies, vec!["out".to_string()], true)?;
-    let ret = match res.remove(&"out".to_string()) {
+    let ret = match res.remove("out") {
         Some(s) => s,
         None => return Err(CascadeErrors::from(InternalError::new())),
     };
