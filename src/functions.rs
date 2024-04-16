@@ -2157,7 +2157,7 @@ impl<'a> FunctionArgument<'a> {
                 None,
             )?;
 
-            ret.default_value = declared_arg.default.clone();
+            ret.default_value.clone_from(&declared_arg.default);
         }
         Ok(ret)
     }

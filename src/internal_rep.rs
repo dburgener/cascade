@@ -1431,7 +1431,7 @@ impl<'a> ClassList<'a> {
         if class == "any" {
             return true;
         }
-        self.classes.get(class).is_some()
+        self.classes.contains_key(class)
     }
 
     pub fn is_perm(&self, perm: &str, context: &BlockContext) -> bool {
