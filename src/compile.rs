@@ -2673,7 +2673,7 @@ mod tests {
                 parents: vec![types.get("domain").unwrap()],
             },
             InheritedAnnotation {
-                annotation: AnnotationInfo::Alias(CascadeString::from("alias").into()),
+                annotation: AnnotationInfo::Alias(CascadeString::from("alias")),
                 parents: vec![types.get("domain").unwrap()],
             },
             // Not deduped, because derive doesn't dedup by design

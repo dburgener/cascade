@@ -415,7 +415,7 @@ fn makelist_test() {
 fn multifiles_test() {
     // valid_policy_test() is somewhat tightly wound to the one file case, so we'll code our
     // own copy here
-    let policy_files = vec![
+    let policy_files = [
         [POLICIES_DIR, "multifile1.cas"].concat(),
         [POLICIES_DIR, "multifile2.cas"].concat(),
     ];
@@ -442,7 +442,7 @@ fn multifiles_test() {
 
 #[test]
 fn compile_machine_policies_test() {
-    let policy_files = vec![
+    let policy_files = [
         [POLICIES_DIR, "machine_building1.cas"].concat(),
         [POLICIES_DIR, "machine_building2.cas"].concat(),
         [POLICIES_DIR, "machine_building3.cas"].concat(),
@@ -489,7 +489,7 @@ fn compile_machine_policies_test() {
 
 #[test]
 fn compile_machine_policies_all_test() {
-    let policy_files = vec![
+    let policy_files = [
         [POLICIES_DIR, "machine_building1.cas"].concat(),
         [POLICIES_DIR, "machine_building2.cas"].concat(),
         [POLICIES_DIR, "machine_building3.cas"].concat(),
@@ -938,7 +938,7 @@ fn extend_double_declaration_error() {
 
 #[test]
 fn machine_building_error() {
-    let policy_files = vec![
+    let policy_files = [
         [POLICIES_DIR, "machine_building1.cas"].concat(),
         [POLICIES_DIR, "machine_building2.cas"].concat(),
         [POLICIES_DIR, "machine_building3.cas"].concat(),
@@ -1332,7 +1332,7 @@ fn valid_nested_alias() {
 
 #[test]
 fn invalid_default_test() {
-    let policy_files = vec![
+    let policy_files = [
         [ERROR_POLICIES_DIR, "invalid_default1.cas"].concat(),
         [ERROR_POLICIES_DIR, "invalid_default2.cas"].concat(),
     ];

@@ -1722,7 +1722,7 @@ mod tests {
         );
 
         let rules = generate_sid_rules(vec![&sid1, &sid2]);
-        let cil_expected = vec![
+        let cil_expected = [
             "(sid foo)",
             "(sidcontext foo (system_u system_r foo_t ((s0) (s0))))",
             "(sid bar)",
