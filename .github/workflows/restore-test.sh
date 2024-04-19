@@ -11,7 +11,7 @@ sudo apt install -y --no-install-recommends flex bison pkg-config libaudit-dev l
 
 pushd selinux
 
-# 3.2 and earlier have a warning fro stringop-truncation
+# 3.2 and earlier have a warning for stringop-truncation
 # 3.0 and earlier have multiple definitions of global variables, which fails to
 # compile with -fno-common, which is the default behavior in modern GCC.  This
 # was fixed upstream in commit a96e8c59ecac84096d870b42701a504791a8cc8c, but
