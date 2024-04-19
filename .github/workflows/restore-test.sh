@@ -17,8 +17,8 @@ pushd selinux
 # was fixed upstream in commit a96e8c59ecac84096d870b42701a504791a8cc8c, but
 # for our purposes compiling the older versions, we can just allow the behavior
 # with -fcommon
-sudo make -j16 CFLAGS="-Wno-error=stringop-truncation -fcommon -pipe -fPIC" -C libsepol install
-sudo make -j16 -C secilc install
+sudo PREFIX=/usr/local make -j16 CFLAGS="-Wno-error=stringop-truncation -fcommon -pipe -fPIC" -C libsepol install
+sudo LIBRARY_PATH=/usr/local/lib make -j16 -C secilc install
 
 # https://nickb.dev/blog/azure-pipelines-for-rust-projects
 curl --proto '=https' -sSf https://sh.rustup.rs | sh -s -- -y
