@@ -75,6 +75,8 @@ jobs:
         include:
           - selinux-version: '3.6'
             rust-toolchain: nightly
+          - selinux-version: '3.5'
+            rust-toolchain: 1.70
     steps:
     - uses: actions/checkout@v3
     - name: Checkout selinux userspace
