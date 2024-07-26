@@ -309,9 +309,9 @@ fn compile_machine_policies_internal(
     errors.into_result(machine_hashmap)
 }
 
-fn get_policies(input_files: Vec<&str>) -> Result<Vec<PolicyFile>, CascadeErrors> {
+fn get_policies(input_files: Vec<&str>) -> Result<PolicyFiles, CascadeErrors> {
     let mut errors = CascadeErrors::new();
-    let mut policies: Vec<PolicyFile> = Vec::new();
+    let mut policies: PolicyFiles = PolicyFiles::default();
     let parser = parser::PolicyParser::new();
     for f in input_files {
         let policy_str = match std::fs::read_to_string(f) {
@@ -331,7 +331,7 @@ fn get_policies(input_files: Vec<&str>) -> Result<Vec<PolicyFile>, CascadeErrors
                 continue;
             }
         };
-        policies.push(PolicyFile::new(*p, SimpleFile::new(f.into(), policy_str)));
+        policies.add_file(*p, f.into(), policy_str);
     }
     errors.into_result(policies)
 }

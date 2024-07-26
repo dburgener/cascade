@@ -8,7 +8,8 @@ use std::iter;
 use std::net::IpAddr as NetIpAddr;
 use std::ops::Range;
 
-use codespan_reporting::files::SimpleFile;
+// TODO: drop SimpleFile.  Keeping it for now while working on getting a partial refactor compiling
+use codespan_reporting::files::{SimpleFile, SimpleFiles};
 
 use crate::constants;
 use crate::context::Context;
@@ -166,14 +167,40 @@ impl<const N: usize> From<&[&CascadeString; N]> for CascadeString {
 }
 
 #[derive(Debug)]
+struct PolicyFiles {
+    files_list: SimpleFiles<String, String>,
+    policies: Vec<PolicyFile>
+}
+
+impl PolicyFiles {
+    fn default() -> Self {
+        PolicyFiles {
+            files_list: SimpleFiles::new(),
+            policies: Vec::new()
+        }
+    }
+
+    fn add_file(&mut self, policy: Policy, name: String, contents: String) {
+        let file_id = self.files_list.add(name, contents);
+        self.policies.push(PolicyFile::new(policy, file_id));
+    }
+
+    // Temporary for refactoring.  TODO: delete
+    fn get_file(&self, file_id: usize) -> Result<&SimpleFile<String, String>, CascadeErrors> {
+        use crate::error::InternalError;
+        self.files_list.get(file_id).map_err(|_| ErrorItem::Internal(InternalError::new()).into())
+    }
+}
+
+#[derive(Debug)]
 pub struct PolicyFile {
     pub policy: Policy,
-    pub file: SimpleFile<String, String>,
+    pub file_id: usize,
 }
 
 impl PolicyFile {
-    pub fn new(policy: Policy, file: SimpleFile<String, String>) -> Self {
-        PolicyFile { policy, file }
+    pub fn new(policy: Policy, file_id: usize) -> Self {
+        PolicyFile { policy, file_id }
     }
 }
 

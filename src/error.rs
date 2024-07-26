@@ -19,6 +19,28 @@ use std::ops::Range;
 use termcolor::{ColorChoice, StandardStream};
 use thiserror::Error;
 
+#[derive(Clone, Debug)]
+pub struct SourceErrorLoc {
+    range: Range<usize>,
+    file_id: usize,
+}
+
+impl SourceErrorLoc {
+    pub fn new(range: Range<usize>, file_id: usize) -> Self {
+        SourceErrorLoc {
+            range,
+            file_id
+        }
+    }
+}
+
+pub enum ErrorLoc {
+    // A location in a source file
+    Source(SourceErrorLoc),
+    // Created via @derive
+    Derived(Box<ErrorLoc>)
+}
+
 #[derive(Error, Clone, Debug)]
 #[error("{diagnostic}")]
 pub struct CompileError {
