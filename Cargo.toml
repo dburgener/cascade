@@ -24,7 +24,7 @@ codespan-reporting = "0.11"
 flate2 = "1"
 is-terminal = "0.4"
 lalrpop-util = { version="0.20", default-features=false, features = ["lexer"] }
-quick-xml = "0.31"
+quick-xml = "0.36"
 sexp = "1.1"
 tar = "0.4"
 termcolor = "1.1"
