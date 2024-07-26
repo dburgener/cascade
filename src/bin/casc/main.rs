@@ -1,5 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: MIT
+#![allow(clippy::manual_flatten)]
+#![allow(clippy::new_without_default)]
 use selinux_cascade::error::{CascadeErrors, ErrorItem};
 use selinux_cascade::{compile_combined, compile_machine_policies, compile_machine_policies_all};
 

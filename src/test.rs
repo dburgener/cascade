@@ -1,3 +1,4 @@
+#![allow(clippy::expect_fun_call)]
 lalrpop_mod!(#[allow(clippy::all)] pub parser);
 
 use crate::error::{CompileError, Diag, ParseError};
