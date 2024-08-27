@@ -7,7 +7,7 @@ mod casc;
 
 fn main() -> std::io::Result<()> {
     // Generate parser
-    lalrpop::process_root().unwrap();
+    lalrpop::process_src().unwrap();
 
     // Generate man page
     // https://rust-cli.github.io/book/in-depth/docs.html
