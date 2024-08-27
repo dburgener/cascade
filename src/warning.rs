@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 //! Module for Cascade warning support
+//!
 //! If your function calls a function that adds warnings, first create a
 //! Warnings object to store the warnings.  Then call inner() on the
 //! WithWarnings object returned from the function generating warnings.

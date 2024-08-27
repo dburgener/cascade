@@ -45,6 +45,7 @@ use error::ErrorItem;
 lalrpop_mod!(#[allow(clippy::all)] pub parser);
 
 /// Compile all machines into a single policy
+///
 /// The list of input files should contain filenames of files containing policy to be
 /// compiled.
 /// Returns a Result containing either a string of CIL policy which is the compiled result or a
@@ -64,6 +65,7 @@ pub fn compile_combined(
 }
 
 /// Compile a complete machine policy
+///
 /// The list of input files should contain filenames of files containing policy to be
 /// compiled.
 /// The list of machine names are the names of the machines to build.
@@ -79,6 +81,7 @@ pub fn compile_machine_policies(
 }
 
 /// Compile all of the machine policies
+///
 /// The list of input files should contain filenames of files containing policy to be
 /// compiled.
 /// Returns a Result containing either a string of CIL policy which is the compiled result or a
@@ -100,6 +103,7 @@ pub fn compile_machine_policies_all(
 }
 
 /// Generate a dbus_contexts file
+///
 /// In the long term, this needs to take information about the policy to use in the generation
 /// For now, all we generate is an xml template
 pub fn generate_dbus_contexts() -> Result<String, error::CascadeErrors> {
