@@ -34,11 +34,22 @@ impl SourceErrorLoc {
     }
 }
 
+#[derive(Clone, Debug)]
 pub enum ErrorLoc {
     // A location in a source file
     Source(SourceErrorLoc),
     // Created via @derive
     Derived(Box<ErrorLoc>)
+}
+
+// TODO: Remove!
+impl ErrorLoc {
+    pub fn get_range(&self) -> Option<Range<usize>> {
+        match self {
+            ErrorLoc::Source(s) => Some(s.range.clone()),
+            ErrorLoc::Derived(_) => None
+        }
+    }
 }
 
 #[derive(Error, Clone, Debug)]

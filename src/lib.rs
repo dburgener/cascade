@@ -25,7 +25,7 @@ mod test;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use crate::ast::{Argument, CascadeString, Declaration, Expression, Policy, PolicyFile};
+use crate::ast::{Argument, CascadeString, Declaration, Expression, Policy, PolicyFile, PolicyFiles};
 use crate::context::{BlockType, Context};
 use crate::error::{CascadeErrors, InternalError, InvalidMachineError, ParseErrorMsg};
 use crate::functions::{FunctionClass, FunctionMap};
@@ -87,7 +87,7 @@ pub fn compile_machine_policies_all(
 ) -> Result<HashMap<String, (String, Warnings)>, error::CascadeErrors> {
     let mut machine_names = Vec::new();
     let policies = get_policies(input_files)?;
-    for p in &policies {
+    for p in policies.get_policies() {
         for e in &p.policy.exprs {
             if let Expression::Decl(Declaration::Machine(s)) = e {
                 machine_names.push(s.name.to_string());
@@ -110,7 +110,7 @@ pub fn generate_seusers() -> String {
 }
 
 fn compile_machine_policies_internal(
-    mut policies: Vec<PolicyFile>,
+    mut policies: PolicyFiles,
     machine_names: Vec<String>,
     create_default_machine: bool,
 ) -> Result<HashMap<String, (String, Warnings)>, error::CascadeErrors> {
@@ -125,6 +125,9 @@ fn compile_machine_policies_internal(
     let mut module_map = ModuleMap::new();
     let mut machine_map = MachineMap::new();
     let mut extend_annotations = BTreeMap::new();
+
+    // TODO: remove and clean up.  Just here for refactor ease
+    let mut policies: Vec<PolicyFile> = policies.get_policies().clone();
 
     {
         // Collect all type declarations

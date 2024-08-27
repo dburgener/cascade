@@ -5,7 +5,7 @@ use lalrpop_util::ErrorRecovery;
 use lalrpop_util::ParseError;
 use crate::error::ParseErrorMsg;
 
-grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, ParseErrorMsg>>);
+grammar<'err>(file_id: usize, errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, ParseErrorMsg>>);
 
 extern {
 	type Error = ParseErrorMsg;
@@ -118,8 +118,16 @@ InheritList: Vec<CascadeString> = {
 }
 
 BuiltInType: CascadeString = {
-	<start: @L> <s: "domain"> <end: @R> => CascadeString::new(s.to_string(), start..end),
-	<start: @L> <s: "resource"> <end: @R> => CascadeString::new(s.to_string(), start..end),
+	<start: @L> <s: "domain"> <end: @R> => {
+		CascadeString::new_source(s.to_string(),
+		                          start..end,
+		                          file_id)
+	},
+	<start: @L> <s: "resource"> <end: @R> => {
+		CascadeString::new_source(s.to_string(),
+		                          start..end,
+		                          file_id)
+	}
 }
 
 FuncDecl: Box<FuncDecl> = {
@@ -163,7 +171,9 @@ ModuleDecl: Module = {
 
 ModuleBody: (CascadeString, CascadeString) = {
 	<s: BuiltInType> <n: NameDecl> ";" => (s, n),
-	<start: @L> <s: "module"> <end: @R> <n: NameDecl> ";" => (CascadeString::new(s.to_string(), start..end), n),
+	<start: @L> <s: "module"> <end: @R> <n: NameDecl> ";" => {
+		(CascadeString::new_source(s.to_string(), start..end, file_id), n)
+	}
 }
 
 MachineDecl: Machine = {
@@ -182,8 +192,8 @@ Ann: Annotation = {
 
 TypeName: CascadeString = {
 	Symbol,
-	<start: @L> <l: TypeName> "." <r: Symbol> <end: @R> => CascadeString::new([l.as_ref(), ".", r.as_ref()].concat(), start..end),
-	<start: @L> "*" <end: @R> => CascadeString::new("*".to_string(), start..end)
+	<start: @L> <l: TypeName> "." <r: Symbol> <end: @R> => CascadeString::new_source([l.as_ref(), ".", r.as_ref()].concat(), start..end, file_id),
+	<start: @L> "*" <end: @R> => CascadeString::new_source("*".to_string(), start..end, file_id)
 }
 
 pub NameDecl: CascadeString = {
@@ -192,7 +202,7 @@ pub NameDecl: CascadeString = {
 	// * must not end with an underscore
 	// * must not contain consecutive underscores
 	// * can contain letters, digits and underscores
-	<start: @L> <s: r"[a-zA-Z](_?([0-9a-zA-Z]+_)*[0-9a-zA-Z]+)?"> <end: @R>  => CascadeString::new(s.to_string(), start..end),
+	<start: @L> <s: r"[a-zA-Z](_?([0-9a-zA-Z]+_)*[0-9a-zA-Z]+)?"> <end: @R>  => CascadeString::new_source(s.to_string(), start..end, file_id),
 }
 
 Symbol: CascadeString = {
@@ -260,7 +270,7 @@ Arg: Argument = {
 Context: CascadeString = {
 	// TODO: don't discard the mls range
 	<start: @L> <u: TypeName> ":" <r: TypeName> ":" <t: TypeName> <m: (":" <MLS_Range>)?> <end: @R> => {
-		CascadeString::new([u.as_ref(), r.as_ref(), t.as_ref()].join(":"), start..end)
+		CascadeString::new_source([u.as_ref(), r.as_ref(), t.as_ref()].join(":"), start..end, file_id)
 	}
 }
 
@@ -296,7 +306,7 @@ Category: CascadeString = {
 }
 
 Quoted_String: CascadeString = {
-	<start: @L> <s: r#""[^"]*""#> <end: @R> => CascadeString::new(s.to_string(), start..end),
+	<start: @L> <s: r#""[^"]*""#> <end: @R> => CascadeString::new_source(s.to_string(), start..end, file_id),
 }
 
 PortRange: Port = {
@@ -320,12 +330,12 @@ IPAddr: AstIpAddr = {
 }
 
 IPv4: CascadeString = {
-	<start: @L> <ip: IPv4Regex> <end: @R> => CascadeString::new(ip.to_string(), start..end),
-	<start: @L> "localhost" <end: @R> => CascadeString::new("localhost".to_string(), start..end),
+	<start: @L> <ip: IPv4Regex> <end: @R> => CascadeString::new_source(ip.to_string(), start..end, file_id),
+	<start: @L> "localhost" <end: @R> => CascadeString::new_source("localhost".to_string(), start..end, file_id),
 }
 
 IPv6: CascadeString = {
-	<start: @L> <ip: IPv6Regex> <end: @R> => CascadeString::new(ip.to_string(), start..end),
+	<start: @L> <ip: IPv6Regex> <end: @R> => CascadeString::new_source(ip.to_string(), start..end, file_id),
 }
 
 // lexing precedence

@@ -13,13 +13,13 @@ use codespan_reporting::files::{SimpleFile, SimpleFiles};
 
 use crate::constants;
 use crate::context::Context;
-use crate::error::{CascadeErrors, ErrorItem, ParseErrorMsg};
+use crate::error::{CascadeErrors, ErrorItem, ErrorLoc, ParseErrorMsg, SourceErrorLoc};
 use crate::internal_rep::TypeMap;
 
-#[derive(Clone, Debug, Eq)]
+#[derive(Clone, Debug)]
 pub struct CascadeString {
     string: String,
-    range: Option<Range<usize>>,
+    location: ErrorLoc,
 }
 
 impl fmt::Display for CascadeString {
@@ -29,15 +29,15 @@ impl fmt::Display for CascadeString {
 }
 
 impl CascadeString {
-    pub fn new(string: String, range: Range<usize>) -> Self {
+    pub fn new_source(string: String, range: Range<usize>, file_id: usize) -> Self {
         CascadeString {
             string,
-            range: Some(range),
+            location: ErrorLoc::Source(SourceErrorLoc::new(range, file_id))
         }
     }
 
     pub fn get_range(&self) -> Option<Range<usize>> {
-        self.range.clone()
+        self.location.get_range()
     }
 
     // TODO: This doesn't include the brackets at the end, but we haven't saved enough info from
@@ -73,7 +73,7 @@ impl From<String> for CascadeString {
     fn from(s: String) -> CascadeString {
         CascadeString {
             string: s,
-            range: None,
+            location: todo!()
         }
     }
 }
@@ -82,7 +82,7 @@ impl From<&str> for CascadeString {
     fn from(s: &str) -> CascadeString {
         CascadeString {
             string: s.to_string(),
-            range: None,
+            location: todo!()
         }
     }
 }
@@ -135,6 +135,8 @@ impl PartialOrd for CascadeString {
     }
 }
 
+impl Eq for CascadeString {}
+
 impl Ord for CascadeString {
     fn cmp(&self, other: &Self) -> Ordering {
         self.string.cmp(&other.string)
@@ -145,7 +147,7 @@ impl From<&Port> for CascadeString {
     fn from(p: &Port) -> Self {
         CascadeString {
             string: p.to_string(),
-            range: p.get_range(),
+            location: todo!(),
         }
     }
 }
@@ -161,50 +163,54 @@ impl<const N: usize> From<&[&CascadeString; N]> for CascadeString {
             .join("");
         CascadeString {
             string: new_string,
-            range: new_range,
+            range: todo!(),
         }
     }
 }
 
 #[derive(Debug)]
-struct PolicyFiles {
+pub struct PolicyFiles {
     files_list: SimpleFiles<String, String>,
     policies: Vec<PolicyFile>
 }
 
 impl PolicyFiles {
-    fn default() -> Self {
+    pub fn default() -> Self {
         PolicyFiles {
             files_list: SimpleFiles::new(),
             policies: Vec::new()
         }
     }
 
-    fn add_file(&mut self, policy: Policy, name: String, contents: String) {
-        let file_id = self.files_list.add(name, contents);
-        self.policies.push(PolicyFile::new(policy, file_id));
+    pub fn add_file(&mut self, policy: Policy, name: String, contents: String) -> usize {
+        // TODO: remove clones
+        let file_id = self.files_list.add(name.clone(), contents.clone());
+        self.policies.push(PolicyFile::new(policy, SimpleFile::new(name, contents)));
+        file_id
     }
 
-    // Temporary for refactoring.  TODO: delete
-    fn get_file(&self, file_id: usize) -> Result<&SimpleFile<String, String>, CascadeErrors> {
-        use crate::error::InternalError;
-        self.files_list.get(file_id).map_err(|_| ErrorItem::Internal(InternalError::new()).into())
+    pub fn get_file(&self, file_id: usize) -> Result<&SimpleFile<String, String>, ()> {
+        self.files_list.get(file_id).map_err(|_e| ())
+    }
+
+    pub fn get_policies(&self) -> &Vec<PolicyFile> {
+        &self.policies
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct PolicyFile {
     pub policy: Policy,
-    pub file_id: usize,
+    pub file: SimpleFile<String, String>,
 }
 
 impl PolicyFile {
-    pub fn new(policy: Policy, file_id: usize) -> Self {
-        PolicyFile { policy, file_id }
+    pub fn new(policy: Policy, file: SimpleFile<String, String>) -> Self {
+        PolicyFile { policy, file }
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Policy {
     pub exprs: Vec<Expression>,
 }
