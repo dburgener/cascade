@@ -36,6 +36,13 @@ impl CascadeString {
         }
     }
 
+    pub fn new_synthetic(string: String, _range: Range<usize>) -> Self {
+        CascadeString {
+            string,
+            location: todo!()
+        }
+    }
+
     pub fn get_range(&self) -> Option<Range<usize>> {
         self.location.get_range()
     }

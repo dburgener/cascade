@@ -1536,7 +1536,7 @@ pub fn get_synthetic_resource_name(
     // We keep the range of the *resource* part specifically, which should always be where this
     // resource was defined
     match associated_resource.get_range() {
-        Some(range) => CascadeString::new(cs_name, range),
+        Some(range) => CascadeString::new_synthetic(cs_name, range),
         None => CascadeString::from(cs_name),
     }
 }
