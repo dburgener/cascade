@@ -1215,7 +1215,7 @@ impl<'a> TryFrom<String> for Context<'a> {
     }
 }
 
-impl<'a> fmt::Display for Context<'a> {
+impl fmt::Display for Context<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

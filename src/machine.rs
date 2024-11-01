@@ -41,27 +41,27 @@ impl Declared for ValidatedModule<'_> {
     }
 }
 
-impl<'a> Annotated for &ValidatedModule<'a> {
+impl Annotated for &ValidatedModule<'_> {
     fn get_annotations(&self) -> std::collections::btree_set::Iter<AnnotationInfo> {
         self.annotations.iter()
     }
 }
 
-impl<'a> Eq for ValidatedModule<'a> {}
+impl Eq for ValidatedModule<'_> {}
 
-impl<'a> Ord for ValidatedModule<'a> {
+impl Ord for ValidatedModule<'_> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.name.cmp(&other.name)
     }
 }
 
-impl<'a> PartialOrd for ValidatedModule<'a> {
+impl PartialOrd for ValidatedModule<'_> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<'a> PartialEq for ValidatedModule<'a> {
+impl PartialEq for ValidatedModule<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
     }
