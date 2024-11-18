@@ -234,7 +234,7 @@ pub enum ErrorItem {
     Internal(#[from] InternalError),
     #[error("Parsing error: {0}")]
     Parse(#[from] ParseError),
-    // TODO: Replace IO() with semantic errors wraping io::Error.
+    // TODO: Replace IO() with semantic errors wrapping io::Error.
     #[error("I/O error: {0}")]
     IO(#[from] io::Error),
     #[error("Invalid machine error: {0}")]
@@ -341,7 +341,7 @@ impl CascadeErrors {
 
     /// Enables to easily stop a workflow after a failed major step.  This is
     /// useful to avoid accumulating more errors that may be hard to understand
-    /// because of unsatisfied prerequiste.
+    /// because of unsatisfied prerequisite.
     ///
     /// For a multi-step workflow, it works as follow:
     /// 1. creates an accumulator with `let mut errors = CascadeErrors::new();`

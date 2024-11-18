@@ -311,7 +311,7 @@ PortRange: Port = {
 }
 
 Port: Port = {
-	<start: @L> <p: PortRegex> <end: @R> => Port::new(p.parse().unwrap(), Some(start..end)) // TODO: report parse error instead of panicing
+	<start: @L> <p: PortRegex> <end: @R> => Port::new(p.parse().unwrap(), Some(start..end)) // TODO: report parse error instead of panicking
 }
 
 IPAddr: AstIpAddr = {
