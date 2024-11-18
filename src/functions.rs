@@ -174,7 +174,7 @@ fn is_collapsed_class(class: &str) -> bool {
     ["capability", "process", "cap_userns"].contains(&class)
 }
 
-// TODO: This can be converted into a TryFrom for more compile time gaurantees
+// TODO: This can be converted into a TryFrom for more compile time guarantees
 // Returns a set of AV Rules, because one Cascade allow() call could generate multiple CIL level AV
 // rules, for example when intermixing capability and capability2 permissions
 fn call_to_av_rule<'a>(
@@ -2641,7 +2641,7 @@ impl From<&DeferredStatement> for sexp::Sexp {
 // unambiguously resolvable
 //
 // A DeferredCall inside a function, generates a DeferredCall in the parent, which may propagate up
-// until the symbol we are deferring on is unambigously resolvable.
+// until the symbol we are deferring on is unambiguously resolvable.
 // Functions calls are resolvable if we can unambiguously assign one function name to them.  A
 // function call using an argument (eg "source.read()", where "source" is an argument name) can't
 // be unambiguously resolved (even if the function has only one caller, there may be
@@ -3617,7 +3617,7 @@ fn validate_argument_error_handler(
     func_map: Option<&FunctionMap>,
 ) -> ErrorItem {
     // If func_info is none, which means we are validating a built in and cannot be an associated call,
-    // or the call is not an asociated one fall through and return the "standard" error.
+    // or the call is not an associated one fall through and return the "standard" error.
     // If this is the associated call we need to do some more digging to give the user a better
     // error message.
     // Unwraps of func_info are safe in this block because of the false return on map_or
@@ -3842,7 +3842,7 @@ pub fn initialize_terminated<'a>(
 // Context it is called in and FunctionMap (all FunctionInfos).
 // If the function call needs to be cast this will handle that.  This function will not
 // validate the cast that is done else where.
-// If the function call has a "this" class or no class, it will substitue the class of
+// If the function call has a "this" class or no class, it will substitute the class of
 // the caller
 // Lastely if the function is type aliased this function will resolve the alias.
 fn resolve_true_cil_name(

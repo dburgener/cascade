@@ -591,7 +591,7 @@ fn permissions_test() {
             "(allow foo foo (capability2 (wake_alarm)))",
             "(allow foo bar (file (all)))",
         ],
-        &["(capabilty (mac_override", "(capability (wake_alarm"],
+        &["(capability (mac_override", "(capability (wake_alarm"],
         0,
     );
 }

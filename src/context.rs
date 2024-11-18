@@ -109,7 +109,7 @@ impl<'a> Context<'a> {
     }
 
     // Returns whether a symbol refers to a list.  If the symbol does not exist, returns false.
-    // Use symbol_in_context to determine existance
+    // Use symbol_in_context to determine existence
     pub fn symbol_is_list(&self, arg: &str) -> bool {
         let arg = self.convert_arg_this(arg);
         match self.symbols.get(&CascadeString::from(&arg as &str)) {

@@ -1132,7 +1132,7 @@ pub fn validate_machines<'a>(
                 _ => {
                     errors.append(CascadeErrors::from(
                         ErrorItem::make_compile_or_internal_error(
-                            &format!("{} is not a supprted configuration", c.name.as_ref()),
+                            &format!("{} is not a supported configuration", c.name.as_ref()),
                             Some(file),
                             c.name.get_range(),
                             &format!(
@@ -1318,7 +1318,7 @@ pub fn get_reduced_infos(
     ret.into_result(WithWarnings::new(new_cil_tree, warnings))
 }
 
-// This is a recusive function that gets only the relevant types from the type map.
+// This is a recursive function that gets only the relevant types from the type map.
 // The reduced types are the types in the module and the types in any of that modules' child modules.
 // Parents of those types are also automatically included.
 // The types are cloned so that each machine TypeMap can own its own types.
@@ -1463,7 +1463,7 @@ fn get_all_function_names(
     ret
 }
 
-// If a type couldn't be organized, it is either a cycle or a non-existant parent somewhere
+// If a type couldn't be organized, it is either a cycle or a non-existent parent somewhere
 // The claim that a type must have at least one parent is enforced by the parser
 // This function walks the tree from a given type and determines which of these cases we are in
 // Return a Vector of found errors.  This Vector can be empty in internal calls, but should not be
@@ -1609,8 +1609,8 @@ fn create_synthetic_resource(
     new_decl.is_extension = false;
     // The synthetic resource keeps some, but not all annotations from its parent.
     // Specifically, Makelist and derive are kept from the parent
-    // TODO: This would be cleaner if we convert to AnnotationInfos first and implent the logic as
-    // a member funtion in AnnotationInfo
+    // TODO: This would be cleaner if we convert to AnnotationInfos first and implement the logic as
+    // a member function in AnnotationInfo
     // See https://github.com/dburgener/cascade/pull/39#discussion_r999510493 for fuller discussion
     new_decl.annotations.annotations = classes
         .iter()
@@ -2058,7 +2058,7 @@ fn organize_type_map(types: &TypeMap) -> Result<Vec<&TypeInfo>, CascadeErrors> {
             }
         }
         if current_pass_types.is_empty() && !tmp_types.is_empty() {
-            // We can't satify the parents for all types
+            // We can't satisfy the parents for all types
             return Err(generate_type_no_parent_errors(
                 tmp_types.values().copied().collect(),
                 types,
@@ -2589,7 +2589,7 @@ mod tests {
 
         let _type_vec = organize_type_map(&types).unwrap();
 
-        // TODO: reenable this.  The built in sid types break the ordering assumptions here
+        // TODO: re-enable this.  The built in sid types break the ordering assumptions here
         // Once they have been removed, the below checks should work again
         // Skip built in types
         //assert_eq!(type_vec[type_vec.len() - 3].name, "foo");

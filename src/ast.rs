@@ -439,7 +439,7 @@ impl Virtualable for FuncDecl {
 pub struct IfBlock {
     pub keyword_range: Range<usize>,
     // TODO: boolean expression
-    // TODO: populate statments
+    // TODO: populate statements
     pub if_statements: Vec<Statement>,
     pub else_statements: Vec<Statement>,
 }
