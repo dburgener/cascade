@@ -8,6 +8,7 @@ license = "MIT"
 repository = "https://github.com/dburgener/cascade"
 readme = "README.md"
 keywords = [ "selinux" ]
+rust-version = "1.81"
 
 [build-dependencies]
 lalrpop = { version="0.22", default-features=false, features = ["lexer"] }
