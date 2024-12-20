@@ -3621,7 +3621,7 @@ fn validate_argument_error_handler(
     // If this is the associated call we need to do some more digging to give the user a better
     // error message.
     // Unwraps of func_info are safe in this block because of the false return on map_or
-    if func_info.map_or(false, |f| f.is_associated_call) {
+    if func_info.is_some_and(|f| f.is_associated_call) {
         let mut error = ErrorItem::make_compile_or_internal_error(
             &format!(
                 "Expected type inheriting {} for associated call",
