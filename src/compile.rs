@@ -829,9 +829,9 @@ fn handle_derive<'a>(
         // If the explicitly listed parents define the function, use only ones that are listed.  If they
         // don't, get it from all of the types parents
         let this_func_parents = if selected_parents.iter().any(|p| {
-            types.get(p.as_ref()).map_or(false, |parent_type| {
-                parent_type.defines_function(f.as_ref(), functions)
-            })
+            types
+                .get(p.as_ref())
+                .is_some_and(|parent_type| parent_type.defines_function(f.as_ref(), functions))
         }) {
             &selected_parents
         } else {
