@@ -25,11 +25,11 @@ codespan-reporting = "0.11"
 flate2 = "1"
 is-terminal = "0.4"
 lalrpop-util = { version="0.22", default-features=false, features = ["lexer"] }
-quick-xml = "0.36"
+quick-xml = "0.37"
 sexp = "1.1"
 tar = "0.4"
 termcolor = "1.1"
-thiserror = "1.0"
+thiserror = "2.0"
 walkdir = "2"
 
 [[bench]]
