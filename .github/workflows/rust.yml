@@ -27,7 +27,7 @@ jobs:
         # informationally check the latest as well.  We should
         # regularly update the known good once we know that tests
         # pass on it
-        rust-toolchain: [ 1.77, stable, nightly ]
+        rust-toolchain: [ 1.83, stable, nightly ]
     steps:
     - uses: actions/checkout@v3
     - name: Setup
@@ -37,9 +37,9 @@ jobs:
     - name: Check clippy
       id: clippy
       run: .github/workflows/clippy.sh ${{ matrix.rust-toolchain }}
-      continue-on-error: ${{ matrix.rust-toolchain != '1.77' }}
+      continue-on-error: ${{ matrix.rust-toolchain != '1.83' }}
     - name: Store clippy flag
-      if: (matrix.rust-toolchain != '1.77')
+      if: (matrix.rust-toolchain != '1.83')
       run: |
         mkdir -p ./clippy-${{ matrix.rust-toolchain }}
         if [[ ${{ steps.clippy.outcome }} == "success" ]] ; then \
@@ -49,7 +49,7 @@ jobs:
         fi
         echo ${{ github.event.number }} > ./clippy-${{ matrix.rust-toolchain }}/issue_num
     - uses: actions/upload-artifact@v3
-      if: (matrix.rust-toolchain != '1.77')
+      if: (matrix.rust-toolchain != '1.83')
       with:
         name: clippy-${{ matrix.rust-toolchain }}
         path: clippy-${{ matrix.rust-toolchain }}/
