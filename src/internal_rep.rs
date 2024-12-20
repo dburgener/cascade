@@ -687,10 +687,7 @@ impl TypeInfo {
 // This is the sexp for *declaring* the type
 impl From<&TypeInfo> for Option<sexp::Sexp> {
     fn from(typeinfo: &TypeInfo) -> Option<sexp::Sexp> {
-        let flavor = match typeinfo.get_cil_declaration_type() {
-            Some(f) => f,
-            None => return None,
-        };
+        let flavor = typeinfo.get_cil_declaration_type()?;
         Some(list(&[
             atom_s(flavor),
             atom_s(typeinfo.name.get_cil_name().as_ref()),
