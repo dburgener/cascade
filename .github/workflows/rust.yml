@@ -70,7 +70,7 @@ jobs:
         # configurable policy versions, we should be able to successfully
         # test against 2.7-2.9
 
-        selinux-version: [ secilc-3.0, secilc-3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7 ]
+        selinux-version: [ secilc-3.0, secilc-3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8 ]
         rust-toolchain: [ stable ]
         include:
           - selinux-version: '3.7'
