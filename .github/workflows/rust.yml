@@ -48,7 +48,7 @@ jobs:
           echo 1 > ./clippy-${{ matrix.rust-toolchain }}/flag; \
         fi
         echo ${{ github.event.number }} > ./clippy-${{ matrix.rust-toolchain }}/issue_num
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       if: (matrix.rust-toolchain != '1.83')
       with:
         name: clippy-${{ matrix.rust-toolchain }}
@@ -103,7 +103,7 @@ jobs:
       # Note, unlike above we are not storing issue_num in this artifact.
       # That is because it will be stored in the clippy artifact and both
       # get unzipped if the toolchain is nightly.
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       if: (matrix.rust-toolchain == 'nightly')
       with:
         name: test-${{ matrix.rust-toolchain }}
