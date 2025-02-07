@@ -1,13 +1,31 @@
 #!/bin/bash
 
-set -e -u -o pipefail
+set -e -u -x -o pipefail
 
 VERSION=${1:-stable}
 
 # Manually build secilc, rather than take the packaged version, so we can have control over version
 # Github actions will have already checked out the repo to the correct tag for this run
 sudo apt update
-sudo apt install -y --no-install-recommends flex bison pkg-config libaudit-dev libbz2-dev libustr-dev libpcre3-dev xmlto
+sudo apt-get install --no-install-recommends --no-install-suggests \
+    bison \
+    flex \
+    gawk \
+    gcc \
+    gettext \
+    make \
+    libaudit-dev \
+    libbz2-dev \
+    libcap-dev \
+    libcap-ng-dev \
+    libcunit1-dev \
+    libglib2.0-dev \
+    libpcre2-dev \
+    libpcre3-dev \
+    pkgconf \
+    python3 \
+    systemd \
+    xmlto
 
 pushd selinux
 
@@ -17,8 +35,7 @@ pushd selinux
 # was fixed upstream in commit a96e8c59ecac84096d870b42701a504791a8cc8c, but
 # for our purposes compiling the older versions, we can just allow the behavior
 # with -fcommon
-sudo PREFIX=/usr/local make -j16 CFLAGS="-Wno-error=stringop-truncation -fcommon -pipe -fPIC" -C libsepol install
-sudo LIBRARY_PATH=/usr/local/lib make -j16 -C secilc install
+sudo make LIBDIR=/usr/local/lib/x86_64-linux-gnu SHLIBDIR=/lib/x86_64-linux-gnu CFLAGS="-Wno-error=stringop-truncation -fcommon -pipe -fPIC" OPT_SUBDIRS="" install
 
 # https://nickb.dev/blog/azure-pipelines-for-rust-projects
 curl --proto '=https' -sSf https://sh.rustup.rs | sh -s -- -y
