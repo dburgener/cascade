@@ -1,8 +1,10 @@
 #!/bin/bash
 
-set -e -u -o pipefail
+set -e -u -x -o pipefail
 
 VERSION=${1:-stable}
+
+ldd `which secilc`
 
 rustup run ${VERSION} cargo test --verbose
 
