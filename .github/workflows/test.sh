@@ -8,6 +8,6 @@ echo ${PATH}
 ldd `which secilc`
 ls /usr/local/bin
 
-rustup run ${VERSION} cargo test --verbose
+LD_LIBRARY_PATH=~/selinux:$LD_LIBRARY_PATH rustup run ${VERSION} cargo test --verbose
 
 ./.github/workflows/cli_test.sh ${VERSION}
