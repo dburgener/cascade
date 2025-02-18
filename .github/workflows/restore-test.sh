@@ -20,6 +20,8 @@ pushd selinux
 sudo DESTDIR=~/selinux_out LIBDIR=~/selinux_out/usr/lib LIBSEPOLA=~/selinux_out/usr/lib/libsepol.a CFLAGS+="-I~/selinux_out/usr/include" LDFLAGS+="-L~/selinux_out/usr/lib -L~/selinux_out/usr/lib" make -j16 CFLAGS="-Wno-error=stringop-truncation -fcommon -pipe -fPIC" -C libsepol install
 sudo ls ~/selinux_out
 sudo ls ~/selinux_out/usr/include
+sudo ls ~/selinux_out/usr/include/sepol
+sudo ls ~/selinux_out/usr/include/sepol/cil
 sudo DESTDIR=~/selinux_out LIBDIR=~/selinux_out/usr/lib LIBSEPOLA=~/selinux_out/usr/lib/libsepol.a CFLAGS+="-I~/selinux_out/usr/include" LDFLAGS+="-L~/selinux_out/usr/lib -L~/selinux_out/usr/lib" make -j16 -C secilc install
 
 # https://nickb.dev/blog/azure-pipelines-for-rust-projects
