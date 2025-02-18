@@ -17,8 +17,10 @@ pushd selinux
 # was fixed upstream in commit a96e8c59ecac84096d870b42701a504791a8cc8c, but
 # for our purposes compiling the older versions, we can just allow the behavior
 # with -fcommon
-sudo DESTDIR=~/selinux LIBDIR=~/selinux/usr/lib LIBSEPOLA=~/selinux/usr/lib/libsepol.a CFLAGS+="-I~/selinux/usr/include" LDFLAGS+="-L~/selinux/usr/lib -L~/selinux/usr/lib" make -j16 CFLAGS="-Wno-error=stringop-truncation -fcommon -pipe -fPIC" -C libsepol install
-sudo DESTDIR=~/selinux LIBDIR=~/selinux/usr/lib LIBSEPOLA=~/selinux/usr/lib/libsepol.a CFLAGS+="-I~/selinux/usr/include" LDFLAGS+="-L~/selinux/usr/lib -L~/selinux/usr/lib" make -j16 -C secilc install
+sudo DESTDIR=~/selinux_out LIBDIR=~/selinux_out/usr/lib LIBSEPOLA=~/selinux_out/usr/lib/libsepol.a CFLAGS+="-I~/selinux_out/usr/include" LDFLAGS+="-L~/selinux_out/usr/lib -L~/selinux_out/usr/lib" make -j16 CFLAGS="-Wno-error=stringop-truncation -fcommon -pipe -fPIC" -C libsepol install
+sudo ls ~/selinux_out
+sudo ls ~/selinux_out/usr/include
+sudo DESTDIR=~/selinux_out LIBDIR=~/selinux_out/usr/lib LIBSEPOLA=~/selinux_out/usr/lib/libsepol.a CFLAGS+="-I~/selinux_out/usr/include" LDFLAGS+="-L~/selinux_out/usr/lib -L~/selinux_out/usr/lib" make -j16 -C secilc install
 
 # https://nickb.dev/blog/azure-pipelines-for-rust-projects
 curl --proto '=https' -sSf https://sh.rustup.rs | sh -s -- -y
