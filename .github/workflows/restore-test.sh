@@ -7,7 +7,7 @@ VERSION=${1:-stable}
 # Manually build secilc, rather than take the packaged version, so we can have control over version
 # Github actions will have already checked out the repo to the correct tag for this run
 sudo apt update
-apt-get install --no-install-recommends --no-install-suggests \
+sudo apt-get install --no-install-recommends --no-install-suggests \
     bison \
     flex \
     gawk \
