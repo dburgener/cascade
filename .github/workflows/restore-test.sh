@@ -23,7 +23,7 @@ pushd selinux
 #sudo ls ~/selinux_out/usr/include/sepol
 #sudo ls ~/selinux_out/usr/include/sepol/cil
 #sudo make DESTDIR=~/selinux_out LIBDIR=~/selinux_out/usr/lib LIBSEPOLA=~/selinux_out/usr/lib/libsepol.a CFLAGS="-I~/selinux_out/usr/include" LDFLAGS="-L~/selinux_out/usr/lib -L~/selinux_out/usr/lib" -j16 -C secilc install
-sudo make CFLAGS="-Wno-error=stringop-truncation -fcommon -pipe -fPI" install
+sudo make CFLAGS="-Wno-error=stringop-truncation -fcommon -pipe -fPIC" install
 
 # https://nickb.dev/blog/azure-pipelines-for-rust-projects
 curl --proto '=https' -sSf https://sh.rustup.rs | sh -s -- -y
