@@ -17,12 +17,13 @@ pushd selinux
 # was fixed upstream in commit a96e8c59ecac84096d870b42701a504791a8cc8c, but
 # for our purposes compiling the older versions, we can just allow the behavior
 # with -fcommon
-sudo make DESTDIR=~/selinux_out LIBDIR=~/selinux_out/usr/lib LIBSEPOLA=~/selinux_out/usr/lib/libsepol.a LDFLAGS="-L~/selinux_out/usr/lib -L~/selinux_out/usr/lib" -j16 CFLAGS="-Wno-error=stringop-truncation -fcommon -pipe -fPIC -I~/selinux_out/usr/include" -C libsepol install
-sudo ls ~/selinux_out
-sudo ls ~/selinux_out/usr/include
-sudo ls ~/selinux_out/usr/include/sepol
-sudo ls ~/selinux_out/usr/include/sepol/cil
-sudo make DESTDIR=~/selinux_out LIBDIR=~/selinux_out/usr/lib LIBSEPOLA=~/selinux_out/usr/lib/libsepol.a CFLAGS="-I~/selinux_out/usr/include" LDFLAGS="-L~/selinux_out/usr/lib -L~/selinux_out/usr/lib" -j16 -C secilc install
+#sudo make DESTDIR=~/selinux_out LIBDIR=~/selinux_out/usr/lib LIBSEPOLA=~/selinux_out/usr/lib/libsepol.a LDFLAGS="-L~/selinux_out/usr/lib -L~/selinux_out/usr/lib" -j16 CFLAGS="-Wno-error=stringop-truncation -fcommon -pipe -fPIC -I~/selinux_out/usr/include" -C libsepol install
+#sudo ls ~/selinux_out
+#sudo ls ~/selinux_out/usr/include
+#sudo ls ~/selinux_out/usr/include/sepol
+#sudo ls ~/selinux_out/usr/include/sepol/cil
+#sudo make DESTDIR=~/selinux_out LIBDIR=~/selinux_out/usr/lib LIBSEPOLA=~/selinux_out/usr/lib/libsepol.a CFLAGS="-I~/selinux_out/usr/include" LDFLAGS="-L~/selinux_out/usr/lib -L~/selinux_out/usr/lib" -j16 -C secilc install
+sudo make CFLAGS="-Wno-error=stringop-truncation -fcommon -pipe -fPI" install
 
 # https://nickb.dev/blog/azure-pipelines-for-rust-projects
 curl --proto '=https' -sSf https://sh.rustup.rs | sh -s -- -y
