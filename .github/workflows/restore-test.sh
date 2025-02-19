@@ -7,7 +7,24 @@ VERSION=${1:-stable}
 # Manually build secilc, rather than take the packaged version, so we can have control over version
 # Github actions will have already checked out the repo to the correct tag for this run
 sudo apt update
-sudo apt install -y --no-install-recommends flex bison pkg-config libaudit-dev libbz2-dev libustr-dev libpcre3-dev xmlto
+apt-get install --no-install-recommends --no-install-suggests \
+    bison \
+    flex \
+    gawk \
+    gcc \
+    gettext \
+    make \
+    libaudit-dev \
+    libbz2-dev \
+    libcap-dev \
+    libcap-ng-dev \
+    libcunit1-dev \
+    libglib2.0-dev \
+    libpcre2-dev \
+    pkgconf \
+    python3 \
+    systemd \
+    xmlto
 
 pushd selinux
 
@@ -23,7 +40,7 @@ pushd selinux
 #sudo ls ~/selinux_out/usr/include/sepol
 #sudo ls ~/selinux_out/usr/include/sepol/cil
 #sudo make DESTDIR=~/selinux_out LIBDIR=~/selinux_out/usr/lib LIBSEPOLA=~/selinux_out/usr/lib/libsepol.a CFLAGS="-I~/selinux_out/usr/include" LDFLAGS="-L~/selinux_out/usr/lib -L~/selinux_out/usr/lib" -j16 -C secilc install
-sudo make CFLAGS="-Wno-error=stringop-truncation -fcommon -pipe -fPIC" install
+sudo make CFLAGS="-Wno-error=stringop-truncation -fcommon -pipe -fPIC" OPT_SUBDIRS="" install
 
 # https://nickb.dev/blog/azure-pipelines-for-rust-projects
 curl --proto '=https' -sSf https://sh.rustup.rs | sh -s -- -y
