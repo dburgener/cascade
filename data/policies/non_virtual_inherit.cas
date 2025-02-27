@@ -10,10 +10,10 @@ resource bar inherits foo {}
 domain baz {
 	bar.read();
 	allow(this, foo, file, write);
-	domain_transition(this, foo, other);
+	domain_transition(this, foo, some_other);
 
-	fn reference_foo(domain other) {
-		allow(other, foo, file, setattr);
+	fn reference_foo(domain some_other) {
+		allow(some_other, foo, file, setattr);
 	}
 }
 
@@ -21,7 +21,7 @@ domain qux inherits baz {
 	allow(this, foo, dir, write);
 }
 
-domain other {
+domain some_other {
 	baz.reference_foo(this);
 }
 
