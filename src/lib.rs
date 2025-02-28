@@ -8,6 +8,7 @@ extern crate lalrpop_util;
 extern crate thiserror;
 
 mod alias_map;
+mod annotations;
 mod ast;
 mod compile;
 mod constants;
@@ -27,11 +28,11 @@ mod test;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
+use crate::annotations::InsertExtendTiming;
 use crate::ast::{Argument, CascadeString, Declaration, Expression, Policy, PolicyFile};
 use crate::context::{BlockType, Context};
 use crate::error::{CascadeErrors, InternalError, InvalidMachineError, ParseErrorMsg};
 use crate::functions::{FunctionClass, FunctionMap};
-use crate::internal_rep::InsertExtendTiming;
 use crate::machine::{MachineMap, ModuleMap, ValidatedMachine, ValidatedModule};
 use crate::util::append_set_map;
 pub use crate::warning::Warnings;

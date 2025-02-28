@@ -13,6 +13,7 @@ use std::str::FromStr;
 use codespan_reporting::files::SimpleFile;
 
 use crate::alias_map::{AliasMap, Declared};
+use crate::annotations::{Annotated, AnnotationInfo};
 use crate::ast::{
     get_all_func_calls, get_cil_name, Annotation, Argument, BuiltIns, CascadeString,
     DeclaredArgument, FuncCall, FuncDecl, IpAddr, Port, Statement,
@@ -23,8 +24,8 @@ use crate::error::{
     add_or_create_compile_error, CascadeErrors, CompileError, ErrorItem, InternalError,
 };
 use crate::internal_rep::{
-    type_name_from_string, typeinfo_from_string, Annotated, AnnotationInfo, ClassList, Context,
-    Sid, TypeInfo, TypeInstance, TypeMap,
+    type_name_from_string, typeinfo_from_string, ClassList, Context, Sid, TypeInfo, TypeInstance,
+    TypeMap,
 };
 use crate::obj_class::perm_list_to_sexp;
 use crate::warning::{Warning, Warnings, WithWarnings};
