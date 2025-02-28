@@ -8,9 +8,10 @@ use std::ops::Range;
 use codespan_reporting::files::SimpleFile;
 
 use crate::alias_map::{AliasMap, Declared};
+use crate::annotations::{Annotated, AnnotationInfo};
 use crate::ast::{Annotations, Argument, CascadeString, Module};
 use crate::error::{CascadeErrors, ErrorItem};
-use crate::internal_rep::{Annotated, AnnotationInfo, TypeInfo};
+use crate::internal_rep::TypeInfo;
 
 pub type ModuleMap<'a> = AliasMap<ValidatedModule<'a>>;
 

@@ -8,6 +8,9 @@ use std::convert::TryFrom;
 use std::ops::Range;
 
 use crate::alias_map::Declared;
+use crate::annotations::{
+    get_type_annotations, Annotated, AnnotationInfo, Associated, InsertExtendTiming,
+};
 use crate::ast::{
     Annotation, Annotations, Argument, CascadeString, Declaration, Expression, FuncCall,
     LetBinding, Machine, Module, PolicyFile, Statement, TypeDecl,
@@ -24,9 +27,8 @@ use crate::functions::{
     FunctionMap, ValidatedCall, ValidatedStatement,
 };
 use crate::internal_rep::{
-    generate_sid_rules, get_type_annotations, validate_derive_args, Annotated, AnnotationInfo,
-    Associated, ClassList, Context, InsertExtendTiming, Sid, TypeInfo, TypeInstance, TypeMap,
-    TypeVar,
+    generate_sid_rules, validate_derive_args, ClassList, Context, Sid, TypeInfo, TypeInstance,
+    TypeMap, TypeVar,
 };
 use crate::machine::{MachineMap, ModuleMap, ValidatedMachine, ValidatedModule};
 use crate::warning::{Warnings, WithWarnings};
