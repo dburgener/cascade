@@ -43,7 +43,7 @@ impl Declared for ValidatedModule<'_> {
 }
 
 impl Annotated for &ValidatedModule<'_> {
-    fn get_annotations(&self) -> std::collections::btree_set::Iter<AnnotationInfo> {
+    fn get_annotations(&self) -> std::collections::btree_set::Iter<'_, AnnotationInfo> {
         self.annotations.iter()
     }
 }
