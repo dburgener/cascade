@@ -122,7 +122,7 @@ mod tests {
         let mut ret = WithWarnings::from(warn_string);
         if do_warn {
             ret.add_warning(Warning::new(
-                &format!("Some warning {}", call_count),
+                &format!("Some warning {call_count}"),
                 file,
                 2..4, // doesn't matter for the test
                 "Some substring",

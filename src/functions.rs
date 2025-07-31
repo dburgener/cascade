@@ -2226,7 +2226,7 @@ fn validate_cast(
             "Cannot typecast",
             file,
             r,
-            format!("This is not something that can be typecast. {}", msg).as_ref(),
+            format!("This is not something that can be typecast. {msg}").as_ref(),
         )
     };
 
@@ -3408,7 +3408,7 @@ impl<'a> ArgForValidation<'a> {
     ) -> Result<WithWarnings<()>, ErrorItem> {
         let err_ret = |msg: &str, r: Option<Range<usize>>| {
             ErrorItem::make_compile_or_internal_error(
-                format!("Cannot typecast {}", msg).as_ref(),
+                format!("Cannot typecast {msg}").as_ref(),
                 file,
                 r,
                 "This is not something that can be typecast",
@@ -3997,10 +3997,7 @@ pub fn search_for_recursion(
                             "Recursive Function call found",
                             file,
                             range,
-                            &format!(
-                                "This function calls the next function: {}.",
-                                previous_function
-                            ),
+                            &format!("This function calls the next function: {previous_function}."),
                         ));
                         previous_function = function_info.get_full_display_name();
                     }
