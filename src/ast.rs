@@ -864,7 +864,7 @@ impl fmt::Display for Port {
             Some(high) => format!("{}-{}", self.low_port_num, high),
             None => self.low_port_num.to_string(),
         };
-        write!(f, "{}", port_string)
+        write!(f, "{port_string}")
     }
 }
 
@@ -1328,7 +1328,7 @@ mod tests {
         let result = if_block.get_renamed_statement(&renames);
 
         // matches!() won't work because matching against box patterns is nightly only
-        let debug_str = format!("{:?}", result);
+        let debug_str = format!("{result:?}");
         assert!(debug_str.contains("new_name"));
         assert!(!debug_str.contains("old_name"));
         assert!(debug_str.contains("unchanged"));

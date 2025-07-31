@@ -1534,7 +1534,7 @@ pub fn get_synthetic_resource_name(
     dom_name: &CascadeString,
     associated_resource: &CascadeString,
 ) -> CascadeString {
-    let cs_name = format!("{}.{}", dom_name, associated_resource);
+    let cs_name = format!("{dom_name}.{associated_resource}");
     // We keep the range of the *resource* part specifically, which should always be where this
     // resource was defined
     match associated_resource.get_range() {
