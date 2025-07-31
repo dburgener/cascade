@@ -2070,7 +2070,7 @@ impl<'a> FunctionInfo<'a> {
 }
 
 impl Annotated for &FunctionInfo<'_> {
-    fn get_annotations(&self) -> std::collections::btree_set::Iter<AnnotationInfo> {
+    fn get_annotations(&self) -> std::collections::btree_set::Iter<'_, AnnotationInfo> {
         self.annotations.iter()
     }
 }

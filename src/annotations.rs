@@ -275,7 +275,7 @@ impl AnnotationInfo {
 }
 
 pub trait Annotated {
-    fn get_annotations(&self) -> std::collections::btree_set::Iter<AnnotationInfo>;
+    fn get_annotations(&self) -> std::collections::btree_set::Iter<'_, AnnotationInfo>;
 }
 
 fn get_associate(

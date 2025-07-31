@@ -98,7 +98,7 @@ impl Ord for TypeInfo {
 }
 
 impl Annotated for &TypeInfo {
-    fn get_annotations(&self) -> std::collections::btree_set::Iter<AnnotationInfo> {
+    fn get_annotations(&self) -> std::collections::btree_set::Iter<'_, AnnotationInfo> {
         self.annotations.iter()
     }
 }
