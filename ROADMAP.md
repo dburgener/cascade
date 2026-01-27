@@ -1,26 +1,36 @@
 # Introduction
 This document describes the project roadmap and goals.  It is intended to be a living document, and open to community input.
 
+## Project status
+This project is not currently being actively developed.  I am available to review and merge PRs, provide support and guidance, and do small maintenance tasks, but I am not actively developing the project.
+
+The minimum feature set to make this generally usable is enumerated below under the 0.1 milestone and community contributions to get to that milestone are welcome.
+
 ## Major milestones
 The details of what is included in these milestones is described below.
 
-0.1 (targeted by 2023-03-31) - Clean compilation of a substantial system policy
+0.1 - Clean compilation of a substantial system policy
 
-1.0 (targeted by 2023-09-30) - Capable of building a functional TE policy for booting a Fedora 36 system in enforcing mode with comparable functionality to targeted policy
+1.0 - Capable of building a functional TE policy for booting a Fedora 36 system in enforcing mode with comparable functionality to targeted policy
 
-1.1 (targeted by 2023-09-30) - audit2cascade
+1.1 - audit2cascade
 
-1.2 (targeted TBD) - UBAC and RBAC
+1.2 - UBAC and RBAC
 
 # Detailed roadmap steps
 This lists remaining steps.  Remove steps below as they are completed.
 
-General bugfixing and clean-up tasks are assumed.  This lists major features needed for each milestone.
+General bugfixing and clean-up tasks are assumed.  This lists major features needed for each milestone.  If there is community interest in a particular feature, it is certainly acceptable to add it earlier.
+
+The 0.1 milestone is substantially more fleshed out to enable community contributions.
 
 ## 0.1
-* Associate resources with resources
-* Associate types via nesting in a block
-* Syntax to call parent class version of functions
+* Compile refpolicy3
+	* Refpolicy3 is available here: https://github.com/pebenito/refpolicy3
+* Error refactor
+* Support target libsepol version
+* The - thing
+
 
 ## 1.0
 * Documentation Comments
