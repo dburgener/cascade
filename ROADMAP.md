@@ -27,10 +27,38 @@ The 0.1 milestone is substantially more fleshed out to enable community contribu
 ## 0.1
 * Compile refpolicy3
 	* Refpolicy3 is available here: https://github.com/pebenito/refpolicy3
-* Error refactor
+	* Changes may be needed to either Cascade or refpolicy3 to make this work
+	* The current status is that Cascade generates a CIL file for refpolicy3, but that CIL file is invalid and does not compile.
+		* Cascade needs to be updated in order to only produce valid CIL and error if the the policy is invalid.
+* Error handling refactor
+	* Errors point at a code point in the input policy using a filename and a position in that file.
+	* Unfortunately, currently the position and the file are tracked through the code separately, which can result in them getting out of sync with unfortunate consequences.
+	* I have a WIP branch to get this working at dburgener/wip-error-refactor
 * Support target libsepol version
-* The - thing
-
+	* Some features desired by Cascade are only supported on certain libsepol versions
+	* Currently Cascade generates one output CIL policy for a given input, which is expected to compile on libsepol 3.0 or greater.
+	* Ideally we could take in a target libsepol version and compile policy for that, which would allow taking advantage of newer CIL language constructs when available
+		* genfscon syntax can be more specific at some point - we don't use that now to be back compatible.  We could use it when available, and report an error if input policy tries to overspecify a genfscon
+		* deny rules were added at some point.  Once we implement delete, we'll want to do so using deny rules, if they exist.
+* Output associated resource names correctly
+	* Currently, an associated resource in the policy is named as `my_domain.my_resource`, but outputs to the CIL as `my_domain-my_resource`
+	* This may be confusing for users
+	* The historical reason for this is expediency - you can't use a `.` character in CIL type names because it's used for CILs own namespacing functionality
+		* But the workaround is straightforward - just use that namespacing functionality.  The below produces the desired result:
+			```
+			(type my_domain)
+			(block my_domain
+				(type my_resource))
+			```
+* Validate file permissions
+	* Currently, Cascade assumes that rules have permissions valid for those object classes.  We should validate that.
+	* This is a little tricky, since permissions can be function arguments, so the object class validity needs to be tracked through function validation based on how they're called.
+	* Another complication is that some permissions can be used for multiple object classes
+* Update for compliance with latest rust
+	* This project was last tested on rust 1.83
+	* Latest stable rust produces a few warnings
+	* There are new clippy warnings to be cleaned up
+	* Presumably our dependencies may have new semver breaking versions that need updating
 
 ## 1.0
 * Documentation Comments
